@@ -1,0 +1,1 @@
+(()=>{'use strict';if(!window.THREE?.WebGLRenderer)return;const p=THREE.WebGLRenderer.prototype,o=p.setPixelRatio;if(o.__olderaHiRes)return;function hi(v){const requested=Number(v)||1;return Math.max(2,Math.min(2.25,requested))}function setPixelRatio(v){return o.call(this,hi(v))}setPixelRatio.__olderaHiRes=true;p.setPixelRatio=setPixelRatio;})();
