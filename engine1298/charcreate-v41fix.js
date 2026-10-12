@@ -1,0 +1,9 @@
+(()=>{'use strict';
+const cs=window.OldERACharScene,native=window.__OldERANativeThree;if(!cs||!native||cs.__v41Fix)return;cs.__v41Fix=true;
+function wrap(name){const fn=cs[name]?.bind(cs);if(!fn)return;cs[name]=async function(...args){const curR=THREE.WebGLRenderer,curC=THREE.PerspectiveCamera;THREE.WebGLRenderer=native.WebGLRenderer;THREE.PerspectiveCamera=native.PerspectiveCamera;try{return await fn(...args)}finally{THREE.WebGLRenderer=curR;THREE.PerspectiveCamera=curC}}}
+wrap('preview');wrap('select');
+function fit(){const s=Math.min(innerWidth/1024,innerHeight/768);for(const id of['stage','worldStage','canvasWrap']){const el=document.getElementById(id);if(!el)continue;el.style.width='1024px';el.style.height='768px';el.style.left='50%';el.style.top='50%';el.style.transform=`translate(-50%,-50%) scale(${s})`;el.style.transformOrigin='center center'}}
+function arm(){fit();const game=document.getElementById('game');if(!game?.classList.contains('on'))return;const host=document.getElementById('uiHost'),scene=document.getElementById('scene3d');host?.querySelectorAll('[data-uiid]').forEach(el=>{const id=String(el.dataset.uiid||'').toLowerCase();if(/^btn_(race_|class_|create|cancel|back|exit|face_|hair_|str_|sta_|dex_|int_|map_)/.test(id)){el.style.pointerEvents='auto';el.style.zIndex='99999'}});scene?.querySelectorAll('canvas').forEach(c=>{c.style.pointerEvents='none'});}
+addEventListener('resize',fit);new MutationObserver(arm).observe(document.documentElement,{subtree:true,childList:true});setInterval(arm,100);requestAnimationFrame(function loop(){fit();requestAnimationFrame(loop)});
+console.info('[OldERA] v41 native character renderer fix active');
+})();
