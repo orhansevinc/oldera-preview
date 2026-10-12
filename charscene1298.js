@@ -17,10 +17,39 @@ async function n3chr(file,opts={}){let p=path(file),key=p.toLowerCase()+'|'+(opt
 function chrFile(nation,race,job){let r=(race||'').toLowerCase(),j=(job||'').toLowerCase();if(nation===1){if(r.includes('ark')||r.includes('_at'))return'ChrSelect/upc_ka_at_wa.n3chr';if(r.includes('wrinkle')||r.includes('_wt'))return'ChrSelect/upc_ka_wt_ma.n3chr';if(r.includes('tuarek')||r.includes('_tu'))return j.includes('priest')?'ChrSelect/upc_ka_tu_pri.n3chr':'ChrSelect/upc_ka_tu_rog.n3chr';return'ChrSelect/upc_ka_at_wa.n3chr'}if(r.includes('bar')||r.includes('_ba'))return'ChrSelect/upc_el_ba_wa.n3chr';if(r.includes('female')||r.includes('_rf')){if(j.includes('rogue'))return'ChrSelect/upc_el_rf_rog.n3chr';if(j.includes('priest'))return'ChrSelect/upc_el_rf_pri.n3chr';return'ChrSelect/upc_el_rf_wa.n3chr'}if(j.includes('rogue'))return'ChrSelect/upc_el_rm_rog.n3chr';if(j.includes('priest'))return'ChrSelect/upc_el_rm_pri.n3chr';return'ChrSelect/upc_el_rm_wa.n3chr'}
 function racePrefix(nation,race){let r=(race||'').toLowerCase();if(nation===1){if(r.includes('_at')||r.includes('ark'))return'upc_ka_at_';if(r.includes('_tu')||r.includes('tuarek'))return'upc_ka_tu_';if(r.includes('_wt')||r.includes('wrinkle'))return'upc_ka_wt_';if(r.includes('_pt')||r.includes('_pu')||r.includes('puri'))return'upc_ka_pu_';return'upc_ka_at_'}if(r.includes('_ba')||r.includes('bar'))return'upc_el_ba_';if(r.includes('_rf')||r.includes('female'))return'upc_el_rf_';return'upc_el_rm_'}
 async function raceGroup(nation,race,{face=0,hair=0}={}){let pre=racePrefix(nation,race),fs=String(face).padStart(2,'0'),hs=String(hair).padStart(2,'0'),names=[];if(pre==='upc_ka_wt_')names=['upper','hands','feet','face'+fs];else names=['upper','lower','hands','feet','face'+fs,'hair'+hs];let g=new THREE.Group();await Promise.all(names.map(async n=>{try{let m=await cpart('Item/'+pre+n+'.n3cpart');if(m)g.add(m)}catch(e){console.warn('1298 base part',pre+n,e)}}));return g}
-function cleanup(){token++;if(!active)return;try{active.renderer.dispose();active.renderer.domElement.remove()}catch{}active=null}
+function cleanup(){token++;if(!active)return;try{if(active.raf)cancelAnimationFrame(active.raf)}catch{}try{active.renderer.dispose();active.renderer.domElement.remove()}catch{}active=null}
 function lights(scene,nation,camera){scene.add(new THREE.AmbientLight(0x808080,.35));let cfg=nation===1?[[[0,1.8,7.4],[0,0,3.5],.6],[[5.87,2.4,4.73],[2.32,0,2.54],.6],[[-5.87,2.4,4.73],[-2.32,0,2.54],.6]]:[[[0,1.8,7],[0,-.1,3],.45],[[5.6,2.4,4.68],[2.2,-.1,2.36],.45],[[-5.6,2.4,4.68],[-2.4,-.1,2.23],.45]];for(let [p,t,a] of cfg){let l=new THREE.SpotLight(0xffffff,1.6,20,a,0.45,1.3);l.position.set(...p);l.target.position.set(...t);scene.add(l,l.target)}}
 function renderer(host,w=1024,h=768,alpha=false){let r=new THREE.WebGLRenderer({antialias:true,alpha});r.setPixelRatio(Math.min(devicePixelRatio,1.5));r.setSize(w,h,false);if(THREE.sRGBEncoding)r.outputEncoding=THREE.sRGBEncoding;r.domElement.style.position='absolute';r.domElement.style.left='0';r.domElement.style.top='0';host.appendChild(r.domElement);return r}
-async function select(host,{nation=2,character=null,onDblClick=null}={}){cleanup();host.innerHTML='';let my=++token,T=THREE_(),scene=new T.Scene();scene.background=new T.Color(0x000000);let cam=new T.PerspectiveCamera(45,1024/768,.05,50),eye=nation===1?[0,-.2,7.4]:[0,-.2,7];cam.position.set(...eye);cam.lookAt(0,-.4,0);let rr=renderer(host);active={renderer:rr,scene,camera:cam};lights(scene,nation,cam);try{scene.add(await shapeObject(nation===1?'ChrSelect/ka_chairs.n3shape':'ChrSelect/el_chairs.n3shape'))}catch(e){console.error('chairs',e)}if(character&&my===token){try{let g=await raceGroup(nation,character.race,character);g.position.set(0,nation===1?-1.16:-1.20,nation===1?2.72:2.74);scene.add(g)}catch(e){console.error('charselect char',e)}}rr.domElement.ondblclick=()=>onDblClick&&onDblClick();rr.render(scene,cam);return active}
+async function select(host,{nation=2,characters=null,character=null,selectedIndex=0,onChange=null,onDblClick=null}={}){
+  cleanup();host.innerHTML='';let my=++token,T=THREE_(),scene=new T.Scene();scene.background=new T.Color(0x000000);
+  const slots=(Array.isArray(characters)?characters.slice(0,3):[character,null,null]);while(slots.length<3)slots.push(null);
+  selectedIndex=Math.max(0,Math.min(2,selectedIndex|0));
+  const at=new T.Vector3(0,-.4,0),eyeBase=nation===1?new T.Vector3(0,-.2,7.4):new T.Vector3(0,-.2,7);
+  let cam=new T.PerspectiveCamera(45,1024/768,.05,50);cam.position.copy(eyeBase);cam.lookAt(at);
+  let rr=renderer(host);active={renderer:rr,scene,camera:cam,slots,selectedIndex,raf:0,angle:0,targetAngle:0,groups:[null,null,null]};lights(scene,nation,cam);
+  try{scene.add(await shapeObject(nation===1?'ChrSelect/ka_chairs.n3shape':'ChrSelect/el_chairs.n3shape'))}catch(e){console.error('chairs',e)}
+  const poses=nation===1?
+    [{p:[0,-1.16,2.72],r:0},{p:[1.86,-1.16,2.10],r:42},{p:[-1.90,-1.16,2.10],r:-42}]:
+    [{p:[0,-1.20,2.74],r:0},{p:[1.86,-1.20,2.00],r:42},{p:[-1.90,-1.20,2.00],r:-46}];
+  for(let i=0;i<3;i++){
+    const ch=slots[i];if(!ch||my!==token)continue;
+    try{let g=await raceGroup(nation,ch.race,ch);let ps=poses[i];g.position.set(...ps.p);g.rotation.y=T.MathUtils.degToRad(ps.r);g.userData.baseY=ps.p[1];g.userData.baseRotY=g.rotation.y;scene.add(g);active.groups[i]=g}catch(e){console.error('charselect slot',i,e)}
+  }
+  const sideAngle=nation===1?0.70:0.74;
+  const angleFor=i=>i===1?sideAngle:(i===2?-sideAngle:0);
+  active.angle=active.targetAngle=angleFor(selectedIndex);
+  function applyCamera(a){let v=eyeBase.clone().sub(at);let c=Math.cos(a),s=Math.sin(a),x=v.x*c+v.z*s,z=-v.x*s+v.z*c;cam.position.set(at.x+x,eyeBase.y,at.z+z);cam.lookAt(at)}
+  applyCamera(active.angle);
+  function setIndex(i,notify=true){i=Math.max(0,Math.min(2,i|0));active.selectedIndex=i;active.targetAngle=angleFor(i);if(notify&&onChange)onChange(i,slots[i]||null);return i}
+  active.rotate=dir=>{let i=active.selectedIndex;if(dir<0){if(i===0)i=1;else if(i===2)i=0}else if(dir>0){if(i===0)i=2;else if(i===1)i=0}return setIndex(i,true)};
+  active.setIndex=i=>setIndex(i,true);active.getIndex=()=>active.selectedIndex;active.getCharacter=()=>slots[active.selectedIndex]||null;
+  rr.domElement.ondblclick=()=>onDblClick&&onDblClick(active.selectedIndex,slots[active.selectedIndex]||null);
+  let last=performance.now();
+  const loop=now=>{if(my!==token||active?.renderer!==rr)return;let dt=Math.min(.05,(now-last)/1000);last=now;let d=active.targetAngle-active.angle;if(Math.abs(d)>.001){let step=Math.sign(d)*Math.min(Math.abs(d),1.2*dt);active.angle+=step;applyCamera(active.angle)}
+    for(let i=0;i<3;i++){let g=active.groups[i];if(!g)continue;let phase=now*.0016+i*.7;g.position.y=g.userData.baseY+Math.sin(phase)*.008;g.rotation.y=g.userData.baseRotY+Math.sin(phase*.55)*.004}
+    rr.render(scene,cam);active.raf=requestAnimationFrame(loop)};
+  if(onChange)onChange(selectedIndex,slots[selectedIndex]||null);active.raf=requestAnimationFrame(loop);return active
+}
 async function preview(host,{nation=2,race='',job='',face=0,hair=0,rect={l:300,t:100,r:700,b:700}}={}){cleanup();host.innerHTML='';let my=++token,T=THREE_(),w=Math.max(10,rect.r-rect.l),h=Math.max(10,rect.b-rect.t),scene=new T.Scene(),cam=new T.PerspectiveCamera(32,w/h,.05,50),rr=renderer(host,w,h,true);rr.setClearColor(0x000000,0);rr.domElement.style.left=rect.l+'px';rr.domElement.style.top=rect.t+'px';active={renderer:rr,scene,camera:cam};scene.add(new T.AmbientLight(0xffffff,.65));let key=new T.DirectionalLight(0xffffff,1.5);key.position.set(3,5,5);scene.add(key);try{let g=await raceGroup(nation,race,{face,hair});if(my!==token)return;let box=new T.Box3().setFromObject(g),size=new T.Vector3(),center=new T.Vector3();box.getSize(size);box.getCenter(center);g.position.sub(center);g.position.y-=size.y*.04;scene.add(g);let dist=Math.max(2.7,size.y*1.35);cam.position.set(0,size.y*.04,dist);cam.lookAt(0,0,0);rr.render(scene,cam)}catch(e){console.error('create preview',e);rr.render(scene,cam)}return active}
 window.OldERACharScene={select,preview,stop:cleanup,chrFile,racePrefix};
 })();
