@@ -23,12 +23,13 @@
 <section id="game" class="screen"><div id="stage"><div id="sceneBg"></div><div id="scene3d"></div><div id="uiHost"></div><div id="loading">1298 client verisi yükleniyor…</div></div></section>
 <section id="world"><div id="canvasWrap"></div><div id="worldStage"><div id="worldStageInner" class="worldStageInner"></div></div><div id="worldLoader" class="worldLoader"><h2>MORADON</h2><div class="wbar"><i id="worldFill"></i></div><p id="worldText">Loading USKO 1298 zone...</p></div></section>
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
-<script src="ui1298.js?v=11"></script>
-<script src="ui1298_patch.js?v=11"></script>
-<script src="exactui1298.js?v=11"></script>
-<script src="worlddata1298.js?v=11"></script>
-<script src="charscene1298.js?v=11"></script>
-<script src="world1298.js?v=11"></script>
+<script src="ui1298.js?v=13"></script>
+<script src="ui1298_patch.js?v=13"></script>
+<script src="pathfix1298.js?v=13"></script>
+<script src="exactui1298.js?v=13"></script>
+<script src="worlddata1298.js?v=13"></script>
+<script src="charscene1298.js?v=13"></script>
+<script src="world1298.js?v=13"></script>
 <script>
 (()=>{'use strict';
 const $=id=>document.getElementById(id),launcher=$('launcher'),game=$('game'),stage=$('stage'),bg=$('sceneBg'),scene3d=$('scene3d'),host=$('uiHost'),loading=$('loading');
@@ -52,8 +53,9 @@ async function renderUI(root,opts){host.style.pointerEvents='none';return N3Exac
 function fail(e){console.error(e);wait(true,'1298 asset yükleme hatası:\n'+(e?.message||e))}
 async function login(){try{showGame();wait();clearScene();let root=await ui('UI_US/el_login_intro_us.uif');await renderLoginBackdrop(root);await renderUI(root,{subtree:'Group_LogIn',native:false,onAction:id=>{let k=actionName(id);if(k==='btn_ok'){let a=ctl('Edit_ID')?.getValue?.().trim(),p=ctl('Edit_PW')?.getValue?.();if(a==='osevinc'&&p==='osevinc')server()}else if(k==='btn_cancel'){location.reload()}}});setInput('Edit_ID','osevinc');setInput('Edit_PW','osevinc');let pw=ctl('Edit_PW')?.el;if(pw)pw.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();ctl('btn_ok')?.el?.click()}};wait(false)}catch(e){fail(e)}}
 function serverRow(groupId){let g=ctl(groupId)?.el;if(!g)return null;return g.querySelector('[data-uiid="List_Server"], [data-uiid="list_server"]')}
-async function server(){try{wait();clearScene();selectedServer=false;let root=await ui('UI_US/el_login_intro_us.uif');await renderLoginBackdrop(root);await renderUI(root,{subtree:'Group_ServerList_01',native:false,onAction:id=>{let k=actionName(id);if(k==='btn_connect'){selectedServer=true;nationSelect()}}});for(let i=2;i<=20;i++){N3ExactUI.setVisible('server_'+i,false);N3ExactUI.setVisible('img_arrow'+i,false)}N3ExactUI.setVisible('server_1',true);N3ExactUI.setVisible('img_arrow1',true);let row=serverRow('server_1');if(row){row.innerHTML='';let label=document.createElement('div');label.textContent='OldERA I';label.style.cssText='position:absolute;inset:0;display:flex;align-items:center;padding-left:6px;color:#fff;font:12px Tahoma,Arial,sans-serif;text-shadow:1px 1px #000;white-space:nowrap;pointer-events:none';row.appendChild(label);row.style.pointerEvents='auto';row.style.cursor='pointer';row.onclick=()=>{selectedServer=true};row.ondblclick=()=>{selectedServer=true;nationSelect()}}let lists=N3ExactUI.all('List_Server');for(let c of lists){if(c.el!==row)c.el.innerHTML=''}wait(false)}catch(e){fail(e)}}
-async function nationSelect(){try{wait();clearScene();bg.style.background='#000';let root=await ui('UI_US/Co_nationselect_us.uif');await renderUI(root,{native:true,onAction:id=>{let k=actionName(id);if(k==='btn_elmo_selection'){nation=2;characterSelect()}else if(k==='btn_karus_selection'){nation=1;characterSelect()}else if(k==='btn_back')server()}});wait(false)}catch(e){fail(e)}}
+function selectServerRow(index,rows){selectedServer=index;rows.forEach((el,i)=>{if(el)el.style.color=i===index?'rgb(0,255,0)':'rgb(255,255,255)'})}
+async function server(){try{wait();clearScene();selectedServer=0;let root=await ui('UI_US/el_login_intro_us.uif');await renderLoginBackdrop(root);await renderUI(root,{subtree:'Group_ServerList_01',native:false,onAction:id=>{let k=actionName(id);if(k==='btn_connect')nationSelect()}});let names=['OldERA I','OldERA II','OldERA III'],rows=[];for(let i=1;i<=20;i++){let show=i<=names.length;N3ExactUI.setVisible('server_'+i,show);N3ExactUI.setVisible('img_arrow'+i,show);let row=serverRow('server_'+i);if(!row)continue;if(show){row.textContent=names[i-1];row.style.pointerEvents='auto';row.style.cursor='pointer';row.style.whiteSpace='nowrap';row.onclick=()=>selectServerRow(i-1,rows);row.ondblclick=()=>{selectServerRow(i-1,rows);nationSelect()};rows.push(row)}else row.textContent=''}selectServerRow(0,rows);document.onkeydown=e=>{if(e.key==='Enter')nationSelect()};wait(false)}catch(e){fail(e)}}
+async function nationSelect(){try{wait();clearScene();bg.style.background='#000';let root=await ui('UI_US/Co_nationselect_us.uif');await renderUI(root,{native:true,onAction:id=>{let k=actionName(id);if(k==='btn_elmo_selection'){nation=2;characterSelect()}else if(k==='btn_karus_selection'){nation=1;characterSelect()}else if(k==='btn_back'||k==='btn_karus_close'||k==='btn_elmo_close')server()}});wait(false)}catch(e){fail(e)}}
 function prettyJob(j){j=String(j||'').replace('btn_class_','');return j?j[0].toUpperCase()+j.slice(1):''}
 function moveOriginalButton(id,x,y){let c=ctl(id);if(!c?.node)return;let dx=x-c.node.region.l,dy=y-c.node.region.t,t=`translate(${dx}px,${dy}px)`;c.el.style.transform=t;c.layers?.forEach?.(l=>l.style.transform=t)}
 function positionCharacterSelect(root){let rw=Math.max(1,root.region.r-root.region.l),ratio=1024/rw,exitY=0;for(let id of ['bt_left','bt_right','bt_exit']){let c=ctl(id);if(!c?.node)continue;let w=c.node.region.r-c.node.region.l,h=c.node.region.b-c.node.region.t,x=Math.floor(c.node.region.l*ratio),y=768-10-h;moveOriginalButton(id,x,y);if(id==='bt_exit')exitY=y}let b=ctl('bt_back');if(b?.node){let h=b.node.region.b-b.node.region.t;moveOriginalButton('bt_back',Math.floor(b.node.region.l*ratio),exitY-15-h)}let d=ctl('bt_delete');if(d?.node)moveOriginalButton('bt_delete',Math.floor(d.node.region.l*ratio),20)}
