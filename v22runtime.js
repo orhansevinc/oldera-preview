@@ -26,6 +26,16 @@ if(window.OldERACharScene?.select){
     return state;
   };
 }
+function alignGameplayPanel(panel){
+  if(!panel?.dataset?.kind)return;
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    const nodes=[...panel.querySelectorAll('[data-uiid]')];let max=-Infinity;
+    for(const n of nodes){const l=parseFloat(n.style.left),w=parseFloat(n.style.width);if(Number.isFinite(l)&&Number.isFinite(w)&&w>0&&w<1000)max=Math.max(max,l+w)}
+    if(Number.isFinite(max)&&max>0&&max<1024)panel.style.translate=(1024-max)+'px 0px';
+  }));
+}
+const stage=document.getElementById('worldStageInner');
+if(stage){const mo=new MutationObserver(ms=>{for(const m of ms)for(const n of m.addedNodes){if(n.nodeType!==1)continue;if(n.matches?.('[data-kind]'))alignGameplayPanel(n);for(const p of n.querySelectorAll?.('[data-kind]')||[])alignGameplayPanel(p)}});mo.observe(stage,{childList:true,subtree:true})}
 async function prewarm1298(){
   if(!window.N3UI||!window.OldERAData)return;
   const ui=['UI/CursorEl01.DXT','UI/CursorKarus01.DXT','UI/CursorClick.DXT','UI_US/el_statebar_us.uif','UI_US/el_hotkey_us.uif','UI_US/el_msgoutput_us.uif','UI_US/el_chat_us.uif','UI_US/el_cmd_us.uif','UI_US/el_inventory_us.uif','UI_US/el_various_frame_us.uif','UI_US/el_page_state_us.uif','UI_US/El_SkillTree_us.uif','UI_US/ka_statebar_us.uif','UI_US/ka_hotkey_us.uif','UI_US/ka_msgoutput_us.uif','UI_US/ka_chat_us.uif','UI_US/ka_cmd_us.uif','UI_US/ka_inventory_us.uif','UI_US/ka_various_frame_us.uif','UI_US/ka_page_state_us.uif','UI_US/ka_skilltree_us.uif'];
@@ -37,5 +47,5 @@ async function prewarm1298(){
 }
 const kick=()=>prewarm1298().catch(e=>console.warn('1298 prewarm',e));
 if('requestIdleCallback'in window)requestIdleCallback(kick,{timeout:2500});else setTimeout(kick,600);
-window.OldERAV22={fit1298,prewarm1298};
+window.OldERAV22={fit1298,prewarm1298,alignGameplayPanel};
 })();
