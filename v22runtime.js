@@ -11,8 +11,8 @@ style.textContent=`
 document.head.appendChild(style);
 function fit1298(){const s=Math.max(.25,Math.min(innerWidth/1024,innerHeight/768));root.style.setProperty('--ko-ui-scale',String(s))}
 addEventListener('resize',fit1298,{passive:true});fit1298();
-// The previous hotfix inverted the arrows and intentionally froze the character.
-// Keep the original selector's direction and ensure its first usable idle clip loops.
+// v20 intentionally inverted the arrows and froze the selector character.
+// v22 leaves the original direction intact and guarantees a looping idle/breath animation.
 if(window.OldERACharScene?.select){
   const base=window.OldERACharScene.select.bind(window.OldERACharScene);
   window.OldERACharScene.select=async(...args)=>{
@@ -28,9 +28,11 @@ if(window.OldERACharScene?.select){
 }
 async function prewarm1298(){
   if(!window.N3UI||!window.OldERAData)return;
-  const ui=['UI/CursorEl01.DXT','UI/CursorKarus01.DXT','UI_US/el_statebar_us.uif','UI_US/el_hotkey_us.uif','UI_US/el_msgoutput_us.uif','UI_US/el_chat_us.uif','UI_US/el_cmd_us.uif','UI_US/el_inventory_us.uif','UI_US/el_various_frame_us.uif','UI_US/el_page_state_us.uif','UI_US/El_SkillTree_us.uif','UI_US/ka_statebar_us.uif','UI_US/ka_hotkey_us.uif','UI_US/ka_msgoutput_us.uif','UI_US/ka_chat_us.uif','UI_US/ka_cmd_us.uif','UI_US/ka_inventory_us.uif','UI_US/ka_various_frame_us.uif','UI_US/ka_page_state_us.uif','UI_US/Ka_SkillTree_us.uif'];
+  const ui=['UI/CursorEl01.DXT','UI/CursorKarus01.DXT','UI/CursorClick.DXT','UI_US/el_statebar_us.uif','UI_US/el_hotkey_us.uif','UI_US/el_msgoutput_us.uif','UI_US/el_chat_us.uif','UI_US/el_cmd_us.uif','UI_US/el_inventory_us.uif','UI_US/el_various_frame_us.uif','UI_US/el_page_state_us.uif','UI_US/El_SkillTree_us.uif','UI_US/ka_statebar_us.uif','UI_US/ka_hotkey_us.uif','UI_US/ka_msgoutput_us.uif','UI_US/ka_chat_us.uif','UI_US/ka_cmd_us.uif','UI_US/ka_inventory_us.uif','UI_US/ka_various_frame_us.uif','UI_US/ka_page_state_us.uif','UI_US/ka_skilltree_us.uif'];
   const jobs=ui.map(p=>/\.uif$/i.test(p)?N3UI.loadUI(p):N3UI.texCanvas(p));
-  jobs.push(OldERAData.gtd?.(),OldERAData.tct?.(),OldERAData.opd?.());
+  const gtd=OldERAData.gtd?.();
+  if(gtd){jobs.push(gtd);jobs.push(gtd.then(g=>OldERAData.tctAtlas?.(g.n)).catch(()=>null))}
+  if(OldERAData.opd)jobs.push(OldERAData.opd());
   await Promise.allSettled(jobs.filter(Boolean));
 }
 const kick=()=>prewarm1298().catch(e=>console.warn('1298 prewarm',e));
