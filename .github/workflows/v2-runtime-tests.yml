@@ -1,0 +1,26 @@
+name: OldERA v2 runtime tests
+
+on:
+  push:
+    branches:
+      - clean-v2-terrain-core
+    paths:
+      - 'v2/**'
+      - '.github/workflows/v2-runtime-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: v2
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run v2 tests
+        run: node --test tests/*.test.mjs
