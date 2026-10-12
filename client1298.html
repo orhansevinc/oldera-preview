@@ -8,8 +8,9 @@
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;font-family:Tahoma,Arial,sans-serif;color:#fff}button,input{font:inherit}
 .screen{position:fixed;inset:0;display:none}.screen.on{display:flex}
 #launcher{align-items:center;justify-content:center;background:radial-gradient(circle,#30201b,#080505 65%)}
-.launch{position:relative;width:min(512px,96vw);aspect-ratio:1/1;background:url('https://www.resimci.org/images/2020/10/27/image9186911c717421bd.png') center/100% 100% no-repeat;filter:drop-shadow(0 20px 40px #000)}
-.patchMask{position:absolute;left:4.5%;right:5.5%;top:77%;height:7.6%;background:#110a08cc}.patchText{position:absolute;left:5%;right:5%;top:75.8%;height:4%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:12px;text-shadow:1px 1px 2px #000}.bar{position:absolute;left:5.1%;right:5.7%;top:79.5%;height:3.5%;border:2px inset #d5b788;background:#260b0c;overflow:hidden}.bar i{display:block;height:100%;width:100%;background:linear-gradient(#efc9a4,#c8323f 48%,#8c121d 52%,#d03b42)}
+.launch{position:relative;width:min(84vh,84vw,900px);aspect-ratio:1/1;background:url('https://www.resimci.org/images/2020/10/27/image9186911c717421bd.png') center/100% 100% no-repeat;filter:drop-shadow(0 24px 60px #000)}
+.promoErase{position:absolute;left:42%;top:10%;width:54%;height:48%;z-index:20;background:linear-gradient(145deg,#2a1510 0%,#140907 55%,#080403 100%);box-shadow:inset 0 0 36px #000}
+.patchMask{position:absolute;left:3.7%;right:3.7%;top:67%;height:17.5%;z-index:21;background:linear-gradient(#21100c,#100706 60%,#160b08)}.patchText{position:absolute;left:5%;right:5%;top:72.2%;height:4.2%;z-index:22;display:flex;align-items:center;justify-content:center;color:#f2ead8;font-weight:bold;font-size:12px;text-shadow:1px 1px 2px #000}.bar{position:absolute;left:5.1%;right:5.2%;top:77.1%;height:3.6%;z-index:22;border:2px inset #d5b788;background:#260b0c;overflow:hidden}.bar i{display:block;height:100%;width:100%;background:linear-gradient(#efc9a4,#c8323f 48%,#8c121d 52%,#d03b42)}
 .launchHit{position:absolute;top:85%;height:8.5%;border:0;background:rgba(255,255,255,.001);cursor:pointer;z-index:50;transition:background .08s,box-shadow .08s}.launchHit:hover{background:rgba(255,245,210,.08);box-shadow:inset 0 0 10px rgba(255,220,150,.35)}.launchHit:active{background:rgba(255,245,210,.14);box-shadow:inset 0 0 14px rgba(255,220,150,.55)}.startHit{left:40%;width:18.5%}.homeHit{left:59%;width:19.5%}.optionHit{left:79%;width:18%}
 #game{background:#000;align-items:center;justify-content:center}
 #stage{position:absolute;width:1024px;height:768px;left:50%;top:50%;transform-origin:center center;overflow:hidden;background:#000}
@@ -19,21 +20,21 @@
 </style>
 </head>
 <body>
-<section id="launcher" class="screen on"><div class="launch"><div class="patchMask"></div><div class="patchText">Update Completed</div><div class="bar"><i></i></div><button id="launchStart" class="launchHit startHit" aria-label="Start" title="Start"></button><button id="launchHome" class="launchHit homeHit" aria-label="HomePage" title="HomePage"></button><button id="launchOption" class="launchHit optionHit" aria-label="Option" title="Option"></button></div></section>
+<section id="launcher" class="screen on"><div class="launch"><div class="promoErase"></div><div class="patchMask"></div><div class="patchText">Update Completed</div><div class="bar"><i></i></div><button id="launchStart" class="launchHit startHit" aria-label="Start" title="Start"></button><button id="launchHome" class="launchHit homeHit" aria-label="HomePage" title="HomePage"></button><button id="launchOption" class="launchHit optionHit" aria-label="Option" title="Option"></button></div></section>
 <section id="game" class="screen"><div id="stage"><div id="sceneBg"></div><div id="scene3d"></div><div id="uiHost"></div><div id="loading">1298 client verisi yükleniyor…</div></div></section>
 <section id="world"><div id="canvasWrap"></div><div id="worldStage"><div id="worldStageInner" class="worldStageInner"></div></div><div id="worldLoader" class="worldLoader"><h2>MORADON</h2><div class="wbar"><i id="worldFill"></i></div><p id="worldText">Loading USKO 1298 zone...</p></div></section>
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
-<script src="ui1298.js?v=13"></script>
-<script src="ui1298_patch.js?v=13"></script>
-<script src="pathfix1298.js?v=13"></script>
-<script src="exactui1298.js?v=13"></script>
-<script src="worlddata1298.js?v=13"></script>
-<script src="charscene1298.js?v=13"></script>
-<script src="world1298.js?v=13"></script>
+<script src="ui1298.js?v=14"></script>
+<script src="ui1298_patch.js?v=14"></script>
+<script src="pathfix1298.js?v=14"></script>
+<script src="exactui1298.js?v=14"></script>
+<script src="worlddata1298.js?v=14"></script>
+<script src="charscene1298.js?v=14"></script>
+<script src="world1298.js?v=14"></script>
 <script>
 (()=>{'use strict';
 const $=id=>document.getElementById(id),launcher=$('launcher'),game=$('game'),stage=$('stage'),bg=$('sceneBg'),scene3d=$('scene3d'),host=$('uiHost'),loading=$('loading');
-let nation=2,character=null,selectedServer=false,createState={race:null,job:null,face:0,hair:0,stats:null,baseStats:null,bonus:0},sceneToken=0;
+let nation=2,character={name:'Osevinc',race:'btn_race_el_rm',job:'btn_class_warrior',face:0,hair:0,stats:[60,60,70,50,50]},selectedServer=false,createState={race:null,job:null,face:0,hair:0,stats:null,baseStats:null,bonus:0},sceneToken=0;
 const cache=new Map();
 function fit(){let s=Math.min(innerWidth/1024,innerHeight/768);stage.style.transform=`translate(-50%,-50%) scale(${s})`}addEventListener('resize',fit);fit();
 function showGame(){launcher.classList.remove('on');game.classList.add('on')}
@@ -45,7 +46,7 @@ function ctl(id){return N3ExactUI.get(id)}
 function setInput(id,value){ctl(id)?.setValue?.(value)}
 function originalBackdrop(root){
   const hidden=new Set(['group_login','group_serverlist_01','group_notice_1','group_notice_2','group_notice_3','premium']);
-  const clone=n=>{if(n.id&&hidden.has(String(n.id).toLowerCase()))return null;let x={...n,children:[]};for(let c of n.children||[]){let cc=clone(c);if(cc)x.children.push(cc)}return x};
+  const clone=n=>{if(n.id&&hidden.has(String(n.id).toLowerCase()))return null;if(n.type===4&&Number(n.animFPS||0)>0)return null;let id=String(n.id||'').toLowerCase();if(/leaf|effect|eff_|fx_/.test(id))return null;let x={...n,children:[]};for(let c of n.children||[]){let cc=clone(c);if(cc)x.children.push(cc)}return x};
   return clone(root);
 }
 async function renderLoginBackdrop(root){bg.innerHTML='';let r=originalBackdrop(root),layer=document.createElement('div');layer.style.cssText='position:absolute;inset:0;pointer-events:none';bg.appendChild(layer);await N3ExactUI.render(r,layer,{native:true})}
@@ -54,8 +55,8 @@ function fail(e){console.error(e);wait(true,'1298 asset yükleme hatası:\n'+(e?
 async function login(){try{showGame();wait();clearScene();let root=await ui('UI_US/el_login_intro_us.uif');await renderLoginBackdrop(root);await renderUI(root,{subtree:'Group_LogIn',native:false,onAction:id=>{let k=actionName(id);if(k==='btn_ok'){let a=ctl('Edit_ID')?.getValue?.().trim(),p=ctl('Edit_PW')?.getValue?.();if(a==='osevinc'&&p==='osevinc')server()}else if(k==='btn_cancel'){location.reload()}}});setInput('Edit_ID','osevinc');setInput('Edit_PW','osevinc');let pw=ctl('Edit_PW')?.el;if(pw)pw.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();ctl('btn_ok')?.el?.click()}};wait(false)}catch(e){fail(e)}}
 function serverRow(groupId){let g=ctl(groupId)?.el;if(!g)return null;return g.querySelector('[data-uiid="List_Server"], [data-uiid="list_server"]')}
 function selectServerRow(index,rows){selectedServer=index;rows.forEach((el,i)=>{if(el)el.style.color=i===index?'rgb(0,255,0)':'rgb(255,255,255)'})}
-async function server(){try{wait();clearScene();selectedServer=0;let root=await ui('UI_US/el_login_intro_us.uif');await renderLoginBackdrop(root);await renderUI(root,{subtree:'Group_ServerList_01',native:false,onAction:id=>{let k=actionName(id);if(k==='btn_connect')nationSelect()}});let names=['OldERA I','OldERA II','OldERA III'],rows=[];for(let i=1;i<=20;i++){let show=i<=names.length;N3ExactUI.setVisible('server_'+i,show);N3ExactUI.setVisible('img_arrow'+i,show);let row=serverRow('server_'+i);if(!row)continue;if(show){row.textContent=names[i-1];row.style.pointerEvents='auto';row.style.cursor='pointer';row.style.whiteSpace='nowrap';row.onclick=()=>selectServerRow(i-1,rows);row.ondblclick=()=>{selectServerRow(i-1,rows);nationSelect()};rows.push(row)}else row.textContent=''}selectServerRow(0,rows);document.onkeydown=e=>{if(e.key==='Enter')nationSelect()};wait(false)}catch(e){fail(e)}}
-async function nationSelect(){try{wait();clearScene();bg.style.background='#000';let root=await ui('UI_US/Co_nationselect_us.uif');await renderUI(root,{native:true,onAction:id=>{let k=actionName(id);if(k==='btn_elmo_selection'){nation=2;characterSelect()}else if(k==='btn_karus_selection'){nation=1;characterSelect()}else if(k==='btn_back'||k==='btn_karus_close'||k==='btn_elmo_close')server()}});wait(false)}catch(e){fail(e)}}
+async function server(){try{wait();clearScene();selectedServer=0;let root=await ui('UI_US/el_login_intro_us.uif');await renderLoginBackdrop(root);await renderUI(root,{subtree:'Group_ServerList_01',native:false,onAction:id=>{let k=actionName(id);if(k==='btn_connect')nationSelect()}});let rows=[];for(let i=1;i<=20;i++){let show=i===1;N3ExactUI.setVisible('server_'+i,show);N3ExactUI.setVisible('img_arrow'+i,show);let row=serverRow('server_'+i);if(!row)continue;if(show){row.textContent='OldERA';row.style.pointerEvents='auto';row.style.cursor='pointer';row.style.whiteSpace='nowrap';row.style.color='rgb(0,255,0)';row.onclick=()=>selectServerRow(0,rows);row.ondblclick=()=>nationSelect();rows.push(row)}else row.textContent=''}selectServerRow(0,rows);document.onkeydown=e=>{if(e.key==='Enter')nationSelect()};wait(false)}catch(e){fail(e)}}
+async function nationSelect(){try{wait();clearScene();bg.style.background='#000';nation=2;let root=await ui('UI_US/Co_nationselect_us.uif');await renderUI(root,{native:true,onAction:id=>{let k=actionName(id);if(k==='btn_elmo_selection'){nation=2;characterSelect()}else if(k==='btn_back'||k==='btn_elmo_close')server()}});for(let id of ['nation_karus','btn_karus_selection','btn_karus_next','btn_karus_close','text_karus_notice','btn_elmo_next','btn_elmo_close','text_elmo_notice'])N3ExactUI.setVisible(id,false);wait(false)}catch(e){fail(e)}}
 function prettyJob(j){j=String(j||'').replace('btn_class_','');return j?j[0].toUpperCase()+j.slice(1):''}
 function moveOriginalButton(id,x,y){let c=ctl(id);if(!c?.node)return;let dx=x-c.node.region.l,dy=y-c.node.region.t,t=`translate(${dx}px,${dy}px)`;c.el.style.transform=t;c.layers?.forEach?.(l=>l.style.transform=t)}
 function positionCharacterSelect(root){let rw=Math.max(1,root.region.r-root.region.l),ratio=1024/rw,exitY=0;for(let id of ['bt_left','bt_right','bt_exit']){let c=ctl(id);if(!c?.node)continue;let w=c.node.region.r-c.node.region.l,h=c.node.region.b-c.node.region.t,x=Math.floor(c.node.region.l*ratio),y=768-10-h;moveOriginalButton(id,x,y);if(id==='bt_exit')exitY=y}let b=ctl('bt_back');if(b?.node){let h=b.node.region.b-b.node.region.t;moveOriginalButton('bt_back',Math.floor(b.node.region.l*ratio),exitY-15-h)}let d=ctl('bt_delete');if(d?.node)moveOriginalButton('bt_delete',Math.floor(d.node.region.l*ratio),20)}
