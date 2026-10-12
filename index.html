@@ -1,42 +1,103 @@
 <!doctype html>
 <html lang="tr">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>OldERA 1298 Preview</title>
 <style>
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;font-family:Arial,Helvetica,sans-serif;color:#eee}button,input{font:inherit}
-.screen{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:#000}.screen.active{display:flex}
-.board{position:relative;background-position:center;background-repeat:no-repeat;background-size:100% 100%;max-width:98vw;max-height:96vh;box-shadow:0 0 0 1px #5d4d37,0 22px 80px #000}
-.launcher{width:min(98vw,calc(96vh * 742 / 459));aspect-ratio:742/459}.login{width:min(98vw,calc(96vh * 741 / 420));aspect-ratio:741/420}.server{width:min(98vw,calc(96vh * 1897 / 911));aspect-ratio:1897/911}.charsel{width:min(98vw,calc(96vh * 1911 / 944));aspect-ratio:1911/944}.charcreate{width:min(98vw,calc(96vh * 1901 / 936));aspect-ratio:1901/936}
-.hit{position:absolute;border:0;background:transparent;cursor:pointer;padding:0}.hit:hover{outline:1px solid rgba(255,240,188,.45);background:rgba(255,255,255,.03)}
-.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:100;background:rgba(0,0,0,.86);border:1px solid #80683e;color:#efdba7;padding:8px 14px;font-size:13px;opacity:0;pointer-events:none;transition:.2s}.toast.show{opacity:1}
-.ad-mask{position:absolute;left:42.3%;top:11.8%;width:51.8%;height:58.0%;background:#000}
-#startHit{left:42.1%;top:84.7%;width:17.7%;height:9.4%}#homeHit{left:60.1%;top:84.7%;width:19.7%;height:9.4%}#optionHit{left:79.8%;top:84.7%;width:17%;height:9.4%}
-.ko-input{position:absolute;height:4.6%;background:#050505;border:1px solid #817765;color:#eee;padding:0 .45rem;font-size:clamp(11px,1.1vw,16px);outline:none}.ko-input:focus{border-color:#d4c08d}
-#idInput{left:9.0%;top:93.5%;width:14.3%}#pwInput{left:38.3%;top:93.5%;width:14.3%}
-.login-label-mask{position:absolute;top:93.0%;height:5.7%;background:linear-gradient(#8f8b81,#d9d6ce 45%,#827c72 55%,#b9b5ad);border:1px solid #625949;color:#1c1812;font-weight:bold;display:flex;align-items:center;justify-content:center;font-size:clamp(9px,.82vw,14px);text-shadow:0 1px #fff9}
-#loginLabel{left:56.4%;width:10.0%}#exitLabel{left:66.8%;width:10.3%}#optLabel{left:77.4%;width:10.6%}#homeLabel{left:88.3%;width:10.5%}
-#loginHit{left:56.4%;top:93%;width:10%;height:5.7%}#exitHit{left:66.8%;top:93%;width:10.3%;height:5.7%}#loginOptHit{left:77.4%;top:93%;width:10.6%;height:5.7%}#loginHomeHit{left:88.3%;top:93%;width:10.5%;height:5.7%}
-.server-row-mask{position:absolute;left:38.6%;top:15.7%;width:21.0%;height:4.0%;background:#1a1b12;border:1px solid #bab58a;box-shadow:0 0 0 1px #111 inset}.server-name{position:absolute;left:39.4%;top:15.8%;font-size:clamp(13px,1.35vw,24px);font-weight:bold;color:#39ff18;text-shadow:0 1px #000}.population{position:absolute;left:49.7%;top:16.25%;width:7.0%;height:1.25%;border:1px solid #6d684f;background:#060606}.population span{display:block;height:100%;width:72%;background:linear-gradient(90deg,#48de24,#d7dc27)}.pop-text{position:absolute;left:57.0%;top:15.95%;color:#ddd8b5;font-size:clamp(9px,.72vw,13px)}
-#serverRowHit{left:38.6%;top:15.7%;width:21%;height:4.0%}#connectHit{left:40.0%;top:86.0%;width:19.0%;height:6.5%}
-.create-shortcut,.start-char{position:absolute;background:linear-gradient(#bdb8ae,#eeeae2 45%,#888174 55%,#cbc5ba);border:1px solid #554c3c;color:#1b1812;font-weight:bold;cursor:pointer;box-shadow:0 0 0 1px #efe8d5 inset}
-.create-shortcut{left:6.5%;bottom:8.2%;width:16.5%;height:5.4%}.start-char{right:6.5%;bottom:8.2%;width:16.5%;height:5.4%}.start-char:disabled{opacity:.45;cursor:not-allowed}
-.char-summary{position:absolute;left:50%;bottom:12.6%;transform:translateX(-50%);padding:7px 15px;background:rgba(0,0,0,.74);border:1px solid #6e5b3d;color:#f2e0b3;text-align:center;min-width:270px}.char-summary small{display:block;color:#c3b58f;margin-top:3px}
-#charName{left:33.3%;top:82.8%;width:23.5%;height:4.3%}.select-outline{position:absolute;pointer-events:none;border:2px solid #f2c8d2;box-shadow:0 0 12px rgba(255,194,211,.35) inset}.race-outline{left:6.2%;top:10.2%;width:19.2%;height:4.4%}.job-outline{left:6.2%;top:40.2%;width:19.2%;height:4.5%;border-color:#d6d0c2}
-.stat-display{position:absolute;left:83.5%;top:7.0%;font-weight:bold;color:#ef999d;font-size:clamp(10px,.95vw,18px)}
-#bonusVal{left:91.1%;top:7.0%}.statv{position:absolute;left:84.6%;font-weight:bold;color:#ddd;font-size:clamp(10px,.95vw,18px)}#sv-str{top:13.8%}#sv-hp{top:19.3%}#sv-dex{top:25.0%}#sv-int{top:30.7%}#sv-mp{top:36.4%}
-#createFinal,#cancelCreate{position:absolute;bottom:8.1%;height:5.0%;background:linear-gradient(#bdb8ae,#eeeae2 45%,#888174 55%,#cbc5ba);border:1px solid #554c3c;color:#1b1812;font-weight:bold;cursor:pointer}#createFinal{left:6%;width:19%}#cancelCreate{right:6.7%;width:17%}
-#world{background:#111}#worldCanvas{position:absolute;inset:0;width:100%;height:100%}.hud{position:absolute;inset:0;pointer-events:none}.zone{position:absolute;left:50%;top:18px;transform:translateX(-50%);font:bold 26px Georgia,serif;color:#e7ca87;text-shadow:0 2px 4px #000}.statusbox{position:absolute;left:18px;top:18px;width:250px;background:rgba(0,0,0,.72);border:1px solid #64533b;padding:10px}.statusbox b{display:block;color:#efdbaa}.bar{height:14px;margin-top:6px;background:#121212;border:1px solid #40372c}.bar i{display:block;height:100%}.hp i{width:100%;background:#8c231f}.mp i{width:100%;background:#245ca0}.worldhelp{position:absolute;right:18px;bottom:18px;background:rgba(0,0,0,.65);border:1px solid #604f39;padding:8px 10px;color:#dfd3b6;font-size:12px}.worldexit{position:absolute;right:18px;top:18px;pointer-events:auto;background:#171717;border:1px solid #6b593d;color:#ead6a3;padding:7px 12px;cursor:pointer}
+*{box-sizing:border-box}html,body{margin:0;height:100%;overflow:hidden;background:#000;color:#e7dec9;font-family:Tahoma,Arial,sans-serif}
+body{background:radial-gradient(circle at 50% 40%,#24170f 0,#090706 45%,#000 78%)}
+.screen{position:absolute;inset:0;display:none}.screen.active{display:block}
+.center{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+.panel{width:min(94vw,980px);height:min(90vh,650px);position:relative;border:1px solid #5b4630;background:#0a0908;box-shadow:0 0 45px #000 inset,0 0 60px #000}
+#loginArt{position:absolute;inset:0;background-position:center;background-size:cover;filter:brightness(.72) saturate(.8)}
+.veil{position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.12),rgba(0,0,0,.72) 58%,rgba(0,0,0,.9))}
+.loginbox{position:absolute;right:6%;top:18%;width:36%;min-width:300px;padding:22px;border:1px solid #796448;background:rgba(12,10,8,.9);box-shadow:0 0 0 1px #1b140d inset}
+.title{font-family:Georgia,serif;font-size:34px;letter-spacing:3px;color:#d7bd84;text-shadow:0 2px 3px #000;margin-bottom:6px}
+.sub{font-size:12px;color:#a99775;margin-bottom:20px}
+label{display:block;font-size:12px;color:#c8b994;margin:10px 0 5px}
+input{width:100%;height:36px;background:#060606;border:1px solid #6d5b42;color:#eee;padding:0 10px;outline:none}
+input:focus{border-color:#c4a86f}
+button{cursor:pointer;color:#e5d5ad;background:linear-gradient(#4d3a26,#21180f);border:1px solid #8d7048;height:36px;padding:0 18px;font-weight:bold}
+button:hover{filter:brightness(1.15)}
+.row{display:flex;gap:8px;margin-top:14px}
+.row button{flex:1}
+.note{position:absolute;left:20px;bottom:18px;color:#7d725d;font-size:11px}
+.card{width:min(92vw,780px);margin:7vh auto 0;background:#0c0a08;border:1px solid #6e573b;padding:22px;box-shadow:0 0 50px #000}
+.card h2{margin:0 0 16px;color:#d9c08b;font-family:Georgia,serif}
+.serverrow{border:1px solid #5f543e;background:#17140f;padding:14px;margin:10px 0;display:flex;justify-content:space-between;align-items:center}
+.serverrow.selected{outline:1px solid #cbb476}
+.chargrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.slot{height:220px;border:1px solid #50452f;background:linear-gradient(#18130e,#080706);display:flex;align-items:center;justify-content:center;text-align:center;color:#8f8268}
+.slot.filled{color:#e5d6b1}
+.small{font-size:12px;color:#9d8d70}
+.world{position:absolute;inset:0;background:#050505}
+.world .map{position:absolute;inset:0;background-position:center;background-size:cover;filter:brightness(.32) sepia(.25);transform:scale(1.02)}
+.world .shade{position:absolute;inset:0;background:radial-gradient(circle at center,transparent 0 28%,rgba(0,0,0,.75) 88%)}
+.world .msg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;background:rgba(0,0,0,.74);border:1px solid #6f5a3d;padding:24px 30px;min-width:360px}
+.world .msg b{display:block;font:28px Georgia,serif;color:#d9c18c;margin-bottom:8px}
+.topbtn{position:absolute;right:18px;top:18px;z-index:2}
+.hidden{display:none}
 </style>
 </head>
 <body>
-<div id="toast" class="toast"></div>
-<section id="launcher" class="screen active"><div class="board launcher" style="background-image:url('assets/launcher.webp')"><div class="ad-mask"></div><button id="startHit" class="hit" aria-label="Start"></button><button id="homeHit" class="hit" aria-label="HomePage"></button><button id="optionHit" class="hit" aria-label="Option"></button></div></section>
-<section id="login" class="screen"><div class="board login" style="background-image:url('assets/login.webp')"><input id="idInput" class="ko-input" value="osevinc"><input id="pwInput" type="password" class="ko-input" value="osevinc"><div id="loginLabel" class="login-label-mask">Login</div><div id="exitLabel" class="login-label-mask">Exit</div><div id="optLabel" class="login-label-mask">Options</div><div id="homeLabel" class="login-label-mask">HomePage</div><button id="loginHit" class="hit"></button><button id="exitHit" class="hit"></button><button id="loginOptHit" class="hit"></button><button id="loginHomeHit" class="hit"></button></div></section>
-<section id="server" class="screen"><div class="board server" style="background-image:url('assets/server.webp')"><div class="server-row-mask"></div><div class="server-name">OldERA</div><div class="population"><span></span></div><div class="pop-text">Normal</div><button id="serverRowHit" class="hit"></button><button id="connectHit" class="hit"></button></div></section>
-<section id="charsel" class="screen"><div class="board charsel" style="background-image:url('assets/charsel.webp')"><button id="createShortcut" class="create-shortcut">Create Character</button><button id="startCharacter" class="start-char" disabled>Start</button><div class="char-summary"><b id="summaryName">Empty Slot</b><small id="summaryMeta">Karakter oluşturmak için Create Character'a bas.</small></div></div></section>
-<section id="charcreate" class="screen"><div class="board charcreate" style="background-image:url('assets/charcreate.webp')"><input id="charName" class="ko-input" placeholder="Character name"><div id="raceOutline" class="select-outline race-outline"></div><div id="jobOutline" class="select-outline job-outline"></div><div id="bonusVal" class="stat-display">10</div><div id="sv-str" class="statv">0</div><div id="sv-hp" class="statv">0</div><div id="sv-dex" class="statv">0</div><div id="sv-int" class="statv">0</div><div id="sv-mp" class="statv">0</div><button id="createFinal">Create Character</button><button id="cancelCreate">Cancel</button></div></section>
-<section id="world" class="screen"><canvas id="worldCanvas"></canvas><div class="hud"><div class="zone">MORADON</div><div class="statusbox"><b id="worldName">Character</b><small id="worldMeta">Lv. 1</small><div class="bar hp"><i></i></div><div class="bar mp"><i></i></div></div><button id="worldExit" class="worldexit">Character Select</button><div class="worldhelp">WASD hareket · Q/E kamera · Shift koş</div></div></section>
-<script src="app.js"></script>
+<section id="login" class="screen active">
+  <div class="center">
+    <div class="panel">
+      <div id="loginArt"></div><div class="veil"></div>
+      <div class="loginbox">
+        <div class="title">OldERA</div>
+        <div class="sub">USKO 1298/1299 prototype · temiz sürüm</div>
+        <label>Account ID</label><input id="id" value="osevinc" autocomplete="off">
+        <label>Password</label><input id="pw" type="password" value="osevinc">
+        <div class="row"><button id="loginBtn">LOGIN</button></div>
+        <div class="small" style="margin-top:12px">Test hesabı: osevinc / osevinc</div>
+      </div>
+      <div class="note">Eski yanlış launcher kaldırıldı. Bu ekran artık temiz build başlangıcı.</div>
+    </div>
+  </div>
+</section>
+
+<section id="server" class="screen">
+  <div class="card">
+    <h2>Server Select</h2>
+    <div class="serverrow selected"><span><b>OldERA I</b><br><span class="small">USKO 1298</span></span><span>Normal</span></div>
+    <div class="row"><button id="serverBtn">CONNECT</button></div>
+  </div>
+</section>
+
+<section id="chars" class="screen">
+  <div class="card">
+    <h2>Character Select</h2>
+    <div class="chargrid">
+      <div id="slot1" class="slot"><span>Empty Slot<br><span class="small">Create Character</span></span></div>
+      <div class="slot"><span>Empty Slot</span></div>
+      <div class="slot"><span>Empty Slot</span></div>
+    </div>
+    <div class="row"><button id="createBtn">CREATE CHARACTER</button><button id="enterBtn">ENTER WORLD</button></div>
+  </div>
+</section>
+
+<section id="create" class="screen">
+  <div class="card">
+    <h2>Create Character</h2>
+    <label>Character Name</label><input id="charName" value="Orhan">
+    <label>Nation / Class</label>
+    <div class="row">
+      <button class="pick" data-v="El Morad · Warrior">El Morad Warrior</button>
+      <button class="pick" data-v="El Morad · Rogue">El Morad Rogue</button>
+      <button class="pick" data-v="Karus · Warrior">Karus Warrior</button>
+    </div>
+    <div class="small" id="pickText" style="margin-top:14px">El Morad · Warrior</div>
+    <div class="row"><button id="saveChar">CREATE</button><button id="cancelChar">CANCEL</button></div>
+  </div>
+</section>
+
+<section id="world" class="screen">
+  <div class="world"><div id="worldMap" class="map"></div><div class="shade"></div>
+    <button id="backBtn" class="topbtn">CHARACTER SELECT</button>
+    <div class="msg"><b>MORADON</b><span id="worldText">Gerçek 1298 Moradon 3D build bu ekrana bağlanıyor.</span><br><br><span class="small">Eski placeholder launcher tamamen kaldırıldı.</span></div>
+  </div>
+</section>
+<script src="app.js?v=clean1298-2"></script>
 </body></html>
