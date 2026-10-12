@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OldERA v2 — N3 Terrain Diagnostic</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; }
+    body { margin: 0; background: #0b0d10; color: #e9edf2; }
+    main { width: min(1100px, calc(100% - 32px)); margin: 40px auto; }
+    h1 { margin-bottom: 6px; }
+    .muted { color: #9da7b4; }
+    .panel { margin-top: 22px; padding: 20px; border: 1px solid #2a3038; border-radius: 14px; background: #13171c; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+    .metric { padding: 12px; border-radius: 10px; background: #0d1116; }
+    .metric b { display: block; margin-top: 5px; font-size: 1.1rem; overflow-wrap: anywhere; }
+    input, button { font: inherit; }
+    input[type="number"] { width: 120px; padding: 8px; border: 1px solid #39424d; border-radius: 8px; background: #0b0d10; color: inherit; }
+    input[type="file"] { max-width: 100%; }
+    button { padding: 9px 13px; border: 0; border-radius: 8px; cursor: pointer; }
+    .row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    #status[data-kind="error"] { color: #ff9b9b; }
+    #status[data-kind="ok"] { color: #9fe6ae; }
+    canvas { width: min(100%, 720px); image-rendering: pixelated; border: 1px solid #2a3038; background: #050607; }
+    code { color: #cbd6e2; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>OldERA v2 — Terrain Core</h1>
+    <div class="muted">KO 1298-era <code>.gtd</code> terrain dosyasını tarayıcıda doğrudan okuyup gerçek N3 yükseklik mantığıyla örnekleyen tanı ekranı.</div>
+
+    <section class="panel">
+      <div class="row">
+        <input id="terrain-file" type="file" accept=".gtd,application/octet-stream">
+        <span id="status" class="muted">Henüz dosya seçilmedi.</span>
+      </div>
+    </section>
+
+    <section id="details" class="panel" hidden>
+      <div class="grid">
+        <div class="metric"><span class="muted">Terrain adı</span><b id="terrain-name">—</b></div>
+        <div class="metric"><span class="muted">Terrain sürümü</span><b id="terrain-version">—</b></div>
+        <div class="metric"><span class="muted">Map size</span><b id="map-size">—</b></div>
+        <div class="metric"><span class="muted">Grid noktası</span><b id="point-count">—</b></div>
+        <div class="metric"><span class="muted">Min / Max yükseklik</span><b id="height-range">—</b></div>
+        <div class="metric"><span class="muted">MAPDATA sonrası kalan</span><b id="trailing-bytes">—</b></div>
+      </div>
+
+      <h2>CN3Terrain::GetHeight testi</h2>
+      <div class="row">
+        <label>X <input id="sample-x" type="number" step="0.25" value="0"></label>
+        <label>Z <input id="sample-z" type="number" step="0.25" value="0"></label>
+        <button id="sample-button" type="button">Yüksekliği oku</button>
+        <strong id="sample-result">—</strong>
+      </div>
+
+      <h2>Ham heightmap önizleme</h2>
+      <p class="muted">Bu bölüm bir oyun renderer'ı değildir; parser'ın gerçek yükseklik gridini doğru okuduğunu görsel olarak doğrulamak içindir.</p>
+      <canvas id="heightmap" width="512" height="512"></canvas>
+    </section>
+  </main>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
