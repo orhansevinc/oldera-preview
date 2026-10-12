@@ -1,262 +1,42 @@
 <!doctype html>
 <html lang="tr">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>OldERA 1298 Web Prototype</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>OldERA 1298 Preview</title>
 <style>
-:root{
-  --gold:#d8c18c; --gold2:#f0dfb1; --edge:#7b6d55; --panel:#090909; --soft:#d8d0c0;
-}
-*{box-sizing:border-box}
-html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;color:#eee;font-family:Arial,Helvetica,sans-serif}
-button,input{font:inherit}
-#app{width:100%;height:100%;position:relative;background:#000}
-.screen{display:none;position:absolute;inset:0;align-items:center;justify-content:center;background:#000}
-.screen.active{display:flex}
-.artboard{position:relative;max-width:96vw;max-height:96vh;background:#000 center/cover no-repeat; box-shadow:0 0 0 1px #564a38, 0 0 0 3px #150f08, 0 30px 70px rgba(0,0,0,.7)}
-.artboard.launcher{width:min(96vw, calc(96vh * 742 / 459));aspect-ratio:742/459}
-.artboard.login{width:min(96vw, calc(96vh * 741 / 420));aspect-ratio:741/420}
-.artboard.server{width:min(96vw, calc(96vh * 1897 / 911));aspect-ratio:1897/911}
-.artboard.charsel{width:min(96vw, calc(96vh * 1911 / 944));aspect-ratio:1911/944}
-.artboard.create{width:min(96vw, calc(96vh * 1901 / 936));aspect-ratio:1901/936}
-.overlay{position:absolute;inset:0}
-.status{position:absolute;left:50%;transform:translateX(-50%);bottom:5%;padding:.55rem .95rem;border:1px solid #826a3e;background:rgba(0,0,0,.72);color:#e9d8af;font-size:.95rem;letter-spacing:.4px;min-width:240px;text-align:center}
-.msg-small{font-size:.82rem;color:#bca88b}
-.invisible-btn,.skin-btn{position:absolute;background:transparent;border:none;cursor:pointer}
-.skin-btn{background:linear-gradient(#4d4d4d,#bfb7a8 45%,#8e8676 55%,#e0dcd3 100%);border:1px solid #2d261c;color:#1d1c17;font-weight:700;box-shadow:0 0 0 1px #a39784 inset;text-shadow:0 1px 0 rgba(255,255,255,.5)}
-.skin-btn:hover{filter:brightness(1.08)}
-.metal-label{position:absolute;color:#f5e5b4;font-weight:bold;text-shadow:0 1px 2px #000,0 0 8px #000}
-input.ko{position:absolute;background:rgba(0,0,0,.75);border:1px solid #8a7d67;color:#e8e3d6;padding:0 .5rem;height:5.3%;font-size:clamp(12px,1.35vw,18px)}
-.dialog{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);min-width:min(420px,88vw);background:rgba(10,10,10,.92);border:1px solid #837055;box-shadow:0 0 0 1px #100d09, 0 18px 60px rgba(0,0,0,.8);padding:1rem 1.1rem 1.1rem;display:none;z-index:50}
-.dialog.open{display:block}
-.dialog h3{margin:.1rem 0 .8rem;color:#e4d2a1;text-align:center;letter-spacing:1px}
-.dialog p,.dialog label{color:#d8cfbe}
-.dialog .row{display:flex;gap:.6rem;align-items:center;justify-content:space-between;margin:.6rem 0}
-.dialog .actions{display:flex;justify-content:center;gap:.7rem;margin-top:1rem}
-.world-screen{background:#020202}
-#worldCanvas{position:absolute;inset:0;width:100%;height:100%}
-#worldHud{position:absolute;inset:0;pointer-events:none}
-#worldHud .clickable, #worldHud input{pointer-events:auto}
-.top-left-panel{position:absolute;left:20px;top:16px;width:245px;background:rgba(13,15,13,.78);border:1px solid #5a4e3b;padding:10px 11px 9px;box-shadow:0 0 0 1px #181510 inset}
-.portrait{width:50px;height:50px;display:inline-flex;align-items:center;justify-content:center;background:#382918;color:#f0d99c;border:1px solid #8a6d42;font-weight:bold;font-size:24px;float:left}
-.name-lv{margin-left:62px;color:#e7d5ae}.name-lv b{display:block;font-size:18px}.name-lv small{color:#a99b81}
-.bars{clear:both;padding-top:8px}.bars>div{position:relative;height:18px;margin-top:6px;background:#120f10;border:1px solid #41372b}.bars>div span{position:absolute;inset:2px}.bars .hp span{background:linear-gradient(90deg,#6c1715,#d83831)}.bars .mp span{background:linear-gradient(90deg,#14335a,#49a0e2)}.bars>div b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;text-shadow:0 1px 2px #000}
-.zone-title{position:absolute;left:50%;top:16px;transform:translateX(-50%);text-align:center;color:#f5dea4;text-shadow:0 2px 6px #000}.zone-title strong{display:block;font-size:28px;letter-spacing:2px}.zone-title small{font-size:12px;color:#d8c190;letter-spacing:1px}
-#miniMap{position:absolute;right:16px;top:16px;border:1px solid #6e5c3d;background:#111;box-shadow:0 0 0 1px #191510 inset}
-.target-info{position:absolute;left:50%;top:82px;transform:translateX(-50%);padding:7px 13px;border:1px solid #7d6844;background:rgba(0,0,0,.76);color:#edd79e;text-align:center}.target-info.hidden{display:none}
-.chat{position:absolute;left:16px;bottom:18px;width:min(420px,42vw);background:rgba(10,10,10,.78);border:1px solid #64543b;padding:8px;pointer-events:auto}.chat-log{height:108px;overflow:auto;font-size:13px;color:#d5ccbd}.chat-log p{margin:.18rem 0}.chat-log span{color:#f2cb69}.chat input{width:100%;margin-top:7px;background:#090909;border:1px solid #514333;color:#ece6d8;padding:.45rem .5rem}
-.skillbar{position:absolute;left:50%;transform:translateX(-50%);bottom:20px;display:flex;gap:7px;padding:8px;background:rgba(10,10,10,.82);border:1px solid #68573f}.skill{width:50px;height:50px;border:1px solid #81745c;background:linear-gradient(var(--c1),var(--c2));position:relative;box-shadow:0 0 0 1px #191510 inset}.skill b{position:absolute;right:4px;bottom:2px;color:#f7e1b4;font-size:13px;text-shadow:0 1px 2px #000}
-.xpbar{position:absolute;left:50%;transform:translateX(-50%);bottom:85px;width:min(430px,45vw);height:16px;background:#0c0c0c;border:1px solid #5c4c36}.xpbar span{position:absolute;inset:2px;width:0%;background:linear-gradient(90deg,#6a5424,#e0b84a)}.xpbar b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;color:#e6dcc8}
-.controls-hint{position:absolute;right:18px;bottom:20px;color:#dfd5be;background:rgba(0,0,0,.56);border:1px solid #5c4f3c;padding:8px 10px;font-size:12px}
-.pointer-hint{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:16px 18px;border:1px solid #826d42;background:rgba(0,0,0,.75);color:#f2ddac;text-align:center}
-.world-screen.scanlines:after{content:'';position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(to bottom, rgba(255,255,255,.02) 0 1px, rgba(0,0,0,0) 1px 3px)}
-.badge{position:absolute;right:2.3%;top:2.2%;background:rgba(0,0,0,.6);color:#efefef;padding:.25rem .55rem;border:1px solid #796443;font-size:clamp(11px,1vw,15px)}
-.hidden{display:none !important}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;font-family:Arial,Helvetica,sans-serif;color:#eee}button,input{font:inherit}
+.screen{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:#000}.screen.active{display:flex}
+.board{position:relative;background-position:center;background-repeat:no-repeat;background-size:100% 100%;max-width:98vw;max-height:96vh;box-shadow:0 0 0 1px #5d4d37,0 22px 80px #000}
+.launcher{width:min(98vw,calc(96vh * 742 / 459));aspect-ratio:742/459}.login{width:min(98vw,calc(96vh * 741 / 420));aspect-ratio:741/420}.server{width:min(98vw,calc(96vh * 1897 / 911));aspect-ratio:1897/911}.charsel{width:min(98vw,calc(96vh * 1911 / 944));aspect-ratio:1911/944}.charcreate{width:min(98vw,calc(96vh * 1901 / 936));aspect-ratio:1901/936}
+.hit{position:absolute;border:0;background:transparent;cursor:pointer;padding:0}.hit:hover{outline:1px solid rgba(255,240,188,.45);background:rgba(255,255,255,.03)}
+.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:100;background:rgba(0,0,0,.86);border:1px solid #80683e;color:#efdba7;padding:8px 14px;font-size:13px;opacity:0;pointer-events:none;transition:.2s}.toast.show{opacity:1}
+.ad-mask{position:absolute;left:42.3%;top:11.8%;width:51.8%;height:58.0%;background:#000}
+#startHit{left:42.1%;top:84.7%;width:17.7%;height:9.4%}#homeHit{left:60.1%;top:84.7%;width:19.7%;height:9.4%}#optionHit{left:79.8%;top:84.7%;width:17%;height:9.4%}
+.ko-input{position:absolute;height:4.6%;background:#050505;border:1px solid #817765;color:#eee;padding:0 .45rem;font-size:clamp(11px,1.1vw,16px);outline:none}.ko-input:focus{border-color:#d4c08d}
+#idInput{left:9.0%;top:93.5%;width:14.3%}#pwInput{left:38.3%;top:93.5%;width:14.3%}
+.login-label-mask{position:absolute;top:93.0%;height:5.7%;background:linear-gradient(#8f8b81,#d9d6ce 45%,#827c72 55%,#b9b5ad);border:1px solid #625949;color:#1c1812;font-weight:bold;display:flex;align-items:center;justify-content:center;font-size:clamp(9px,.82vw,14px);text-shadow:0 1px #fff9}
+#loginLabel{left:56.4%;width:10.0%}#exitLabel{left:66.8%;width:10.3%}#optLabel{left:77.4%;width:10.6%}#homeLabel{left:88.3%;width:10.5%}
+#loginHit{left:56.4%;top:93%;width:10%;height:5.7%}#exitHit{left:66.8%;top:93%;width:10.3%;height:5.7%}#loginOptHit{left:77.4%;top:93%;width:10.6%;height:5.7%}#loginHomeHit{left:88.3%;top:93%;width:10.5%;height:5.7%}
+.server-row-mask{position:absolute;left:38.6%;top:15.7%;width:21.0%;height:4.0%;background:#1a1b12;border:1px solid #bab58a;box-shadow:0 0 0 1px #111 inset}.server-name{position:absolute;left:39.4%;top:15.8%;font-size:clamp(13px,1.35vw,24px);font-weight:bold;color:#39ff18;text-shadow:0 1px #000}.population{position:absolute;left:49.7%;top:16.25%;width:7.0%;height:1.25%;border:1px solid #6d684f;background:#060606}.population span{display:block;height:100%;width:72%;background:linear-gradient(90deg,#48de24,#d7dc27)}.pop-text{position:absolute;left:57.0%;top:15.95%;color:#ddd8b5;font-size:clamp(9px,.72vw,13px)}
+#serverRowHit{left:38.6%;top:15.7%;width:21%;height:4.0%}#connectHit{left:40.0%;top:86.0%;width:19.0%;height:6.5%}
+.create-shortcut,.start-char{position:absolute;background:linear-gradient(#bdb8ae,#eeeae2 45%,#888174 55%,#cbc5ba);border:1px solid #554c3c;color:#1b1812;font-weight:bold;cursor:pointer;box-shadow:0 0 0 1px #efe8d5 inset}
+.create-shortcut{left:6.5%;bottom:8.2%;width:16.5%;height:5.4%}.start-char{right:6.5%;bottom:8.2%;width:16.5%;height:5.4%}.start-char:disabled{opacity:.45;cursor:not-allowed}
+.char-summary{position:absolute;left:50%;bottom:12.6%;transform:translateX(-50%);padding:7px 15px;background:rgba(0,0,0,.74);border:1px solid #6e5b3d;color:#f2e0b3;text-align:center;min-width:270px}.char-summary small{display:block;color:#c3b58f;margin-top:3px}
+#charName{left:33.3%;top:82.8%;width:23.5%;height:4.3%}.select-outline{position:absolute;pointer-events:none;border:2px solid #f2c8d2;box-shadow:0 0 12px rgba(255,194,211,.35) inset}.race-outline{left:6.2%;top:10.2%;width:19.2%;height:4.4%}.job-outline{left:6.2%;top:40.2%;width:19.2%;height:4.5%;border-color:#d6d0c2}
+.stat-display{position:absolute;left:83.5%;top:7.0%;font-weight:bold;color:#ef999d;font-size:clamp(10px,.95vw,18px)}
+#bonusVal{left:91.1%;top:7.0%}.statv{position:absolute;left:84.6%;font-weight:bold;color:#ddd;font-size:clamp(10px,.95vw,18px)}#sv-str{top:13.8%}#sv-hp{top:19.3%}#sv-dex{top:25.0%}#sv-int{top:30.7%}#sv-mp{top:36.4%}
+#createFinal,#cancelCreate{position:absolute;bottom:8.1%;height:5.0%;background:linear-gradient(#bdb8ae,#eeeae2 45%,#888174 55%,#cbc5ba);border:1px solid #554c3c;color:#1b1812;font-weight:bold;cursor:pointer}#createFinal{left:6%;width:19%}#cancelCreate{right:6.7%;width:17%}
+#world{background:#111}#worldCanvas{position:absolute;inset:0;width:100%;height:100%}.hud{position:absolute;inset:0;pointer-events:none}.zone{position:absolute;left:50%;top:18px;transform:translateX(-50%);font:bold 26px Georgia,serif;color:#e7ca87;text-shadow:0 2px 4px #000}.statusbox{position:absolute;left:18px;top:18px;width:250px;background:rgba(0,0,0,.72);border:1px solid #64533b;padding:10px}.statusbox b{display:block;color:#efdbaa}.bar{height:14px;margin-top:6px;background:#121212;border:1px solid #40372c}.bar i{display:block;height:100%}.hp i{width:100%;background:#8c231f}.mp i{width:100%;background:#245ca0}.worldhelp{position:absolute;right:18px;bottom:18px;background:rgba(0,0,0,.65);border:1px solid #604f39;padding:8px 10px;color:#dfd3b6;font-size:12px}.worldexit{position:absolute;right:18px;top:18px;pointer-events:auto;background:#171717;border:1px solid #6b593d;color:#ead6a3;padding:7px 12px;cursor:pointer}
 </style>
 </head>
 <body>
-<div id="app">
-  <section class="screen active" id="launcherScreen">
-    <div class="artboard launcher" id="launcherBoard" style="background-image:url('assets/launcher.webp')">
-      <div class="overlay">
-        <div style="position:absolute;left:46.4%;top:11.5%;width:47.2%;height:34.5%;background:#000"></div>
-        <div class="metal-label" style="left:47.5%;top:48.3%;font-size:clamp(10px,.9vw,16px);color:#ddd">Update Completed</div>
-        <div style="position:absolute;left:45.8%;top:52.4%;width:44.4%;height:3.9%;background:#f4d7da;border:1px solid #b9a5a8;box-shadow:0 0 0 1px #6a5c61 inset"></div>
-        <button class="skin-btn" id="launcherStart" style="left:45.6%;top:58.6%;width:16.4%;height:7.4%;font-size:clamp(11px,.95vw,18px)">Start</button>
-        <button class="skin-btn" id="launcherHome" style="left:64.0%;top:58.6%;width:19.3%;height:7.4%;font-size:clamp(10px,.88vw,17px)">HomePage</button>
-        <button class="skin-btn" id="launcherOption" style="left:84.6%;top:58.6%;width:12.8%;height:7.4%;font-size:clamp(10px,.88vw,17px)">Option </button>
-        <button id="launcherClose" class="invisible-btn" style="right:0.9%;top:0.9%;width:4.2%;height:6.7%"></button>
-        <div class="status" id="launcherStatus">Launcher hazÄ±r. Start ile giriÅŸ ekranÄ±na geÃ§.</div>
-      </div>
-    </div>
-  </section>
-
-  <section class="screen" id="loginScreen">
-    <div class="artboard login" style="background-image:url('assets/login.webp')">
-      <div class="overlay">
-        <input class="ko" id="loginId" style="left:5.2%;top:92.4%;width:16.1%;height:5.5%" value="osevinc" maxlength="24" />
-        <input class="ko" id="loginPw" type="password" style="left:38.6%;top:92.4%;width:15.9%;height:5.5%" value="osevinc" maxlength="24" />
-        <button class="skin-btn" id="loginBtn" style="left:56.8%;top:92.25%;width:9.1%;height:5.8%;font-size:clamp(10px,.85vw,15px)">Login</button>
-        <button class="skin-btn" id="loginExit" style="left:67.6%;top:92.25%;width:10.3%;height:5.8%;font-size:clamp(10px,.85vw,15px)">Exit</button>
-        <button class="skin-btn" id="loginOption" style="left:79.2%;top:92.25%;width:10.0%;height:5.8%;font-size:clamp(10px,.85vw,15px)">Option</button>
-        <button class="skin-btn" id="loginHome" style="left:90.2%;top:92.25%;width:9.4%;height:5.8%;font-size:clamp(9px,.75vw,14px)">HomePage</button>
-        <div class="status" id="loginStatus">Test hesap hazÄ±r: <b>osevinc / osevinc</b></div>
-      </div>
-    </div>
-  </section>
-
-  <section class="screen" id="serverScreen">
-    <div class="artboard server" style="background-image:url('assets/server.webp')">
-      <div class="overlay">
-        <div class="badge">Login: <span id="loggedUser">osevinc</span></div>
-        <button id="serverBack" class="invisible-btn" style="left:42.3%;top:89.2%;width:14.2%;height:5.8%"></button>
-        <button id="serverConnect" class="invisible-btn" style="left:40.3%;top:86.7%;width:18.8%;height:6.6%"></button>
-        <button id="serverRow" class="invisible-btn" style="left:38.8%;top:12.4%;width:21.0%;height:5.3%"></button>
-        <div id="serverGlow" style="position:absolute;left:39.05%;top:12.7%;width:20.3%;height:4.6%;border:2px solid #dfd8ae;box-shadow:0 0 18px rgba(255,241,130,.35) inset,0 0 18px rgba(71,255,39,.16);pointer-events:none"></div>
-        <div style="position:absolute;left:39.6%;top:13.05%;color:#2eff00;font-size:clamp(16px,1.65vw,32px);font-weight:700;text-shadow:0 1px 2px #000">OldERA</div>
-        <div style="position:absolute;left:48.2%;top:13.3%;width:6.3%;height:1.25%;background:linear-gradient(90deg,#65ff39 0 68%, transparent 68%);border:1px solid #332f22"></div>
-        <div style="position:absolute;left:55.2%;top:13.0%;color:#ded8c0;font-size:clamp(11px,.9vw,16px);">Normal</div>
-        <div class="status" id="serverStatus">Server listesinde <b>OldERA</b> seÃ§ili. Connect ile devam et.</div>
-      </div>
-    </div>
-  </section>
-
-  <section class="screen" id="charSelectScreen">
-    <div class="artboard charsel" style="background-image:url('assets/charsel.webp')">
-      <div class="overlay">
-        <button id="charBack" class="invisible-btn" style="left:37.6%;top:88.5%;width:21.5%;height:6.5%"></button>
-        <button id="charExit" class="invisible-btn" style="left:37.7%;top:94.3%;width:21.6%;height:5.0%"></button>
-        <button id="charDelete" class="invisible-btn" style="left:41.0%;top:0.3%;width:16.7%;height:5.5%"></button>
-        <button id="charPrev" class="invisible-btn" style="left:17.6%;top:88.6%;width:8.8%;height:6.2%"></button>
-        <button id="charNext" class="invisible-btn" style="left:72.8%;top:88.6%;width:8.8%;height:6.2%"></button>
-        <button class="skin-btn" id="openCreate" style="left:8%;top:79.4%;width:15.2%;height:5.4%;font-size:clamp(12px,.95vw,19px)">Create Character</button>
-        <button class="skin-btn" id="enterWorld" style="left:76.3%;top:79.4%;width:15.2%;height:5.4%;font-size:clamp(12px,.95vw,19px)">Start</button>
-        <div style="position:absolute;left:50%;top:71%;transform:translateX(-50%);min-width:28%;padding:.5rem .8rem;border:1px solid #7a6541;background:rgba(0,0,0,.72);text-align:center;color:#efe3c1">
-          <div style="font-size:clamp(14px,1.1vw,22px);font-weight:700" id="charSummaryName">HenÃ¼z karakter yok</div>
-          <div class="msg-small" id="charSummaryMeta">Ã–nce Create Character ile bir karakter oluÅŸtur.</div>
-        </div>
-        <div class="status" id="charSelectStatus">Karakter seÃ§imi ekranÄ±. Ä°stersen direkt oluÅŸtur, sonra Start ile Maradon'a geÃ§.</div>
-      </div>
-    </div>
-  </section>
-
-  <section class="screen" id="createScreen">
-    <div class="artboard create" style="background-image:url('assets/charcreate.webp')">
-      <div class="overlay">
-        <input class="ko" id="charName" style="left:33.2%;top:82.6%;width:23.6%;height:4.8%" placeholder="Karakter adÄ±" maxlength="20" />
-        <button class="invisible-btn race-option" data-race="Arch Tuarek" style="left:1.9%;top:10.7%;width:22.0%;height:5.7%"></button>
-        <button class="invisible-btn race-option" data-race="Tuarek" style="left:1.9%;top:17.6%;width:22.0%;height:5.7%"></button>
-        <button class="invisible-btn race-option" data-race="Wrinkle Tuarek" style="left:1.9%;top:24.7%;width:22.0%;height:5.7%"></button>
-        <button class="invisible-btn race-option" data-race="Puri Tuarek" style="left:1.9%;top:31.6%;width:22.0%;height:5.7%"></button>
-        <button class="invisible-btn job-option" data-job="Warrior" style="left:1.9%;top:44.0%;width:22.0%;height:5.7%"></button>
-        <button class="invisible-btn job-option" data-job="Rogue" style="left:1.9%;top:50.8%;width:22.0%;height:5.7%"></button>
-        <button class="invisible-btn job-option" data-job="Magician" style="left:1.9%;top:57.7%;width:22.0%;height:5.7%"></button>
-        <button class="invisible-btn job-option" data-job="Priest" style="left:1.9%;top:64.6%;width:22.0%;height:5.7%"></button>
-        <button class="invisible-btn stat-plus" data-stat="str" style="left:79.3%;top:14.3%;width:3.4%;height:2.9%"></button>
-        <button class="invisible-btn stat-plus" data-stat="hp" style="left:79.3%;top:20.1%;width:3.4%;height:2.9%"></button>
-        <button class="invisible-btn stat-plus" data-stat="dex" style="left:79.3%;top:25.7%;width:3.4%;height:2.9%"></button>
-        <button class="invisible-btn stat-plus" data-stat="int" style="left:79.3%;top:31.6%;width:3.4%;height:2.9%"></button>
-        <button class="invisible-btn stat-plus" data-stat="mp" style="left:79.3%;top:37.4%;width:3.4%;height:2.9%"></button>
-        <button class="invisible-btn stat-minus" data-stat="str" style="left:67.3%;top:14.3%;width:3.4%;height:2.9%"></button>
-        <button class="invisible-btn stat-minus" data-stat="hp" style="left:67.3%;top:20.1%;width:3.4%;height:2.9%"></button>
-        <button class="invisible-btn stat-minus" data-stat="dex" style="left:67.3%;top:25.7%;width:3.4%;height:2.9%"></button>
-        <button class="invisible-btn stat-minus" data-stat="int" style="left:67.3%;top:31.6%;width:3.4%;height:2.9%"></button>
-        <button class="invisible-btn stat-minus" data-stat="mp" style="left:67.3%;top:37.4%;width:3.4%;height:2.9%"></button>
-        <button class="skin-btn" id="createCharBtn" style="left:3.4%;top:87.3%;width:20.6%;height:5.6%;font-size:clamp(12px,.95vw,18px)">Create Character</button>
-        <button class="skin-btn" id="cancelCreateBtn" style="left:76.0%;top:87.3%;width:16.0%;height:5.6%;font-size:clamp(12px,.95vw,18px)">Cancel</button>
-        <div id="raceHighlight" style="position:absolute;left:1.9%;top:10.7%;width:22%;height:5.7%;border:2px solid #f0c9d4;box-shadow:0 0 10px rgba(255,182,193,.42) inset;pointer-events:none"></div>
-        <div id="jobHighlight" style="position:absolute;left:1.9%;top:44.0%;width:22%;height:5.7%;border:2px solid #c2b39b;box-shadow:0 0 10px rgba(255,255,255,.15) inset;pointer-events:none"></div>
-        <div id="statOverlay" style="position:absolute;left:67.3%;top:8.9%;width:16.2%;height:34.8%;pointer-events:none;color:#ddd;font-weight:700;text-shadow:0 1px 2px #000;font-size:clamp(12px,1vw,20px)">
-          <div id="bonusPoints" style="position:absolute;right:-27.3%;top:0.1%;color:#f4a9b0">10</div>
-          <div id="stat-str" style="position:absolute;left:45.6%;top:14.8%">0</div>
-          <div id="stat-hp" style="position:absolute;left:45.6%;top:31.3%">0</div>
-          <div id="stat-dex" style="position:absolute;left:45.6%;top:47.3%">0</div>
-          <div id="stat-int" style="position:absolute;left:45.6%;top:64.0%">0</div>
-          <div id="stat-mp" style="position:absolute;left:45.6%;top:80.5%">0</div>
-        </div>
-        <div style="position:absolute;left:73.8%;top:58.9%;width:20.7%;height:20.2%;padding:1rem;color:#ffef46;font-size:clamp(12px,1.1vw,22px);line-height:1.15;overflow:hidden;text-shadow:0 1px 2px #000" id="charDescription">Arch Tuarek is a physically strong race who are fit to become a warrior.</div>
-        <div class="status" id="createStatus">SeÃ§imleri yap, isim gir ve Create Character'a bas.</div>
-      </div>
-    </div>
-  </section>
-
-  <section class="screen world-screen scanlines" id="worldScreen">
-    <canvas id="worldCanvas"></canvas>
-    <div id="worldHud">
-      <div class="top-left-panel"><div class="portrait" id="hudPortrait">W</div><div class="name-lv"><b id="hudName">Orhan</b><small id="hudMeta">Karus Â· Warrior Â· Lv. 1</small></div><div class="bars"><div class="hp"><span style="width:100%"></span><b>HP 312 / 312</b></div><div class="mp"><span style="width:100%"></span><b>MP 122 / 122</b></div></div></div>
-      <div class="zone-title"><strong>MORADON</strong><small>Merchant City</small></div>
-      <canvas id="miniMap" width="180" height="180"></canvas>
-      <div id="targetInfo" class="target-info hidden"><b></b><small>[E] Talk</small></div>
-      <div class="chat clickable"><div id="chatLog" class="chat-log"><p><span>[Notice]</span> Welcome to OldERA 1298.</p><p><span>[System]</span> Test account ile girisÅŸ yaptÄ±n. ÅžÅŸimdi Maradon'dasÄ±n.</p></div><input id="chatInput" placeholder="Mesaj..." /></div>
-      <div class="skillbar" id="skillbar"></div>
-      <div class="xpbar"><span></span><b>EXP 0.00%</b></div>
-      <div class="controls-hint">WASD hareket Â· Mouse bakÄ±ÅŸÂ· Shift koÅŸ Â· E etkileÅŸim Â· Esc fareyi bÄ±rak</div>
-    </div>
-    <div id="pointerHint" class="pointer-hint">DÃ¼nyaya tÄ±kla<br/><small>fare kontrolÃ¼nÃ¼ etkinleÅŸtir</small></div>
-  </section>
-
-  <div class="dialog" id="optionsDialog">
-    <h3>Option</h3>
-    <div class="row"><label for="renderScale">Render scale</label><input id="renderScale" type="range" min="0.5" max="1" step="0.1" value="0.8"></div>
-    <div class="row"><label for="showNames">NPC isimleri</label><input id="showNames" type="checkbox" checked></div>
-    <div class="row"><label for="scanlines">CRT/1298 doku</label><input id="scanlines" type="checkbox" checked></div>
-    <div class="actions"><button class="skin-btn" id="closeOptions" style="padding:.5rem 1rem">OK</button></div>
-  </div>
-</div>
-<script>
-/* Oldera 1298 web prototype â€” clean-room canvas raycaster.
-   The map is an original Moradon-inspired layout; no Knight Online game assets are embedded. */
-(() => {
-  class OlderaWorld {
-    constructor(canvas, mini){
-      this.canvas=canvas; this.ctx=canvas.getContext('2d',{alpha:false}); this.mini=mini; this.mctx=mini.getContext('2d');
-      this.map=[
-        '1111111111111111111111111111111111111',
-        '1000000000000000000000000000000000000001',
-        '100033300000000000000000000000000033300001',
-        '100030300000000000000000000000000030300001',
-        '100033300000000000000000000000000033300001',
-        '100000000000000000000000000000000000000001',
-        '100000022220000000000000000022220000001',
-        '100000020020000000000000000020020000001',
-        '100000020020000000000000000020020000001',
-        '100000022220000000000000000022220000001',
-        '100000000000000000000000000000000000000001',
-        '100000000000000004444440000000000000000001',
-        '100000000000000004000040000000000000000001',
-        '100000000000000004050040000000000000000001',
-        '100000000000000004000040000000000000000001',
-        '100000000000000004444440000000000000000001',
-        '100000000000000000000000000000000000000001',
-        '1000222200000000000000000000000022220001',
-        '10002002000000000000000000000000020020001',
-        '1000200200000000000000000000000020020001',
-        '10002222000000000000000000000000022220001',
-        '100000000000000000000000000000000000000001',
-        '100000000000000000000000000000000000000001',
-        '100000033300000000000000000000033300000001',
-        '100000030300000000000000000000030300000001',
-        '100000033300000000000000000000033300000001',
-        '100000000000000000000000000000000000000001',
-        '100000000000000000000000000000000000000001',
-        '100000000000000000000000000000000000000001',
-        '100000000000011110000111100000000000000001',
-        '100000000000010010000100100000000000000001',
-        '100000000000010010000100100000000000000001',
-        '100000000000011110000111100000000000000001',
-        '100000000000000000000000000000000000000001',
-        '100000000000000000000000000000000000000001',
-        '11111111111111111111001111111111111111111111111'
-      ].map(r=>r.split('').map(Number));
-      this.p={x:19.5,y:31.5,a:-Math.PI/2};
-      this.keys={}; this.fov=Math.PI/3.25; this.depth=28; this.running=false; this.last=0; this.scale=.8;
-      this.npcs=[
-        {x:18.2,y:17.7,name:'[Inn Hostess] Lina',type:'inn'},
-        {x:21.7,y:17.8,name:']Warehouse Keeper] Emma',type:'bank'},
-        {x:14.6,y:22.5,name:'[Potion Merchant] Menissiah',type:'potion'},
-        {x:24.6,y:22.7,name:'[Armor Merchant] Hesta',type:'armor'},
-        {x:18.1,y:10.1,name:'[Weapon Merchant] Charon',type:'weapon'},
-        {x:21.5,y:10.2,name:'[Sundries] Neria',type:'sundries'}
-      ];
-      this.showNames=true; this.onTarget=null;
-      this.bind(); this.resize();
-    }
-    bind(){
-      addEventListener('resize',()=>this.resize());
-      addEventListener('keydown',e=>{ if(!['INPUT','TEXTAREA'].includes(document.activeElement?.tagName)) this.keys[e.code]=true; });
-      addEventListener('keyup',e=>this.keys[e.code]=false);
-      this.canvas.addEventListener('click',()=>this.canvas.requestPointerLock?.());
-      document.addEventListener('mousemove',e=>{ if(document.pointerLockElement===this.canvas) this.p.a+=e.movementX*.0027; });
-    }
-    resize(){
-      const dpr=Math.min(devicePixelRatio||1,1.5); this.canvas.width=Math.floor(innerWidth*this.scale*dpr); this.canvas.height=Math.floor(innerHeight*this.scale*dpr);
-      this.w=this.canvas.width; this.h=this.canvas.height;
-    }
-    setScale(v){this.scale=+v;this.resize()}
-    cell(x,y){ const X=Math.floor(x),Y=Math.floor(y); if(Y<0||X<0||Y>=this.map.length||X>=this.map[0].length)return 1; return this.map[Y][X\ìô(€€€ÍÑ…ÉÐ ¥ì¥˜¡Ñ¡¥Ì¹ÉÕ¹¹¥¹œ¥É•ÑÕÉ¸ìÑ¡¥Ì¹ÉÕ¹¹¥¹œõÑÉÕ”ìÑ¡¥Ì¹±…ÍÐõÁ•É™½Éµ…¹”¹¹½Ü ¤ìÉ•ÅÕ•ÍÑ¹¥µ…Ñ¥½¹É…µ”¡ÐôùÑ¡¥Ì¹±½½À¡Ð¤¤ìô(€€€ÍÑ½À ¥íÑ¡¥Ì¹ÉÕ¹¹¥¹œõ™…±Í”í‘½Õµ•¹Ð¹•á¥ÑA½¥¹Ñ•É1½¬ü¸ ¥ô(€€€±½½À¡Ð¥ì¥˜ …Ñ¡¥Ì¹ÉÕ¹¹¥¹œ¥É•ÑÕÉ¸ì±•Ð‘Ðõ5…Ñ ¹µ¥¸ ¡ÐµÑ¡¥Ì¹±…ÍÐ¤¼ÄÀÀÀ°¸ÀÔ¤íÑ¡¥Ì¹±…ÍÐõÐíÑ¡¥Ì¹ÕÁ‘…Ñ”¡‘Ð¤íÑ¡¥Ì¹É•¹‘•È ¤íÉ•ÅÕ•ÍÑ¹¥µ…Ñ¥½¹É…µ”¡¸ôùÑ¡¥Ì¹±½½À¡¸¤¤ìô(€€€ÕÁ‘…Ñ”¡‘Ð¥ì(€€€€€±•ÐÍÀô¡Ñ¡¥Ì¹­•åÌ¹M¡¥™Ñ1•™ÑññÑ¡¥Ì¹­•åÌ¹M¡¥™ÑI¥¡Ð¤üÐ¸ÈèÈ¸ÐÔ±‘àôÀ±‘äôÀì(€€€€€½¹ÍÐ˜ô¡Ñ¡¥Ì¹­•åÌ¹-•å\üÄèÀ¤´¡Ñ¡¥Ì¹­•åÌ¹-•åLüÄèÀ¤°Ìô¡Ñ¡¥Ì¹­•åÌ¹-•åüÄèÀ¤´¡Ñ¡¥Ì¹­•åÌ¹-•åüÄèÀ¤ì(€€€€€‘àô¡5…Ñ ¹½Ì¡Ñ¡¥Ì¹À¹„¤©˜­5…Ñ ¹½Ì¡Ñ¡¥Ì¹À¹„­5…Ñ ¹A$¼È¤©Ì¤©ÍÀ©‘Ðì(€€€€€‘äô¡5…Ñ ¹Í¥¸¡Ñ¡¥Ì¹À¹„¤©˜­5…Ñ ¹Í¥¸¡Ñ¡¥Ì¹À¹„­5…Ñ ¹A$¼È¤©Ì¤©ÍÀ©‘Ðì(€€€€€½¹ÍÐÁ…ô¸ÈÈí¥˜ …Ñ¡¥Ì¹•±°¡Ñ¡¥Ì¹À¹à­‘à­5…Ñ ¹Í¥¸¡‘à¤©Á…±Ñ¡¥Ì¹À¹ä¤¥Ñ¡¥Ì¹À¹à¬õ‘àí¥˜ …Ñ¡¥Ì¹•±°¡Ñ¡¥Ì¹À¹à±Ñ¡¥Ì¹À¹ä­‘ä­5…Ñ ¹Í¥¸¡‘ä¤©Á…¤¥Ñ¡¥Ì¹À¹ä¬õ‘äì(€€€€€±•Ð‰•ÍÐõ¹Õ±°±‰ôÄ¸ÌÔì™½È¡½¹ÍÐ¸½˜Ñ¡¥Ì¹¹ÁÌ¥í±•Ðõ5…Ñ ¹¡åÁ½Ð¡¸¹àµÑ¡¥Ì¹À¹à±¸¹äµÑ¡¥Ì¹À¹ä¤í¥˜¡ñ‰¥í‰õí‰•ÍÐõ¹õô(€€€€€¥˜¡Ñ¡¥Ì¹½¹Q…É•Ð¥Ñ¡¥Ì¹½¹Q…É•Ð¡‰•ÍÐ¤ì(€€€ô(€€€Ý…±±½±½È¡ÑåÁ”±‘¥ÍÐ±Í¥‘”¥ì(€€€€€½¹ÍÐÁ…±•ÑÑ”õìÄélÄÀÔ°äÄ°Øát°ÈélÄÈà°äÜ°Ôát°ÌélÜä°ØÜ°ÔÉt°ÐélÄÔÀ°ÄÈØ°àÉt°ÔéläÈ°ÄÄÄ°ÄÄÍuôí±•ÐŒõÁ…±•ÑÑ•mÑåÁ•uññÁ…±•ÑÑ•lÅt°Í¡…‘”õ5…Ñ ¹µ…à ¸ÈÈ°Äµ‘¥ÍÐ¼ÌÄ¤¬¡Í¥‘”ü¸àÈèÄ¤íÉ•ÑÕÉ¸Éˆ ‘íŒ¹µ…À¡Øôù5…Ñ ¹™±½½È¡Ø©Í¡…‘”¤¤¹©½¥¸ œ°œ¥ô¥€ì(€€€ô(€€€…ÍÐ¡É„¥ì(€€€€€±•ÐÍ¥¸õ5…Ñ ¹Í¥¸¡É„¥ñð¸ÀÀÀÄ±½Ìõ5…Ñ ¹½Ì¡É„¥ñð¸ÀÀÀÄ±ôÀ±ÑåÁ”ôÀ±Í¥‘”ôÀìÝ¡¥±”¡ñÑ¡¥Ì¹‘•ÁÑ ¥í¬ô¸ÀÈÔí±•ÐàõÑ¡¥Ì¹À¹à­½Ì©±äõÑ¡¥Ì¹À¹ä­Í¥¸©íÑåÁ”õÑ¡¥Ì¹•±°¡à±ä¤í¥˜¡ÑåÁ”¥í±•Ð™àõàµ5…Ñ ¹™±½½È¡à¤±™äõäµ5…Ñ ¹™±½½È¡ä¤íÍ¥‘”ô¡™àð¸ÀÌÕññ™àø¸äØÔ¤üÄèÀí‰É•…­õôÉ•ÑÕÉ¸í±ÑåÁ”±Í¥‘•ôì(€€€ô(€€€É•¹‘•È ¥ì(€€€€€½¹ÍÐŒõÑ¡¥Ì¹Ñà±ÌõÑ¡¥Ì¹Ü± õÑ¡¥Ì¹ ì½¹ÍÐÍ­äõŒ¹É•…Ñ•1¥¹•…ÉÉ…‘¥•¹Ð À°À°À± ¨¸ÔÔ¤íÍ­ä¹…‘‘½±½ÉMÑ½À À°œŒÔàÜÐàÔœ¤íÍ­ä¹…‘‘½±½ÉMÑ½À ¸ØÔ°œˆå…„Ý”œ¤íÍ­ä¹…‘‘½±½ÉMÑ½À Ä°œÅˆäàÈœ¤íŒ¹™¥±±MÑå±”õÍ­äíŒ¹™¥±±I•Ð À°À±Ü± ¨¸ÔÔ¤ì(€€€€€Œ¹™¥±±MÑå±”ôœˆØäÜØàœíŒ¹™¥±±I•Ð À± ¨¸ÔÔ±Ü± ¨¸ÐÔ¤ì(€€€€€Œ¹™¥±±MÑå±”ôœŒÑˆÑÐÌœí™½È¡±•Ð¤ôÀí¤ðÄÈí¤¬¬¥í±•Ð‰àô¡¤¼ÄÄ¤©Ü´ÌÀ±‰ ôÈÔ¬¡¤”Ì¤¨ÄàíŒ¹™¥±±I•Ð¡‰à± ¨¸ÔÔµ‰ °ÜÔ±‰ ¥ô(€€€€€½¹ÍÐ½±Ìõ5…Ñ ¹µ¥¸¡Ü°ÜØÀ¤í½¹ÍÐÍÑÉ¥Á”õÜ½½±Ìì½¹ÍÐé‰Õ˜õ¹•Ü±½…ÐÌÉÉÉ…ä¡½±Ì¤ì(€€€€€™½È¡±•ÐàôÀíàñ½±Ìíà¬¬¥í±•ÐÉ„õÑ¡¥Ì¹À¹„µÑ¡¥Ì¹™½Ø¼È¬¡à½½±Ì¤©Ñ¡¥Ì¹™½Ø±ÈõÑ¡¥Ì¹…ÍÐ¡É„¤±õÈ¹©5…Ñ ¹½Ì¡É„µÑ¡¥Ì¹À¹„¤íé‰Õ™mátõí±•ÐÝ õ5…Ñ ¹µ¥¸¡ ¨Ä¸Ô± ¼¡¨¸ÜÈ¤¤í±•ÐÑ½Àô¡ µÝ ¤¼ÈíŒ¹™¥±±MÑå±”õÑ¡¥Ì¹Ý…±±½±½È¡È¹ÑåÁ”±±È¹Í¥‘”¤íŒ¹™¥±±I•Ð¡à©ÍÑÉ¥Á”±Ñ½À±ÍÑÉ¥Á”¬Ä±Ý ¤ì¥˜¡È¹ÑåÁ”ôôôÉññÈ¹ÑåÁ”ôôôÐ¥íŒ¹™¥±±MÑå±”õÉ‰„ ÌÔ°ÈÐ°ÄÌ°‘í5…Ñ ¹µ…à À°¸Ìàµ¼äÀ¥ô¥€í™½È¡±•Ð¬õÑ½À¬ÄÐí¬ñÑ½À­Ý í¬¬ôÈÈ¥Œ¹™¥±±I•Ð¡à©ÍÑÉ¥Á”±¬±ÍÑÉ¥Á”¬Ä°È¥õô(€€€€€Ñ¡¥Ì¹É•¹‘•É9ÁÌ¡é‰Õ˜±½±Ì±ÍÑÉ¥Á”¤ì(€€€€€Ñ¡¥Ì¹É•¹‘•ÉÉ½Õ¹‘1¥¹•Ì ¤íÑ¡¥Ì¹‘É…Ý5¥¹¤ ¤ì(€€€ô(€€€É•¹‘•ÉÉ½Õ¹‘1¥¹•Ì ¥í½¹ÍÐŒõÑ¡¥Ì¹Ñà±ÜõÑ¡¥Ì¹Ü± õÑ¡¥Ì¹ íŒ¹Í…Ù” ¤íŒ¹ÍÑÉ½­•MÑå±”ôœŒÑŒÌàÈÔÅŒœíŒ¹±¥¹•]¥‘Ñ ôÄí™½È¡±•Ðäõ ¨¸Ôàíäñ íä¬õ5…Ñ ¹µ…à à°¡äµ ¨¸ÔÔ¤¨¸ÀäÔ¤¥íŒ¹‰•¥¹A…Ñ  ¤íŒ¹µ½Ù•Q¼ À±ä¤íŒ¹±¥¹•Q¼¡Ü±ä¤íŒ¹ÍÑÉ½­” ¥õŒ¹É•ÍÑ½É” ¥ô(€€€É•¹‘•É9ÁÌ¡é‰Õ˜±½±Ì±ÍÑÉ¥Á”¥ì(€€€€€½¹ÍÐ±¥ÍÐõÑ¡¥Ì¹¹ÁÌ¹µ…À¡¸ôùí±•Ð‘àõ¸¹àµÑ¡¥Ì¹À¹à±‘äõ¸¹äµÑ¡¥Ì¹À¹à±õ5…Ñ ¹¡åÁ½Ð¡‘à±‘ä¤±„õ5…Ñ ¹…Ñ…¸È¡‘ä±‘à¤µÑ¡¥Ì¹À¹„íÝ¡¥±”¡„ù5…Ñ ¹A$¥„´õ5…Ñ ¹A$¨ÈíÝ¡¥±”¡„ðµ5…Ñ ¹A$¥„¬õ5…Ñ ¹A$¨ÈíÉ•ÑÕÉ¹ì¸¸¹¸±±…õô¤¹™¥±Ñ•È¡¸ôù5…Ñ ¹…‰Ì¡¸¹„¤ñÑ¡¥Ì¹™½Ø¨¸Ü˜™¸¹ø¸ÌÔ¤¹Í½ÉÐ ¡„±ˆ¤ôùˆ¹µ„¹¤ì(€€€€€™½È¡½¹ÍÐ¸½˜±¥ÍÐ¥í±•ÐÍàô¡¸¹„½Ñ¡¥Ì¹™½Ø¬¸Ô¤©Ñ¡¥Ì¹Ü°Í¥é”õÑ¡¥Ì¹ ¼¡¸¹¨¸äÈ¤°½°õ5…Ñ ¹µ…à À±5…Ñ ¹µ¥¸¡½±Ì´Ä±5…Ñ ¹™±½½È¡Íà½Ñ¡¥Ì¹Ü©½±Ì¤¤¤í¥˜¡¸¹ùé‰Õ™m½±t¬¸È¥½¹Ñ¥¹Õ”í±•Ð‰…Í”õÑ¡¥Ì¹ ¼È­Í¥é”¨¸Ô±Ñ½Àõ‰…Í”µÍ¥é”í½¹ÍÐŒõÑ¡¥Ì¹ÑàíŒ¹™¥±±MÑå±”ôœŒÅˆÄÜÄÌœíŒ¹‰•¥¹A…Ñ  ¤íŒ¹•±±¥ÁÍ”¡Íà±Ñ½À­Í¥é”¨¸ÈÄ±Í¥é”¨¸ÄÈ±Í¥é”¨¸ÄØ°À°À±5…Ñ ¹A$¨È¤íŒ¹™¥±° ¤íŒ¹™¥±±MÑå±”õ¸¹ÑåÁ”ôôô‰…¹¬œüœŒÜØØÔÐÜœé¸¹ÑåÁ”ôôôÝ•…Á½¸œüœŒØÔÔÔÑ”œèœŒÝˆØàÐàœíŒ¹™¥±±I•Ð¡ÍàµÍ¥é”¨¸ÄØ±Ñ½À­Í¥é”¨¸ÌÈ±Í¥é”¨¸ÌÈ±Í¥é”¨¸ÔÄ¤íŒ¹™¥±±MÑå±”ôœŒÄàÄàÄàœíŒ¹™¥±±I•Ð¡ÍàµÍ¥é”¨¸ÄÌ±Ñ½À­Í¥é”¨¸à±Í¥é”¨¸Àä±Í¥é”¨¸È¤íŒ¹™¥±±I•Ð¡Íà­Í¥é”¨¸ÀÐ±Ñ½À­Í¥é”¨¸à±Í¥é”¨¸Àä±Í¥é”¨¸È¤í¥˜¡Ñ¡¥Ì¹Í¡½Ý9…µ•Ì˜™Í¥é”øÈÀ¥íŒ¹™½¹Ðõ€‘í5…Ñ ¹µ…à à±5…Ñ ¹µ¥¸ ÄÐ±Í¥é”¨¸ÀÔÔ¤¥õÁàÉ¥…±€íŒ¹Ñ•áÑ±¥¸ô•¹Ñ•ÈœíŒ¹™¥±±MÑå±”ôœ˜Å˜ÜÈœíŒ¹ÍÑÉ½­•MÑå±”ôœŒÀÀÀœíŒ¹±¥¹•]¥‘Ñ ôÌíŒ¹ÍÑÉ½­•Q•áÐ¡¸¹¹…µ”±Íà±Ñ½À´Ô¤íŒ¹™¥±±Q•áÐ¡¸¹¹…µ”±Íà±Ñ½À´Ô¥õô(€€€ô(€€€‘É…Ý5¥¹¤ ¥í½¹ÍÐŒõÑ¡¥Ì¹µÑà±\õÑ¡¥Ì¹µ¥¹¤¹Ý¥‘Ñ ± õÑ¡¥Ì¹µ¥¹¤¹¡•¥¡ÐíŒ¹±•…ÉI•Ð À°À±\± ¤íŒ¹™¥±±MÑå±”ôœŒÄÐÈÀÅ„œíŒ¹™¥±±I•Ð À°À±\± ¤í½¹ÍÐÍ…±”ôÐ±½àõ\¼ÈµÑ¡¥Ì¹À¹à©Í…±”±½äõ ¼ÈµÑ¡¥Ì¹À¹ä©Í…±”í™½È¡±•ÐäôÀíäñÑ¡¥Ì¹µ…À¹±•¹Ñ íä¬¬¥™½È¡±•ÐàôÀíàñÑ¡¥Ì¹µ…ÁlÁt¹±•¹Ñ íà¬¬¥í±•ÐØõÑ¡¥Ì¹µ…Ámåumátí¥˜¡Ø¥íŒ¹™¥±±MÑå±”õØôôôÐüœ„ÄàÔÔÐœéØôôôÈüœŒÜØÕˆÌÜœèœŒÕ˜ÔàÑ„œíŒ¹™¥±±I•Ð¡½à­à©Í…±”±½ä­ä©Í…±”±Í…±”±Í…±”¥õõ™½È¡½¹ÍÐ¸½˜Ñ¡¥Ì¹¹ÁÌ¥íŒ¹™¥±±MÑå±”ôœ”ÝŒÐØÜœíŒ¹™¥±±I•Ð¡½à­¸¹à©Í…±”´Ä±½ä­¸¹ä©Í…±”´Ä°Ì°Ì¥õŒ¹Í…Ù” ¤íŒ¹ÑÉ…¹Í±…Ñ”¡\¼È± ¼È¤íŒ¹É½Ñ…Ñ”¡Ñ¡¥Ì¹À¹„¤íŒ¹™¥±±MÑå±”ôœ™™˜œíŒ¹‰•¥¹A…Ñ  ¤íŒ¹µ½Ù•Q¼ Ü°À¤íŒ¹±¥¹•Q¼ ´Ô°´Ð¤íŒ¹±¥¹•Q¼ ´Ì°À¤íŒ¹±¥¹•Q¼ ´Ô°Ð¤íŒ¹±½Í•A…Ñ  ¤íŒ¹™¥±° ¤íŒ¹É•ÍÑ½É” ¤íŒ¹ÍÑÉ½­•MÑå±”ôœŒáˆÄÝ„ØØœíŒ¹‰•¥¹A…Ñ  ¤íŒ¹…ÉŒ¡\¼È± ¼È°ÜÔ°À±5…Ñ ¹A$¨È¤íŒ¹ÍÑÉ½­” ¥ô(€ô(€Ý¥¹‘½Ü¹=±‘•É…]½É±õ=±‘•É…]½É±ì)ô¤ ¤ì((ð½ÍÉ¥ÁÐø(ñÍÉ¥ÁÐø(  ¤€ôøì(€½¹ÍÐ€€ôÌ€ôø‘½Õµ•¹Ð¹ÅÕ•ÉåM•±•Ñ½È¡Ì¤ì(€½¹ÍÐ€€ôÌ€ôøl¸¸¹‘½Õµ•¹Ð¹ÅÕ•ÉåM•±•Ñ½É±°¡Ì¥tì(€½¹ÍÐÍÉ••¹Ì€ôì(€€€±…Õ¹¡•Èè€ œ±…Õ¹¡•ÉMÉ••¸œ¤°±½¥¸è€ œ±½¥¹MÉ••¸œ¤°Í•ÉÙ•Èè€ œÍ•ÉÙ•ÉMÉ••¸œ¤°(€€€¡…ÉM•±•Ðè€ œ¡…ÉM•±•ÑMÉ••¸œ¤°É•…Ñ”è€ œÉ•…Ñ•MÉ••¸œ¤°Ý½É±è€ œÝ½É±‘MÉ••¸œ¤(€ôì(€½¹ÍÐÍÑ…Ñ”€ôì(€€€…½Õ¹Ðèí¥è½Í•Ù¥¹Œœ°Á…ÍÍÝ½Éè½Í•Ù¥¹Œô°(€€€ÕÉÉ•¹ÑUÍ•Èè€œœ°(€€€Í•ÉÙ•Èè€=±‘Iœ°(€€€É•…Ñ•‘¡…É…Ñ•Èè¹Õ±°°(€€€É•…Ñ”èíÉ…”èÉ QÕ…É•¬œ°©½ˆè]…ÉÉ¥½Èœ°¹…µ”èœœ°ÍÑ…ÑÌéíÍÑÈèÀ±¡ÀèÀ±‘•àèÀ±¥¹ÐèÀ±µÀèÁô°‰½¹ÕÌèÄÁô(€ôì(€±•ÐÝ½É±€ô¹Õ±°ì(€™Õ¹Ñ¥½¸Í¡½Ü¡¹…µ”¥ì=‰©•Ð¹Ù…±Õ•Ì¡ÍÉ••¹Ì¤¹™½É… ¡ÌôùÌ¹±…ÍÍ1¥ÍÐ¹É•µ½Ù” …Ñ¥Ù”œ¤¤ìÍÉ••¹Ím¹…µ•t¹±…ÍÍ1¥ÍÐ¹…‘ …Ñ¥Ù”œ¤ì¥˜¡¹…µ”ôôôÝ½É±œ¥ì¥˜ …Ý½É±¤¥¹¥Ñ]½É± ¤ìÝ½É±¹ÍÑ…ÉÐ ¤ìô•±Í”ìÝ½É±€˜˜Ý½É±¹ÍÑ½À ¤ìôô(€™Õ¹Ñ¥½¸ÍÑ…ÑÕÌ¡¥°Ñ•áÐ¥ì€¡¥¤¹¥¹¹•É!Q50€ôÑ•áÐìô(€™Õ¹Ñ¥½¸½Á•¹=ÁÑ¥½¹Ì ¥ì€ œ½ÁÑ¥½¹Í¥…±½œœ¤¹±…ÍÍ1¥ÍÐ¹…‘ ½Á•¸œ¤ìô(€™Õ¹Ñ¥½¸±½Í•=ÁÑ¥½¹Ì ¥ì€ œ½ÁÑ¥½¹Í¥…±½œœ¤¹±…ÍÍ1¥ÍÐ¹É•µ½Ù” ½Á•¸œ¤ìô(€€ œ±½Í•=ÁÑ¥½¹Ìœ¤¹½¹±¥¬€ô±½Í•=ÁÑ¥½¹Ìì(€€ œ±…Õ¹¡•É=ÁÑ¥½¸œ¤¹½¹±¥¬€ô½Á•¹=ÁÑ¥½¹Ìì€ œ±½¥¹=ÁÑ¥½¸œ¤¹½¹±¥¬€ô½Á•¹=ÁÑ¥½¹Ìì(€€ œ±…Õ¹¡•É!½µ”œ¤¹½¹±¥¬€ô€ ¤€ôø…±•ÉÐ 	ÔÁÉ½Ñ½Ñ¥ÁÑ”!½µ•Á…”‰ÕÑ½¹Ôå…±»Åé„å•ÈÑÕÑÕÕ‘ÕÈ¸ƒÁÍÑ•ÉÍ•¸Í½¹É…­¤…“Åµ‘„•Ë•¬éŽÙ¹±…¹“ÅÉµ„•­±•É¥´¸œ¤ì(€€ œ±½¥¹!½µ”œ¤¹½¹±¥¬€ô€ ¤€ôø…±•ÉÐ 	ÔÁÉ½Ñ½Ñ¥ÁÑ”!½µ•Á…”‰ÕÑ½¹Ôå…±»Åé„å•ÈÑÕÑÕÕ‘ÕÈ¸œ¤ì(€€ œ±…Õ¹¡•É±½Í”œ¤¹½¹±¥¬€ô€ ¤€ôø…±•ÉÐ Q…É…å‹ÇÄÁÉ½Ñ½Ñ¥Á¥¹‘”Á•¹•É”­…Á…Ñµ„¥Ï}±•µ¥¹¤Ñ…É…å‹ÇÄçÙ¹•Ñ¥È¸œ¤ì(€€ œ±…Õ¹¡•ÉMÑ…ÉÐœ¤¹½¹±¥¬€ô€ ¤€ôøÍ¡½Ü ±½¥¸œ¤ì(€€ œ±½¥¹á¥Ðœ¤¹½¹±¥¬€ô€ ¤€ôøÍ¡½Ü ±…Õ¹¡•Èœ¤ì(€€ œ±½¥¹	Ñ¸œ¤¹½¹±¥¬€ô€ ¤€ôøì(€€€½¹ÍÐ¥€ô€ œ±½¥¹%œ¤¹Ù…±Õ”¹ÑÉ¥´ ¤ì(€€€½¹ÍÐÁÜ€ô€ œ±½¥¹AÜœ¤¹Ù…±Õ”ì(€€€¥˜¡¥€ôôôÍÑ…Ñ”¹…½Õ¹Ð¹¥€˜˜ÁÜ€ôôôÍÑ…Ñ”¹…½Õ¹Ð¹Á…ÍÍÝ½É¥ì(€€€€€ÍÑ…Ñ”¹ÕÉÉ•¹ÑUÍ•È€ô¥ì(€€€€€€ œ±½•‘UÍ•Èœ¤¹Ñ•áÑ½¹Ñ•¹Ð€ô¥ì(€€€€€ÍÑ…ÑÕÌ œ±½¥¹MÑ…ÑÕÌœ°€¥É§|‰‡}…ËÅ³Ä¸€ñˆù=±‘Ið½ˆøÍ•ÉÙ•È±¥ÍÑ•Í¥¹”—¥±¥å½È¸¸¸œ¤ì(€€€€€Í•ÑQ¥µ•½ÕÐ  ¤€ôøÍ¡½Ü Í•ÉÙ•Èœ¤°€ÈÀÀ¤ì(€€€ô•±Í”ì(€€€€€ÍÑ…ÑÕÌ œ±½¥¹MÑ…ÑÕÌœ°€e…¹³Ç|¡•Í…À¸Q•ÍÐ§¥¸€ñˆù½Í•Ù¥¹Œ€¼½Í•Ù¥¹Œð½ˆø­Õ±±…¸¸œ¤ì(€€€ô(€ôì(€€ œÍ•ÉÙ•ÉI½Üœ¤¹½¹±¥¬€ô€ ¤€ôøìÍÑ…ÑÕÌ œÍ•ÉÙ•ÉMÑ…ÑÕÌœ°€œñˆù=±‘Ið½ˆøÍ—¥±‘¤¸½¹¹•Ð¥±”­…É…­Ñ•È•­É…»Å¹„—œ¸œ¤ìôì(€€ œÍ•ÉÙ•É	…¬œ¤¹½¹±¥¬€ô€ ¤€ôøÍ¡½Ü ±½¥¸œ¤ì(€€ œÍ•ÉÙ•É½¹¹•Ðœ¤¹½¹±¥¬€ô€ ¤€ôøÍ¡½Ü ¡…ÉM•±•Ðœ¤ì(€™Õ¹Ñ¥½¸É•™É•Í¡¡…ÉMÕµµ…Éä ¥ì(€€€½¹ÍÐ €ôÍÑ…Ñ”¹É•…Ñ•‘¡…É…Ñ•Èì(€€€¥˜¡ ¥ì(€€€€€€ œ¡…ÉMÕµµ…Éå9…µ”œ¤¹Ñ•áÑ½¹Ñ•¹Ð€ô ¹¹…µ”ì(€€€€€€ œ¡…ÉMÕµµ…Éå5•Ñ„œ¤¹Ñ•áÑ½¹Ñ•¹Ð€ô-…ÉÕÌƒ
-Ü€‘í ¹©½‰ôƒ
-Ü€‘í ¹É…•ôƒ
-Ü1Ø¸€Å€ì(€€€€€€ œ•¹Ñ•É]½É±œ¤¹‘¥Í…‰±•€ô™…±Í”ì€ œ•¹Ñ•É]½É±œ¤¹ÍÑå±”¹½Á…¥Ñä€ô€œÄœì(€€€€€ÍÑ…ÑÕÌ œ¡…ÉM•±•ÑMÑ…ÑÕÌœ°€ñˆø‘í ¹¹…µ•ôð½ˆø¡…ëÅÈ¸MÑ…ÉÐ¥±”5…É…‘½¸„—•‰¥±¥ÉÍ¥¸¹€¤ì(€€€ô•±Í”ì(€€€€€€ œ¡…ÉMÕµµ…Éå9…µ”œ¤¹Ñ•áÑ½¹Ñ•¹Ð€ô€!•»ñè­…É…­Ñ•Èå½¬œì(€€€€€€ œ¡…ÉMÕµµ…Éå5•Ñ„œ¤¹Ñ•áÑ½¹Ñ•¹Ð€ô€ŸY¹”É•…Ñ”¡…É…Ñ•È¥±”‰¥È­…É…­Ñ•È½±×}ÑÕÈ¸œì(€€€€€€ œ•¹Ñ•É]½É±œ¤¹‘¥Í…‰±•€ôÑÉÕ”ì€ œ•¹Ñ•É]½É±œ¤¹ÍÑå±”¹½Á…¥Ñä€ô€œ¸ÔÔœì(€€€€€ÍÑ…ÑÕÌ œ¡…ÉM•±•ÑMÑ…ÑÕÌœ°€-…É…­Ñ•Èå½¬¸ƒY¹”€ñˆùÉ•…Ñ”¡…É…Ñ•Èð½ˆø¥±”‰¥ÈÑ…¹”½±×}ÑÕÈ¸œ¤ì(€€€ô(€ô(€€ œ½Á•¹É•…Ñ”œ¤¹½¹±¥¬€ô€ ¤€ôøÍ¡½Ü É•…Ñ”œ¤ì(€€ œ¡…É	…¬œ¤¹½¹±¥¬€ô€ ¤€ôøÍ¡½Ü Í•ÉÙ•Èœ¤ì(€€ œ¡…Éá¥Ðœ¤¹½¹±¥¬€ô€ ¤€ôøÍ¡½Ü Í•ÉÙ•Èœ¤ì(€€ œ¡…É•±•Ñ”œ¤¹½¹±¥¬€ô€ ¤€ôøì(€€€¥˜ …ÍÑ…Ñ”¹É•…Ñ•‘¡…É…Ñ•È¥ìÍÑ…ÑÕÌ œ¡…ÉM•±•ÑMÑ…ÑÕÌœ°€M¥±¥¹••¬­…É…­Ñ•Èå½¬¸œ¤ìÉ•ÑÕÉ¸ìô(€€€¥˜¡½¹™¥É´¡€‘íÍÑ…Ñ”¹É•…Ñ•‘¡…É…Ñ•È¹¹…µ•ô­…É…­Ñ•É¤Í¥±¥¹Í¥¸µ¤ý€¤¥ìÍÑ…Ñ”¹É•…Ñ•‘¡…É…Ñ•È€ô¹Õ±°ìÉ•™É•Í¡¡…ÉMÕµµ…Éä ¤ìô(€ôì(€€ œ¡…ÉAÉ•Øœ¤¹½¹±¥¬€ô€ ¤€ôøÍÑ…ÑÕÌ œ¡…ÉM•±•ÑMÑ…ÑÕÌœ°€	ÔÁÉ½Ñ½Ñ¥ÁÑ”Ñ•¬Í±½Ð…­Ñ¥˜¸M½¹É…­¤…“Åµ‘„€ÌÍ±½ÑÔ‘„‘½±‘ÕÉ…‰¥±¥É¥´¸œ¤ì(€€ œ¡…É9•áÐœ¤¹½¹±¥¬€ô€ ¤€ôøÍÑ…ÑÕÌ œ¡…ÉM•±•ÑMÑ…ÑÕÌœ°€	ÔÁÉ½Ñ½Ñ¥ÁÑ”Ñ•¬Í±½Ð…­Ñ¥˜¸œ¤ì(€€ œ•¹Ñ•É]½É±œ¤¹½¹±¥¬€ô€ ¤€ôøì¥˜¡ÍÑ…Ñ”¹É•…Ñ•‘¡…É…Ñ•È¤ìÁ½ÁÕ±…Ñ•!Õ ¤ìÍ¡½Ü Ý½É±œ¤ìôôì(€½¹ÍÐÉ…•Q½À€ôìÉ QÕ…É•¬œèœÄÀ¸Ü”œ°QÕ…É•¬œèœÄÜ¸Ø”œ°]É¥¹­±”QÕ…É•¬œèœÈÐ¸Ü”œ°AÕÉ¤QÕ…É•¬œèœÌÄ¸Ø”ôì(€½¹ÍÐ©½‰Q½À€ôì]…ÉÉ¥½ÈœèœÐÐ¸À”œ°I½Õ”œèœÔÀ¸à”œ°5…¥¥…¸œèœÔÜ¸Ü”œ°AÉ¥•ÍÐœèœØÐ¸Ø”ôì(€½¹ÍÐ‘•ÍÉ¥ÁÑ¥½¹Ì€ôì(€€€€É QÕ…É•­ñ]…ÉÉ¥½ÈœèÉ QÕ…É•¬¥Ì„Á¡åÍ¥…±±äÍÑÉ½¹œÉ…”Ý¡¼…É”™¥ÐÑ¼‰•½µ”„Ý…ÉÉ¥½È¸œ°(€€€€É QÕ…É•­ñI½Õ”œèÉ QÕ…É•¬…¸…±Í¼‰•½µ”„É½Õ”Ý¥Ñ ‰…±…¹•±½Í”½µ‰…Ð…¹…¥±¥Ñä¸œ°(€€€€É QÕ…É•­ñ5…¥¥…¸œèÉ QÕ…É•¬µ…¥¥…¹Ì…É”Õ¹ÕÍÕ…°°‰ÕÐÁ½ÍÍ¥‰±”™½È„Ñ•ÍÐÁÉ½Ñ½ÑåÁ”¸œ°(€€€€É QÕ…É•­ñAÉ¥•ÍÐœèÉ QÕ…É•¬ÁÉ¥•ÍÑÌÕÍ”™…¥Ñ …¹ÍÕÁÁ½ÉÐµ…¥ŒÑ¼…¥…±±¥•Ì¸œ°(€€€€QÕ…É•­ñ]…ÉÉ¥½ÈœèQÕ…É•¬Ý…ÉÉ¥½ÉÌ…É”ÍÑÕÉ‘ä…¹‘•Á•¹‘…‰±”™É½¹Ð±¥¹”™¥¡Ñ•ÉÌ¸œ°(€€€€QÕ…É•­ñI½Õ”œèQÕ…É•¬É½Õ•ÌÑÉ…‘”É…ÜÁ½Ý•È™½ÈÍ¹•…­ä…¹…¥±”…ÑÑ…­Ì¸œ°(€€€€QÕ…É•­ñ5…¥¥…¸œèQÕ…É•¬µ…¥¥…¹Ì™½ÕÌ½¸ÍÁ•±°Á½Ý•È½Ù•È‰ÉÕÑ”ÍÑÉ•¹Ñ ¸œ°(€€€€QÕ…É•­ñAÉ¥•ÍÐœèQÕ…É•¬ÁÉ¥•ÍÑÌ•á•°…Ð¡•…±¥¹œ…¹Á…ÉÑäÍÕÁÁ½ÉÐ¸œ°(€€€€]É¥¹­±”QÕ…É•­ñ]…ÉÉ¥½Èœè]É¥¹­±”QÕ…É•¬¥Ì„Ñ½Õ ±½Í”½µ‰…Ð½ÁÑ¥½¸™½È„Ý…ÉÉ¥½È¸œ°(€€€€]É¥¹­±”QÕ…É•­ñI½Õ”œè]É¥¹­±”QÕ…É•¬É½Õ”¥Ì„¹¥µ‰±”µ•±•”¡½¥”¸œ°(€€€€]É¥¹­±”QÕ…É•­ñ5…¥¥…¸œè]É¥¹­±”QÕ…É•¬µ…¥¥…¸™½ÕÍ•Ì½¸µ…¥ŒÁ½Ý•È¸œ°(€€€€]É¥¹­±”QÕ…É•­ñAÉ¥•ÍÐœè]É¥¹­±”QÕ…É•¬ÁÉ¥•ÍÐ…¸¡•…°…¹‰Õ™˜Ñ•…µµ…Ñ•Ì¸œ°(€€€€AÕÉ¤QÕ…É•­ñ]…ÉÉ¥½ÈœèAÕÉ¤QÕ…É•¬Ý…ÉÉ¥½ÉÌ…É”‘ÕÉ…‰±”•¹ÑÉäµ±•Ù•°µ•±•”™¥¡Ñ•ÉÌ¸œ°(€€€€AÕÉ¤QÕ…É•­ñI½Õ”œèAÕÉ¤QÕ…É•¬É½Õ•ÌÍÕ¥Ð‘•áÑ•É¥Ñäµ‰…Í•Á±…ä¸œ°(€€€€AÕÉ¤QÕ…É•­ñ5…¥¥…¸œèAÕÉ¤QÕ…É•¬µ…¥¥…¹Ì…É”‰•¥¹¹•È™É¥•¹‘±äµ…¥ŒÕÍ•ÉÌ¸œ°(€€€€AÕÉ¤QÕ…É•­ñAÉ¥•ÍÐœèAÕÉ¤QÕ…É•¬ÁÉ¥•ÍÑÌ‰É¥¹œ¡•…±¥¹œ…¹ÍÕÁÁ½ÉÐ¸œ(€ôì(€™Õ¹Ñ¥½¸É•™É•Í¡É•…Ñ•U$ ¥ì(€€€€ œÉ…•!¥¡±¥¡Ðœ¤¹ÍÑå±”¹Ñ½À€ôÉ…•Q½ÁmÍÑ…Ñ”¹É•…Ñ”¹É…•tì(€€€€ œ©½‰!¥¡±¥¡Ðœ¤¹ÍÑå±”¹Ñ½À€ô©½‰Q½ÁmÍÑ…Ñ”¹É•…Ñ”¹©½‰tì(€€€€ œ‰½¹ÕÍA½¥¹ÑÌœ¤¹Ñ•áÑ½¹Ñ•¹Ð€ôÍÑ…Ñ”¹É•…Ñ”¹‰½¹ÕÌì(€€€™½È¡½¹ÍÐ¬½˜lÍÑÈœ°¡Àœ°‘•àœ°¥¹Ðœ°µÀt¤€ œÍÑ…Ð´œ­¬¤¹Ñ•áÑ½¹Ñ•¹Ð€ôÍÑ…Ñ”¹É•…Ñ”¹ÍÑ…ÑÍm­tì(€€€€ œ¡…É•ÍÉ¥ÁÑ¥½¸œ¤¹Ñ•áÑ½¹Ñ•¹Ð€ô‘•ÍÉ¥ÁÑ¥½¹Ím€‘íÍÑ…Ñ”¹É•…Ñ”¹É…•õð‘íÍÑ…Ñ”¹É•…Ñ”¹©½‰õtñð‘•ÍÉ¥ÁÑ¥½¹ÍlÉ QÕ…É•­ñ]…ÉÉ¥½Ètì(€ô(€€ œ¹É…”µ½ÁÑ¥½¸œ¤¹™½É… ¡‰Ñ¸€ôø‰Ñ¸¹½¹±¥¬€ô€ ¤€ôøìÍÑ…Ñ”¹É•…Ñ”¹É…”€ô‰Ñ¸¹‘…Ñ…Í•Ð¹É…”ìÉ•™É•Í¡É•…Ñ•U$ ¤ìô¤ì(€€ œ¹©½ˆµ½ÁÑ¥½¸œ¤¹™½É… ¡‰Ñ¸€ôø‰Ñ¸¹½¹±¥¬€ô€ ¤€ôøìÍÑ…Ñ”¹É•…Ñ”¹©½ˆ€ô‰Ñ¸¹‘…Ñ…Í•Ð¹©½ˆìÉ•™É•Í¡É•…Ñ•U$ ¤ìô¤ì(€™Õ¹Ñ¥½¸‰ÕµÁMÑ…Ð¡ÍÑ…Ð°‘•±Ñ„¥ì(€€€¥˜¡‘•±Ñ„€ø€À€˜˜ÍÑ…Ñ”¹É•…Ñ”¹‰½¹ÕÌ€ðô€À¤É•ÑÕÉ¸ì(€€€¥˜¡‘•±Ñ„€ð€À€˜˜ÍÑ…Ñ”¹É•…Ñ”¹ÍÑ…ÑÍmÍÑ…Ñt€ðô€À¤É•ÑÕÉ¸ì(€€€ÍÑ…Ñ”¹É•…Ñ”¹ÍÑ…ÑÍmÍÑ…Ñt€¬ô‘•±Ñ„ì(€€€ÍÑ…Ñ”¹É•…Ñ”¹‰½¹ÕÌ€´ô‘•±Ñ„ì(€€€É•™É•Í¡É•…Ñ•U$ ¤ì(€ô(€€ œ¹ÍÑ…ÐµÁ±ÕÌœ¤¹™½É… ¡‰Ñ¸€ôø‰Ñ¸¹½¹±¥¬€ô€ ¤€ôø‰ÕµÁMÑ…Ð¡‰Ñ¸¹‘…Ñ…Í•Ð¹ÍÑ…Ð°€Ä¤¤ì(€€ œ¹ÍÑ…Ðµµ¥¹ÕÌœ¤¹™½É… ¡‰Ñ¸€ôø‰Ñ¸¹½¹±¥¬€ô€ ¤€ôø‰ÕµÁMÑ…Ð¡‰Ñ¸¹‘…Ñ…Í•Ð¹ÍÑ…Ð°€´Ä¤¤ì(€€ œ…¹•±É•…Ñ•	Ñ¸œ¤¹½¹±¥¬€ô€ ¤€ôøÍ¡½Ü ¡…ÉM•±•Ðœ¤ì(€€ œÉ•…Ñ•¡…É	Ñ¸œ¤¹½¹±¥¬€ô€ ¤€ôøì(€€€½¹ÍÐ¹…µ”€ô€ œ¡…É9…µ”œ¤¹Ù…±Õ”¹ÑÉ¥´ ¤ì(€€€¥˜ …¹…µ”¥ìÍÑ…ÑÕÌ œÉ•…Ñ•MÑ…ÑÕÌœ°€ŸY¹”­…É…­Ñ•È…“Ä¥È¸œ¤ìÉ•ÑÕÉ¸ìô(€€€ÍÑ…Ñ”¹É•…Ñ•‘¡…É…Ñ•È€ôí¹…µ”°É…”èÍÑ…Ñ”¹É•…Ñ”¹É…”°©½ˆèÍÑ…Ñ”¹É•…Ñ”¹©½ˆ°ÍÑ…ÑÌèì¸¸¹ÍÑ…Ñ”¹É•…Ñ”¹ÍÑ…ÑÍõôì(€€€ÍÑ…ÑÕÌ œÉ•…Ñ•MÑ…ÑÕÌœ°€ñˆø‘í¹…µ•ôð½ˆø½±×}ÑÕÉÕ±‘Ô¸-…É…­Ñ•È•­É…»Å¹„“Ù»ñ³ñå½È¸¸¹€¤ì(€€€Í•ÑQ¥µ•½ÕÐ  ¤€ôøìÉ•™É•Í¡¡…ÉMÕµµ…Éä ¤ìÍ¡½Ü ¡…ÉM•±•Ðœ¤ìô°€ÄàÀ¤ì(€ôì(€™Õ¹Ñ¥½¸Á½ÁÕ±…Ñ•!Õ ¥ì(€€€½¹ÍÐ €ôÍÑ…Ñ”¹É•…Ñ•‘¡…É…Ñ•Èñðí¹…µ”è=É¡…¸œ°©½ˆè]…ÉÉ¥½Èœ°É…”èÉ QÕ…É•¬ôì(€€€€ œ¡Õ‘9…µ”œ¤¹Ñ•áÑ½¹Ñ•¹Ð€ô ¹¹…µ”ì(€€€€ œ¡Õ‘5•Ñ„œ¤¹Ñ•áÑ½¹Ñ•¹Ð€ô-…ÉÕÌƒ
-Ü€‘í ¹©½‰ôƒ
-Ü1Ø¸€Å€ì(€€€€ œ¡Õ‘A½ÉÑÉ…¥Ðœ¤¹Ñ•áÑ½¹Ñ•¹Ð€ô ¹©½‰lÁt¹Ñ½UÁÁ•É…Í” ¤ì(€€€€ œ¡…Ñ1½œœ¤¹¥¹Í•ÉÑ‘©…•¹Ñ!Q50 ‰•™½É••¹œ°€ñÀøñÍÁ…¸ùmMåÍÑ•µtð½ÍÁ…¸ø€‘í•Í…Á•!Ñµ°¡ ¹¹…µ”¥ô5½É…‘½¸„¥É§|å…ÁÓÄ¸ð½Àù€¤ì(€ô(€™Õ¹Ñ¥½¸¥¹¥Ñ]½É± ¥ì(€€€Ý½É±€ô¹•Ü=±‘•É…]½É±  œÝ½É±‘…¹Ù…Ìœ¤°€ œµ¥¹¥5…Àœ¤¤ì(€€€½¹ÍÐÍ­¥±±ÌõmlœŒÜäÈÔÅ„œ°œŒÅ„ÀàÀÜœ°œÄt±lœ…„ÜØÌÐœ°œŒÈÔÄØÁŒœ°œÈt±lœŒÌÄÔÔÙœ°œŒÁˆÄÐÅŒœ°œÌt±lœŒÝØàÌäœ°œŒÅŒÄÜÁˆœ°œÐt±lœŒÑØØÍ”œ°œŒÄÄÅˆÁ”œ°œÔt±lœŒØÔÐÈÙŒœ°œŒÅ„Á˜ÅŒœ°œØt±lœŒÜäÍÉ˜œ°œŒÅ˜Á”Á„œ°œÜt±lœŒÍŒÕÜàœ°œŒÁŒÄØÅ˜œ°œàutì(€€€€ œÍ­¥±±‰…Èœ¤¹¥¹¹•É!Q50€ôÍ­¥±±Ì¹µ…À¡Ìôù€ñ‘¥Ø±…ÍÌô‰Í­¥±°ˆÍÑå±”ôˆ´µŒÄè‘íÍlÁuôì´µŒÈè‘íÍlÅuôˆøñˆø‘íÍlÉuôð½ˆøð½‘¥Øù€¤¹©½¥¸ œœ¤ì(€€€½¹ÍÐÑ…É•Ð€ô€ œÑ…É•Ñ%¹™¼œ¤ì(€€€Ý½É±¹½¹Q…É•Ð€ô¸€ôøì(€€€€€¥˜¡¸¥ìÑ…É•Ð¹±…ÍÍ1¥ÍÐ¹É•µ½Ù” ¡¥‘‘•¸œ¤ìÑ…É•Ð¹ÅÕ•ÉåM•±•Ñ½È ˆœ¤¹Ñ•áÑ½¹Ñ•¹Ð€ô¸¹¹…µ”ìô(€€€€€•±Í”Ñ…É•Ð¹±…ÍÍ1¥ÍÐ¹…‘ ¡¥‘‘•¸œ¤ì(€€€ôì(€€€€ œÝ½É±‘…¹Ù…Ìœ¤¹…‘‘Ù•¹Ñ1¥ÍÑ•¹•È ±¥¬œ° ¤ôø œÁ½¥¹Ñ•É!¥¹Ðœ¤¹ÍÑå±”¹‘¥ÍÁ±…äô¹½¹”œ¤ì(€€€‘½Õµ•¹Ð¹…‘‘Ù•¹Ñ1¥ÍÑ•¹•È Á½¥¹Ñ•É±½­¡…¹”œ° ¤ôùì œÁ½¥¹Ñ•É!¥¹Ðœ¤¹ÍÑå±”¹‘¥ÍÁ±…äõ‘½Õµ•¹Ð¹Á½¥¹Ñ•É1½­±•µ•¹Ðü¹½¹”œè‰±½¬ô¤ì(€€€…‘‘Ù•¹Ñ1¥ÍÑ•¹•È ­•å‘½Ý¸œ±”ôùì(€€€€€¥˜¡ÍÉ••¹Ì¹Ý½É±¹±…ÍÍ1¥ÍÐ¹½¹Ñ…¥¹Ì …Ñ¥Ù”œ¤€˜˜”¹½‘”ôôô-•åœ€˜˜€…Ñ…É•Ð¹±…ÍÍ1¥ÍÐ¹½¹Ñ…¥¹Ì ¡¥‘‘•¸œ¤¥ì(€€€€€€€€ œ¡…Ñ1½œœ¤¹¥¹Í•ÉÑ‘©…•¹Ñ!Q50 ‰•™½É••¹œ°€ñÀøñÍÁ…¸ø‘í•Í…Á•!Ñµ°¡Ñ…É•Ð¹ÅÕ•ÉåM•±•Ñ½È ˆœ¤¹Ñ•áÑ½¹Ñ•¹Ð¥ôð½ÍÁ…¸ø!•»ñèÅÕ•ÍÐ€¼Í¡½ÀÍ¥ÍÑ•µ¤‰‡}³Ä‘—}¥°¸ð½Àù€¤ì(€€€€€ô(€€€ô¤ì(€€€€ œ¡…Ñ%¹ÁÕÐœ¤¹…‘‘Ù•¹Ñ1¥ÍÑ•¹•È ­•å‘½Ý¸œ±”ôùì(€€€€€¥˜¡”¹­•äôôô¹Ñ•Èœ€˜˜”¹Ñ…É•Ð¹Ù…±Õ”¹ÑÉ¥´ ¤¥ì(€€€€€€€”¹ÁÉ•Ù•¹Ñ•™…Õ±Ð ¤ì”¹ÍÑ½ÁAÉ½Á……Ñ¥½¸ ¤ì(€€€€€€€€ œ¡…Ñ1½œœ¤¹¥¹Í•ÉÑ‘©…•¹Ñ!Q50 ‰•™½É••¹œ°€ñÀøñÍÁ…¸ùl‘í•Í…Á•!Ñµ°¡ÍÑ…Ñ”¹É•…Ñ•‘¡…É…Ñ•Èü¹¹…µ”ñð€½Í•Ù¥¹Œœ¥õtð½ÍÁ…¸ø€‘í•Í…Á•!Ñµ°¡”¹Ñ…É•Ð¹Ù…±Õ”¥ôð½Àù€¤ì(€€€€€€€”¹Ñ…É•Ð¹Ù…±Õ”ôœœì(€€€€€ô(€€€ô¤ì(€€€€ œÉ•¹‘•ÉM…±”œ¤¹…‘‘Ù•¹Ñ1¥ÍÑ•¹•È ¥¹ÁÕÐœ±”ôùÝ½É±¹Í•ÑM…±”¡”¹Ñ…É•Ð¹Ù…±Õ”¤¤ì(€€€€ œÍ¡½Ý9…µ•Ìœ¤¹…‘‘Ù•¹Ñ1¥ÍÑ•¹•È ¡…¹”œ±”ôùÝ½É±¹Í¡½Ý9…µ•Ìõ”¹Ñ…É•Ð¹¡•­•¤ì(€€€€ œÍ…¹±¥¹•Ìœ¤¹…‘‘Ù•¹Ñ1¥ÍÑ•¹•È ¡…¹”œ±”ôùÍÉ••¹Ì¹Ý½É±¹±…ÍÍ1¥ÍÐ¹Ñ½±” Í…¹±¥¹•Ìœ°”¹Ñ…É•Ð¹¡•­•¤¤ì(€ô(€™Õ¹Ñ¥½¸•Í…Á•!Ñµ°¡Ì¥ìÉ•ÑÕÉ¸MÑÉ¥¹œ¡Ì¤¹É•Á±…” ½l˜ðøˆt½œ°Œôø¡ìœ˜œèœ™…µÀìœ°œðœèœ™±Ðìœ°œøœèœ™Ðìœ°œˆœèœ™ÅÕ½Ðìœ°ˆœˆèœ˜ŒÌäìõmt¤¤ìô(€É•™É•Í¡É•…Ñ•U$ ¤ì(€É•™É•Í¡¡…ÉMÕµµ…Éä ¤ì)ô¤ ¤ì(ð½ÍÉ¥ÁÐø(ð½‰½‘äø(ð½¡Ñµ°ø(
+<div id="toast" class="toast"></div>
+<section id="launcher" class="screen active"><div class="board launcher" style="background-image:url('assets/launcher.webp')"><div class="ad-mask"></div><button id="startHit" class="hit" aria-label="Start"></button><button id="homeHit" class="hit" aria-label="HomePage"></button><button id="optionHit" class="hit" aria-label="Option"></button></div></section>
+<section id="login" class="screen"><div class="board login" style="background-image:url('assets/login.webp')"><input id="idInput" class="ko-input" value="osevinc"><input id="pwInput" type="password" class="ko-input" value="osevinc"><div id="loginLabel" class="login-label-mask">Login</div><div id="exitLabel" class="login-label-mask">Exit</div><div id="optLabel" class="login-label-mask">Options</div><div id="homeLabel" class="login-label-mask">HomePage</div><button id="loginHit" class="hit"></button><button id="exitHit" class="hit"></button><button id="loginOptHit" class="hit"></button><button id="loginHomeHit" class="hit"></button></div></section>
+<section id="server" class="screen"><div class="board server" style="background-image:url('assets/server.webp')"><div class="server-row-mask"></div><div class="server-name">OldERA</div><div class="population"><span></span></div><div class="pop-text">Normal</div><button id="serverRowHit" class="hit"></button><button id="connectHit" class="hit"></button></div></section>
+<section id="charsel" class="screen"><div class="board charsel" style="background-image:url('assets/charsel.webp')"><button id="createShortcut" class="create-shortcut">Create Character</button><button id="startCharacter" class="start-char" disabled>Start</button><div class="char-summary"><b id="summaryName">Empty Slot</b><small id="summaryMeta">Karakter oluÅŸturmak iÃ§in Create Character'a bas.</small></div></div></section>
+<section id="charcreate" class="screen"><div class="board charcreate" style="background-image:url('assets/charcreate.webp')"><input id="charName" class="ko-input" placeholder="Character name"><div id="raceOutline" class="select-outline race-outline"></div><div id="jobOutline" class="select-outline job-outline"></div><div id="bonusVal" class="stat-display">10</div><div id="sv-str" class="statv">0</div><div id="sv-hp" class="statv">0</div><div id="sv-dex" class="statv">0</div><div id="sv-int" class="statv">0</div><div id="sv-mp" class="statv">0</div><button id="createFinal">Create Character</button><button id="cancelCreate">Cancel</button></div></section>
+<section id="world" class="screen"><canvas id="worldCanvas"></canvas><div class="hud"><div class="zone">MORADON</div><div class="statusbox"><b id="worldName">Character</b><small id="worldMeta">Lv. 1</small><div class="bar hp"><i></i></div><div class="bar mp"><i></i></div></div><button id="worldExit" class="worldexit">Character Select</button><div class="worldhelp">WASD hareket Â· Q/E kamera Â· Shift koÅŸ</div></div></section>
+<script src="app.js"></script>
+</body></html>
