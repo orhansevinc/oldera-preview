@@ -135,21 +135,16 @@ export class GameFlowRuntime {
     if (this.state !== GameFlowState.CHARACTER_SELECT || !this.characterSelect) return;
 
     this.characterSelect.tick(deltaSeconds, options);
-    const action = this.characterSelect.consumePendingAction();
-    if (!action) return;
+    const action = this.characterSelect.pendingAction;
+    if (action?.type !== 'enter-main') return;
 
-    if (action.type === 'enter-main') {
-      this.pendingWorldEntry = {
-        character: action.character,
-        slot: action.slot,
-        zone: action.character?.zone ?? null,
-      };
-      this.state = GameFlowState.WORLD_LOADING;
-      return;
-    }
-
-    // Sound and network-shaped actions remain visible to the adapter layer.
-    this.characterSelect.pendingAction = action;
+    this.characterSelect.consumePendingAction();
+    this.pendingWorldEntry = {
+      character: action.character,
+      slot: action.slot,
+      zone: action.character?.zone ?? null,
+    };
+    this.state = GameFlowState.WORLD_LOADING;
   }
 
   completeWorldLoad(worldInfo = {}) {
