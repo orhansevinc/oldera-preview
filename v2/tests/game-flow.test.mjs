@@ -5,6 +5,9 @@ import { Nation, SelectAnimation } from '../src/character-select/CharacterSelect
 import { GameFlowRuntime, GameFlowState } from '../src/game-flow/GameFlowRuntime.js';
 import { OLD_ERA_DEV_SERVER } from '../src/session/DevAccountStore.js';
 
+// Synthetic only: authentic Moradon zone mapping will come from 1298 Zones.tbl.
+const TEST_ZONE_ID = 777;
+
 test('OldERA v2 follows launcher -> login -> server -> nation -> character create', () => {
   const flow = new GameFlowRuntime();
 
@@ -36,7 +39,7 @@ test('OldERA v2 follows launcher -> login -> server -> nation -> character creat
     classId: 201,
     face: 1,
     hair: 1,
-    zone: 21,
+    zone: TEST_ZONE_ID,
   });
 
   assert.equal(flow.snapshot().state, GameFlowState.CHARACTER_SELECT);
@@ -50,7 +53,7 @@ test('selected character completes original animation before world loading', () 
   flow.selectServer();
   flow.selectNation(Nation.ELMORAD);
   flow.activateCurrentCharacter();
-  flow.createCharacter({ id: 'Orhan', race: 12, classId: 201, zone: 21 });
+  flow.createCharacter({ id: 'Orhan', race: 12, classId: 201, zone: TEST_ZONE_ID });
 
   const selectRequest = flow.activateCurrentCharacter();
   assert.equal(selectRequest.type, 'select-character-request');
@@ -68,7 +71,7 @@ test('selected character completes original animation before world loading', () 
   flow.tick(0, { selectedAnimationEnded: true });
   assert.equal(flow.snapshot().state, GameFlowState.WORLD_LOADING);
   assert.equal(flow.snapshot().pendingWorldEntry.character.id, 'Orhan');
-  assert.equal(flow.snapshot().pendingWorldEntry.zone, 21);
+  assert.equal(flow.snapshot().pendingWorldEntry.zone, TEST_ZONE_ID);
 
   flow.completeWorldLoad({ terrainReady: true });
   assert.equal(flow.snapshot().state, GameFlowState.WORLD);
