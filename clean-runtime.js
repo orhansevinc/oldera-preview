@@ -1,0 +1,1 @@
+(()=>{if(!window.THREE)return;const empty=()=>new THREE.BufferGeometry();THREE.CylinderGeometry=function(){return empty()};THREE.SphereGeometry=function(){return empty()};})();
