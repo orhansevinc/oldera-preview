@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>OldKOWeb — OldKO Launcher</title>
+  <link rel="stylesheet" href="launcher.css">
+</head>
+<body>
+  <main class="shell" id="shell">
+    <section class="launcher" id="launcherPanel" aria-labelledby="launcherTitle">
+      <div class="brand-lockup">
+        <div class="brand-mark" aria-hidden="true">OK</div>
+        <div>
+          <p class="eyebrow" id="productName">OldKOWeb</p>
+          <h1 id="launcherTitle">OldKO</h1>
+          <p class="patch" id="patchLabel">Gerçek Knight Online 1298 Web Client</p>
+        </div>
+      </div>
+
+      <div class="mobile-warning" id="mobileWarning" hidden></div>
+      <div class="error-box" id="errorBox" role="alert" hidden></div>
+
+      <div class="status-grid" aria-live="polite">
+        <div class="status-row" data-step="browser"><span>Tarayıcı</span><strong>Kontrol ediliyor…</strong></div>
+        <div class="status-row" data-step="build"><span>Build</span><strong>Bekliyor</strong></div>
+        <div class="status-row" data-step="package"><span>1298 paket</span><strong>Bekliyor</strong></div>
+        <div class="status-row" data-step="gateway"><span>Gateway</span><strong>Bekliyor</strong></div>
+        <div class="status-row" data-step="runtime"><span>Runtime</span><strong>Başlatılmadı</strong></div>
+      </div>
+
+      <div class="build-card">
+        <span>Sürüm</span>
+        <code id="buildVersion">—</code>
+      </div>
+
+      <button id="startButton" class="start-button" type="button" disabled>
+        <span>OYNA</span>
+        <small>START</small>
+      </button>
+      <p class="notice" id="launcherNotice">Launcher yalnızca gerçek WASM client paketini doğrular ve başlatır.</p>
+    </section>
+
+    <section class="game-stage" id="gameStage" hidden aria-label="OldKO gerçek 1298 client">
+      <div class="runtime-strip" id="runtimeStrip">
+        <span id="runtimeText">Client yükleniyor…</span>
+        <button id="backButton" type="button">Launcher</button>
+      </div>
+      <iframe id="gameFrame" title="OldKO 1298" allow="autoplay; fullscreen" referrerpolicy="same-origin"></iframe>
+    </section>
+  </main>
+
+  <script src="launcher-core.js"></script>
+  <script src="app.js" data-config="./config.json"></script>
+</body>
+</html>
