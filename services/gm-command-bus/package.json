@@ -1,0 +1,12 @@
+{
+  "name": "@oldko/gm-command-bus",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Server-side allowlisted GM/admin command execution boundary for OldKO",
+  "main": "src/index.js",
+  "types": "index.d.ts",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node --test ../../tests/gm-command-bus/*.test.cjs"
+  }
+}
