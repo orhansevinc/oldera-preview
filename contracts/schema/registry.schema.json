@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "oldko.contract-registry/v1",
+  "title": "OldKOWeb cross-service contract registry",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "generatedFor",
+    "baseRef",
+    "policyVersion",
+    "contracts"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "oldko.contract-registry/v1"
+    },
+    "generatedFor": {
+      "const": "WS39"
+    },
+    "baseRef": {
+      "type": "string"
+    },
+    "baseCommit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "policyVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "contracts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "schemaVersion",
+          "contractVersion",
+          "provider",
+          "consumer",
+          "expected",
+          "actual",
+          "assessment",
+          "sourceRefs"
+        ]
+      }
+    }
+  }
+}

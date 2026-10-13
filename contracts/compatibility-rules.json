@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "oldko.compatibility-rules/v1",
+  "version": "1.0.0",
+  "breaking": [
+    "missing_required_interface",
+    "missing_required_method",
+    "missing_required_field",
+    "incompatible_type_change",
+    "requiredness_tightened",
+    "transaction_semantic_conflict",
+    "authority_semantic_missing",
+    "idempotency_semantic_missing"
+  ],
+  "nonBreaking": [
+    "optional_output_added",
+    "new_unused_enum_value",
+    "new_method_added",
+    "accepted_input_widened",
+    "implementation_only_change"
+  ],
+  "adapterRule": "Adapters may translate representation but may not synthesize missing authority, validation, atomicity or idempotency semantics."
+}

@@ -1,0 +1,11 @@
+{
+  "name": "@oldko/ws39-contract-tests",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "test": "node --test *.test.cjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

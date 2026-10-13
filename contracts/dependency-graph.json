@@ -1,0 +1,126 @@
+{
+  "schemaVersion": "oldko.dependency-graph/v1",
+  "nodes": [
+    "WS03",
+    "WS03/WS08/WS13/WS17",
+    "WS07",
+    "WS08",
+    "WS12",
+    "WS14",
+    "WS15",
+    "WS16",
+    "WS17",
+    "WS18",
+    "WS19",
+    "WS19/WS25",
+    "WS22",
+    "WS23",
+    "WS25",
+    "WS26",
+    "WS27",
+    "WS28",
+    "WS29",
+    "WS32",
+    "WS33",
+    "WS34",
+    "WS38"
+  ],
+  "edges": [
+    {
+      "contract": "character.create.session-to-rules",
+      "from": "WS03",
+      "to": "WS34",
+      "breaking": true
+    },
+    {
+      "contract": "world.entry.session-to-world",
+      "from": "WS03",
+      "to": "WS14",
+      "breaking": true
+    },
+    {
+      "contract": "movement.world-to-sync",
+      "from": "WS14",
+      "to": "WS15",
+      "breaking": true
+    },
+    {
+      "contract": "npc.world-to-npc",
+      "from": "WS14",
+      "to": "WS16",
+      "breaking": true
+    },
+    {
+      "contract": "merchant.npc-to-economy",
+      "from": "WS16",
+      "to": "WS22",
+      "breaking": true
+    },
+    {
+      "contract": "quest.npc-to-quest",
+      "from": "WS16",
+      "to": "WS23",
+      "breaking": true
+    },
+    {
+      "contract": "inventory.items-to-economy",
+      "from": "WS17",
+      "to": "WS22",
+      "breaking": true
+    },
+    {
+      "contract": "inn.items-to-storage",
+      "from": "WS17",
+      "to": "WS33",
+      "breaking": false
+    },
+    {
+      "contract": "combat.combat-to-mobs",
+      "from": "WS19",
+      "to": "WS25",
+      "breaking": true
+    },
+    {
+      "contract": "loot.mobs-to-loot",
+      "from": "WS25",
+      "to": "WS26",
+      "breaking": true
+    },
+    {
+      "contract": "progression.combat-mob-to-progression",
+      "from": "WS19/WS25",
+      "to": "WS27",
+      "breaking": true
+    },
+    {
+      "contract": "gm.admin-to-command-bus",
+      "from": "WS08",
+      "to": "WS28",
+      "breaking": true
+    },
+    {
+      "contract": "persistence.data-to-consumers",
+      "from": "WS07",
+      "to": "WS03/WS08/WS13/WS17",
+      "breaking": true
+    },
+    {
+      "contract": "content.launcher-to-manifest",
+      "from": "WS12",
+      "to": "WS38",
+      "breaking": true
+    },
+    {
+      "contract": "friends.social-to-messenger",
+      "from": "WS18",
+      "to": "WS32",
+      "breaking": true
+    },
+    {
+      "contract": "observability.common-adoption",
+      "from": "WS29",
+      "to": "BACKEND_SERVICES",
+      "breaking": false
+    }
+  ]
+}
