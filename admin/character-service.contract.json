@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base": "/api/admin",
+  "authority": "ROOT_OWNER",
+  "resources": {
+    "character": {
+      "read": "GET /characters/:name",
+      "edit": "PATCH /characters/:name",
+      "stats": "PATCH /characters/:name/stats",
+      "skills": "PATCH /characters/:name/skills",
+      "inventory": "GET /characters/:name/inventory",
+      "inn": "GET /characters/:name/inn",
+      "transactions": "GET /characters/:name/transactions",
+      "sanctions": "GET /characters/:name/sanctions"
+    },
+    "items": {
+      "history": "GET /items/:serial/history",
+      "action": "POST /items/:serial",
+      "search": "GET /items/search?q=:query"
+    },
+    "commands": {
+      "execute": "POST /commands"
+    }
+  },
+  "slotModel": {
+    "equipment": 14,
+    "inventory": 28,
+    "warehouse": 192,
+    "warehousePages": 8,
+    "warehouseSlotsPerPage": 24
+  },
+  "mutationRules": [
+    "Never trust client-supplied authority or actor identity.",
+    "Resolve ROOT_OWNER from the authenticated server session.",
+    "Validate level, class, stat, skill, zone and coordinate limits server-side.",
+    "Item create, edit, remove and transfer operations must be transactional.",
+    "Every mutation must create an append-only audit event with actor, target, reason, source and traceId.",
+    "Critical world/server actions require re-authentication before execution.",
+    "The browser must never connect directly to the game database."
+  ]
+}
