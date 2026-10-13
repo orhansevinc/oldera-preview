@@ -53,18 +53,10 @@ bool ZoneRules::IsSupportedZone(ZoneId zone) noexcept {
 }
 
 bool ZoneRules::IsSafeZone(ZoneId zone) const noexcept {
-    // Zone-wide safety only. Coordinate/region safe areas are represented by
-    // PlayerLocation::in_safe_area and checked by CanAttack().
-    switch (zone) {
-        case ZoneId::Moradon:
-        case ZoneId::Karus:
-        case ZoneId::ElMorad:
-        case ZoneId::KarusEslant:
-        case ZoneId::ElMoradEslant:
-            return true;
-        default:
-            return false;
-    }
+    // Zone-wide unconditional safety only. Coordinate/region safe areas are
+    // represented by PlayerLocation::in_safe_area and checked by CanAttack().
+    // Home-zone safety is event-dependent because invasion can enable PvP.
+    return zone == ZoneId::Moradon;
 }
 
 bool ZoneRules::AreHostile(
@@ -160,15 +152,13 @@ DeathRule ZoneRules::GetDeathRule(
     Nation nation,
     ZoneId zone,
     const ZoneRuntimeState& state) const noexcept {
-    (void)nation;
-
     if (zone == ZoneId::Arena)
         return {RespawnPolicy::ZoneBind, false};
 
     if (IsBattleZone(zone) && state.battle_open)
         return {RespawnPolicy::BattleBind, true};
 
-    if (IsSafeZone(zone))
+    if (zone == ZoneId::Moradon || IsHomeZoneFor(nation, zone))
         return {RespawnPolicy::NationHome, false};
 
     return {RespawnPolicy::ZoneBind, false};
@@ -182,11 +172,17 @@ NPContributionRule ZoneRules::GetNPContributionRule(
         return {false, attack.reason};
 
     // Arena kills are PvP-capable but are deliberately not NP-bearing here.
-    // WS24 exposes eligibility only; the combat/economy layer owns amounts.
-    if (!IsBattleZone(context.attacker.zone))
-        return {false, RuleReason::PvPDisabled};
+    // Open battle zones and legal invasion kills may contribute NP. WS24
+    // exposes eligibility only; the combat/economy layer owns amounts.
+    if (IsBattleZone(context.attacker.zone))
+        return {true, RuleReason::Allowed};
 
-    return {true, RuleReason::Allowed};
+    if (state.invasion_open
+        && (IsHomeZoneFor(context.attacker.nation, context.attacker.zone)
+            || IsOpposingHomeZoneFor(context.attacker.nation, context.attacker.zone)))
+        return {true, RuleReason::Allowed};
+
+    return {false, RuleReason::PvPDisabled};
 }
 
 } // namespace oldko::rules
