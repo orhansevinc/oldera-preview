@@ -1,0 +1,59 @@
+name: WS30 Backup Recovery
+
+on:
+  push:
+    branches:
+      - ws30-backup-recovery
+    paths:
+      - 'backup/**'
+      - 'recovery-tests/**'
+      - 'workstreams/ws30/**'
+      - '.github/workflows/ws30-recovery.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'backup/**'
+      - 'recovery-tests/**'
+      - 'workstreams/ws30/**'
+      - '.github/workflows/ws30-recovery.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  disposable-postgres-recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ws30_test_only
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Validate shell syntax
+        run: |
+          find backup recovery-tests -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+
+      - name: Run disposable recovery test
+        env:
+          PG_TEST_ADMIN_URL: postgresql://postgres:ws30_test_only@127.0.0.1:5432/postgres
+        run: recovery-tests/run_recovery_test.sh
