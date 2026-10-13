@@ -32,7 +32,7 @@ CREATE TABLE oldko.characters (
   account_id bigint NOT NULL REFERENCES oldko.accounts(id) ON DELETE CASCADE,
   slot smallint NOT NULL CHECK (slot BETWEEN 0 AND 2),
   name varchar(20) NOT NULL,
-  name_key varchar(20) NOT NULL UNIQUE,
+  name_key varchar(20) NOT NULL,
   nation smallint NOT NULL CHECK (nation IN (1,2)),
   race smallint NOT NULL,
   class_id smallint NOT NULL,
@@ -177,7 +177,7 @@ CREATE TABLE oldko.ip_bans (
   revoke_reason text,
   CHECK (expires_at IS NULL OR expires_at > created_at)
 );
-CREATE INDEX ip_bans_network_gist_idx ON oldko.ip_bans USING gist (network inet_ops) WHERE revoked_at IS NULL;
+CREATE INDEX ip_bans_network_spgist_idx ON oldko.ip_bans USING spgist (network inet_ops) WHERE revoked_at IS NULL;
 
 CREATE TABLE oldko.audit_log (
   id bigserial PRIMARY KEY,
