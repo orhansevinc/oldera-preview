@@ -15,8 +15,13 @@ function loadUsers() {
 function loadRepository() {
   // WS07 integration point: replace this factory with a repository implementing
   // services/admin-api/src/repository.js REQUIRED_METHODS. Admin API contains no DB migrations.
-  if (process.env.ADMIN_REPOSITORY && process.env.ADMIN_REPOSITORY !== 'memory') throw new Error(`Unknown ADMIN_REPOSITORY=${process.env.ADMIN_REPOSITORY}. Wire WS07 adapter here after database branch merge.`);
-  return new MemoryAdminRepository();
+  const mode = process.env.ADMIN_REPOSITORY || (process.env.NODE_ENV === 'production' ? 'ws07' : 'memory');
+  if (mode === 'memory') {
+    if (process.env.NODE_ENV === 'production') throw new Error('Refusing to start production admin-api with MemoryAdminRepository');
+    return new MemoryAdminRepository();
+  }
+  if (mode === 'ws07') throw new Error('WS07 repository adapter is not wired yet; refusing to start with fake production persistence');
+  throw new Error(`Unknown ADMIN_REPOSITORY=${mode}`);
 }
 
 const repository = loadRepository();
