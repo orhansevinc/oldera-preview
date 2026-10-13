@@ -6,7 +6,21 @@
 <meta content="dark" name="color-scheme"/>
 <meta content="no-cache, no-store, must-revalidate" http-equiv="Cache-Control"/>
 <title>OldKOWeb — 1299 Classic</title>
-<link href="oldkoweb-v14-a.css" rel="stylesheet"/><link href="oldkoweb-v14-b.css" rel="stylesheet"/></head>
+<link href="oldkoweb-v14-a.css?v=18" rel="stylesheet"/>
+<link href="oldkoweb-v14-b.css?v=18" rel="stylesheet"/>
+<style>
+html,body{overflow-x:hidden}
+main{width:100%}
+.hero{position:relative!important;isolation:isolate!important;min-height:690px!important;overflow:hidden!important;display:flex!important;align-items:center!important;width:100vw!important;max-width:none!important;margin-left:calc(50% - 50vw)!important;background:#050607!important}
+.hero:before{content:''!important;position:absolute!important;inset:0!important;z-index:-2!important;background-image:linear-gradient(90deg,rgba(2,3,5,.84) 0%,rgba(2,3,5,.56) 28%,rgba(2,3,5,.22) 52%,rgba(2,3,5,.10) 72%,rgba(2,3,5,.20) 100%),linear-gradient(180deg,rgba(0,0,0,.02) 0%,rgba(0,0,0,.02) 64%,rgba(5,6,7,.93) 100%),url('https://s3.eu-central-1.amazonaws.com/images.gamesatis.com/app/public/content/705/content_knight-online-castle-siege-war-csw.jpg')!important;background-size:cover,cover,cover!important;background-position:center,center,center 48%!important;background-repeat:no-repeat!important;filter:saturate(1.08) contrast(1.04) brightness(.95)!important;transform:none!important}
+.hero:after{content:''!important;position:absolute!important;inset:0!important;z-index:-1!important;background:linear-gradient(90deg,rgba(0,0,0,.18) 0%,transparent 18%,transparent 82%,rgba(0,0,0,.14) 100%)!important;pointer-events:none!important}
+.hero-grid{position:relative!important;z-index:1!important;display:grid!important;grid-template-columns:1.05fr .95fr!important;gap:60px!important;align-items:center!important;padding:74px 0 118px!important;width:min(var(--shell),calc(100% - 32px))!important;margin:auto!important}
+.hero-grid>div:first-child{max-width:760px!important;padding:0!important;border:0!important;background:none!important;box-shadow:none!important;backdrop-filter:none!important}
+.play-stage{display:grid!important;place-items:center!important;min-height:390px!important;position:relative!important}
+@media(max-width:1120px){.hero{min-height:900px!important}.hero:before{background-position:center,center,58% center!important}.hero-grid{grid-template-columns:1fr!important;padding:62px 0 105px!important}.play-stage{min-height:300px!important}}
+@media(max-width:700px){.hero{min-height:860px!important}.hero:before{background-position:center,center,62% center!important}.hero-grid{padding:58px 0 92px!important}.play-stage{min-height:250px!important}}
+</style>
+</head>
 <body>
 <header class="top"><div class="shell nav"><a class="brand" href="#top"><span class="crest"></span><span><strong>OldKO<span>Web</span></strong><small>1299 CLASSIC</small></span></a><nav class="navlinks"><a href="#news">Haberler</a><a href="#ranking">Sıralamalar</a><a href="#online">Çevrimiçi</a><a href="#guide">Rehber</a><a href="#status">Sunucu Durumu</a></nav><div class="actions"><a class="btn" href="/oldera-preview/account.html#login">GİRİŞ</a><a class="btn" href="/oldera-preview/account.html#register">KAYIT</a><a class="btn play" href="/oldera-preview/play.html">OYNA</a></div></div></header>
 <main id="top">
@@ -22,4 +36,4 @@
 <div id="guide"><div class="section-head"><div><div class="kicker">BİLGİ MERKEZİ</div><h2>Rehber</h2><p>Item / Drop / Upgrade verileri server database ile daha sonra bağlanacak.</p></div></div><div class="guide"><div class="guide-head"><h3>OldKOWeb Rehberi</h3><span class="live-note"><i class="dot wait"></i> VERİ ENTEGRASYONU BEKLİYOR</span></div><div class="guide-grid"><div class="guide-item" data-guide="items"><b>⚔ Item List</b><span>Silah, armor, takı ve item detayları.</span><em>/api/guide/items</em></div><div class="guide-item" data-guide="drops"><b>💰 Drop List</b><span>Mob / boss bazlı drop ve oran bilgileri.</span><em>/api/guide/drops</em></div><div class="guide-item" data-guide="upgrade"><b>🔨 Upgrade Rates</b><span>+ basma oranları ve upgrade tabloları.</span><em>/api/guide/upgrade-rates</em></div><div class="guide-item" data-guide="start"><b>📖 Başlangıç Rehberi</b><span>Yeni oyuncular için hızlı başlangıç.</span><em>İçerik hazırlanıyor</em></div><div class="guide-item" data-guide="systems"><b>⚙ Oyun Sistemleri</b><span>1299'da aktif olacak sistemlerin açıklaması.</span><em>İçerik hazırlanıyor</em></div><div class="guide-item" data-guide="rules"><b>📜 Kurallar</b><span>Oyun ve topluluk kuralları.</span><em>İçerik hazırlanıyor</em></div></div></div></div></div></section>
 </main>
 <footer class="footer"><div class="shell footerrow"><span>© 2026 OldKOWeb • 1299 CLASSIC</span><span>oldkoweb.com • account.oldkoweb.com • /play</span></div></footer><div class="toast" id="toast"></div>
-<script src="oldkoweb-v14.js"></script></body></html>
+<script src="oldkoweb-v14.js?v=18"></script></body></html>
