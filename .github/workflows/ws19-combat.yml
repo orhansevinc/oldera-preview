@@ -1,0 +1,31 @@
+name: WS19 Combat Core
+
+on:
+  push:
+    branches: [ws19-combat-core]
+    paths:
+      - 'services/ko1298-combat/**'
+      - 'tests/ko1298-combat/**'
+      - 'workstreams/ws19/**'
+      - '.github/workflows/ws19-combat.yml'
+  pull_request:
+    paths:
+      - 'services/ko1298-combat/**'
+      - 'tests/ko1298-combat/**'
+      - 'workstreams/ws19/**'
+      - '.github/workflows/ws19-combat.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run WS19 tests
+        run: node --test tests/ko1298-combat/*.test.js
