@@ -1,0 +1,193 @@
+name: WS01 Runtime Build
+
+on:
+  push:
+    branches: [ws01-runtime-build]
+    paths:
+      - '.github/workflows/ws01-runtime.yml'
+      - 'tools/ws01_runtime/**'
+      - 'openko-web/index.html'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ws01-runtime-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  OPENKO_SHA: 97eb0ea20207afc0c360bfed6915113572711be3
+  KO_ASSETS_SHA: 2055ee6ed77f1b5cfef23832dd5bc31909e14a66
+  EMSDK_VERSION: '6.0.12'
+
+jobs:
+  runtime-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout WS01 control branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 1
+
+      - name: Checkout pinned OpenKO POSIX client
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: luisfelipe18/old-school-openko
+          ref: ${{ env.OPENKO_SHA }}
+          path: openko
+          submodules: false
+          fetch-depth: 1
+
+      - name: Checkout pinned genuine KO 1298 assets
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: ko4life-net/ko-assets
+          ref: ${{ env.KO_ASSETS_SHA }}
+          path: ko-assets
+          fetch-depth: 1
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            Data
+            UI_US
+            Snd/Intro_Sound.mp3
+            Server.ini
+
+      - name: Verify pinned inputs and genuine asset slice
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C openko rev-parse HEAD)" = "$OPENKO_SHA"
+          test "$(git -C ko-assets rev-parse HEAD)" = "$KO_ASSETS_SHA"
+          test -s ko-assets/Data/Texts_us.tbl
+          test -s ko-assets/Data/UIs_us.tbl
+          test -s ko-assets/UI_US/el_login_intro_us.uif
+          test -s ko-assets/Snd/Intro_Sound.mp3
+          test -s ko-assets/Server.ini
+          echo "OPENKO_SHA=$OPENKO_SHA"
+          echo "KO_ASSETS_SHA=$KO_ASSETS_SHA"
+          echo "Data files: $(find ko-assets/Data -type f | wc -l)"
+          echo "UI_US files: $(find ko-assets/UI_US -type f | wc -l)"
+
+      - name: Verify currently committed browser package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/ws01_runtime/verify_package.py \
+            --dir openko-web \
+            --index openko-web/index.html \
+            --manifest ws01-committed-package.json
+
+      - name: Apply existing real-browser patches and verify WebGL2/preload anchors
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/patch_openko_browser.py
+          python3 tools/patch_openko_browser_gateway.py
+          python3 tools/fix_browser_server_ini_case.py
+          python3 tools/patch_openko_browser_serverlist_probe.py
+          python3 tools/patch_openko_browser_auth_probe.py
+          python3 tools/ws01_runtime/prepare_browser_source.py
+
+      - name: Install build and browser tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake python3 git
+          npm install --no-save --no-audit --no-fund playwright-core@1.55.0
+
+      - name: Setup pinned Emscripten
+        uses: mymindstorm/setup-emsdk@6ab9eb1bda2574c4ddb79809fc9247783eaf9021 # v14
+        with:
+          version: ${{ env.EMSDK_VERSION }}
+          actions-cache-folder: emsdk-cache
+
+      - name: Verify Emscripten toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          emcc --version | tee emscripten-version.txt
+          grep -F "$EMSDK_VERSION" emscripten-version.txt
+
+      - name: Configure real WarFare browser client
+        shell: bash
+        run: |
+          set -euo pipefail
+          emcmake cmake -S openko -B build-web -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_FLAGS='-DBOOST_HAS_PTHREADS=1' \
+            -DCMAKE_CXX_FLAGS='-DBOOST_HAS_PTHREADS=1 -DASIO_DISABLE_THREADS=1 -fexceptions' \
+            -DCMAKE_EXE_LINKER_FLAGS='-fexceptions' \
+            -DOPENKO_BUILD_CLIENT=ON \
+            -DOPENKO_CLIENT_POSIX_EXPERIMENTAL=ON \
+            -DOPENKO_BUILD_CLIENT_TOOLS=OFF \
+            -DOPENKO_BUILD_TOOLS=OFF \
+            -DOPENKO_BUILD_SERVERS=OFF \
+            -DOPENKO_BUILD_TESTS=OFF \
+            -DOPENKO_FETCH_CLIENT_ASSETS=OFF \
+            -DOPENKO_COMPILE_WARNINGS_AS_ERROR=OFF \
+            2>&1 | tee configure-web.log
+
+      - name: Build real WarFare WASM client
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build build-web --target WarFare -j2 2>&1 | tee build-web.log
+
+      - name: Stage canonical WS01 bootstrap and verify rebuilt package
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=build-web/bin/Release
+          test -d "$OUT"
+          cp openko-web/index.html "$OUT/index.html"
+          python3 tools/ws01_runtime/verify_package.py \
+            --dir "$OUT" \
+            --index "$OUT/index.html" \
+            --manifest ws01-rebuilt-package.json
+
+      - name: Real Chromium runtime bootstrap smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=build-web/bin/Release
+          CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          test -n "$CHROME"
+          "$CHROME" --version
+
+          python3 -m http.server 8000 --bind 127.0.0.1 --directory "$OUT" >ws01-http.log 2>&1 &
+          HTTP_PID=$!
+          trap 'kill "$HTTP_PID" 2>/dev/null || true' EXIT
+          sleep 2
+
+          CHROME="$CHROME" \
+          WS01_URL='http://127.0.0.1:8000/index.html' \
+          WS01_LOG='ws01-runtime-browser-driver.log' \
+            timeout 90s node tools/ws01_runtime/runtime_smoke.cjs 2>&1 | tee ws01-runtime-browser.log
+
+          grep -q 'RUNTIME_OK WASM + data preload + WebGL2/OpenGL + real login bootstrap' ws01-runtime-browser.log
+          ! grep -q 'render backend: Null' ws01-runtime-browser.log
+          ! grep -Eq '\[pageerror\]|GL_INVALID_(ENUM|VALUE|OPERATION)|WebGL: INVALID_|WebGL: too many errors' ws01-runtime-browser.log
+
+          if grep -q 'emscripten_set_main_loop_timing: Cannot set timing mode' ws01-runtime-browser.log; then
+            echo 'KNOWN_WARNING: Emscripten main-loop timing warning remains non-fatal and is documented in workstreams/ws01/INTEGRATION_PATCH.md'
+          fi
+
+      - name: Upload WS01 runtime evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ws01-runtime-evidence
+          path: |
+            emscripten-version.txt
+            configure-web.log
+            build-web.log
+            ws01-committed-package.json
+            ws01-rebuilt-package.json
+            ws01-http.log
+            ws01-runtime-browser.log
+            ws01-runtime-browser-driver.log
+          if-no-files-found: warn
