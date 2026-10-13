@@ -164,12 +164,21 @@ jobs:
           </script><script src="KnightOnLine.js"></script></body></html>
           EOF
 
+          set +e
           CHROME="$CHROME" TEST_ID="$TEST_ID" TEST_PW="$TEST_PW" CHAR_NAME="$CHAR_NAME" \
-            timeout 170s node tools/ws04_character/browser_character_driver.cjs 2>&1 | tee ws04-browser.log
+            timeout 260s node tools/ws04_character/browser_character_driver.cjs 2>&1 | tee ws04-browser.log
+          DRIVER_RC=${PIPESTATUS[0]}
+          set -e
 
-          echo '=== CLIENT TAIL ==='; tail -n 220 ws04-browser.log || true
+          echo '=== CLIENT TAIL ==='; tail -n 260 ws04-browser.log || true
           echo '=== GAME STUB ==='; cat ws04-game-stub.log || true
           echo '=== GAME RESULT ==='; cat ko-game-result.txt || true
+          echo '=== GAME GATEWAY ==='; cat ws04-gateway-game.log || true
+
+          if [ "$DRIVER_RC" -ne 0 ]; then
+            echo "WS04 browser driver failed rc=$DRIVER_RC after diagnostics were preserved" >&2
+            exit "$DRIVER_RC"
+          fi
 
           # Console gates: prove the real parser/procedure/send path, not merely survival.
           grep -q 'NATION_TO_CHAR_SELECT_OK' ws04-browser.log
