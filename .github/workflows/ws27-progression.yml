@@ -1,0 +1,34 @@
+name: WS27 Progression
+
+on:
+  push:
+    branches:
+      - ws27-progression
+    paths:
+      - 'services/ko1298-progression/**'
+      - 'tests/ko1298-progression/**'
+      - 'workstreams/ws27/**'
+      - '.github/workflows/ws27-progression.yml'
+  pull_request:
+    paths:
+      - 'services/ko1298-progression/**'
+      - 'tests/ko1298-progression/**'
+      - 'workstreams/ws27/**'
+      - '.github/workflows/ws27-progression.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run WS27 tests
+        run: node --test tests/ko1298-progression/*.test.js
