@@ -56,6 +56,7 @@ jobs:
           python3 tools/patch_openko_browser_serverlist_probe.py
           python3 tools/patch_openko_browser_auth_probe.py
           python3 tools/ws04_character/patch_character_client.py
+          python3 tools/ws04_character/patch_frame_capture.py
           python3 - <<'PY'
           from pathlib import Path
           p = Path('openko/src/Client/WarFare/RHIDeviceGL.cpp')
@@ -70,6 +71,8 @@ jobs:
           PY
           test -n "$(find ko-assets/Chr -type f -print -quit)"
           grep -q 'ko-assets/Chr@/data/Chr' openko/src/Client/WarFare/CMakeLists.txt
+          grep -q 'EXPORTED_RUNTIME_METHODS=FS' openko/src/Client/WarFare/CMakeLists.txt
+          grep -q 'WS04_GL_CAPTURE' openko/src/Client/WarFare/RHIDeviceGL.cpp
           grep -q 'WS04_CHAR_LIST parsed' openko/src/Client/WarFare/GameProcCharacterSelect.cpp
           grep -q 'WS04_CHAR_CREATE_SENT' openko/src/Client/WarFare/GameProcCharacterCreate.cpp
 
@@ -183,11 +186,12 @@ jobs:
           # Console gates: prove the real parser/procedure/send path, not merely survival.
           grep -q 'NATION_TO_CHAR_SELECT_OK' ws04-browser.log
           grep -q 'CHAR_LIST_PARSE_OK slots=3 occupied=0' ws04-browser.log
-          grep -q 'CHARACTER_SELECT_VISUAL_OK' ws04-browser.log
+          grep -q 'CHARACTER_SELECT_VISUAL_OK source=pre-swap-gl' ws04-browser.log
           grep -q 'EMPTY_SLOT_TO_CREATE_OK' ws04-browser.log
-          grep -q 'CHARACTER_CREATE_VISUAL_OK' ws04-browser.log
+          grep -q 'CHARACTER_CREATE_VISUAL_OK source=pre-swap-gl' ws04-browser.log
           grep -q 'CREATE_MODEL_VISUAL_OK' ws04-browser.log
           grep -q "CHAR_CREATE_PACKET_OK name=$CHAR_NAME" ws04-browser.log
+          grep -q 'WS04_GL_CAPTURE' ws04-browser-status.txt
           grep -q 'WS04_CHAR_LIST parsed result=1 slots=3 occupied=0' ws04-browser-status.txt
           grep -q 'WS04_CHAR_CREATE_UI' ws04-browser-status.txt
           grep -q 'WS04_CHAR_CREATE_SENT opcode=0x02' ws04-browser-status.txt
