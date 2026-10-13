@@ -6,7 +6,8 @@
   <title>OldKOWeb — OldKO 1298</title>
   <style>
     *{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#000}
-    body{display:grid;place-items:center}#stage{position:relative;width:1024px;height:768px;transform-origin:center center}
+    body{display:grid;place-items:center}
+    #stage{position:relative;width:1024px;height:768px;transform-origin:center center}
     #canvas{display:block;width:1024px;height:768px;background:#000;outline:none}
     #status{position:fixed;left:10px;top:8px;z-index:10;margin:0;color:#b8ffb8;font:12px/1.35 Consolas,monospace;white-space:pre-wrap;pointer-events:none;text-shadow:0 1px 2px #000;max-width:min(900px,95vw)}
   </style>
@@ -15,12 +16,83 @@
   <div id="stage"><canvas id="canvas" width="1024" height="768" tabindex="0"></canvas></div>
   <pre id="status">OldKOWeb / gerçek OldKO 1298 client yükleniyor…</pre>
   <script>
-  (()=>{
-    const W=1024,H=768,stage=document.getElementById('stage'),canvas=document.getElementById('canvas'),status=document.getElementById('status'),lines=[];
-    const log=(kind,text)=>{const line=(kind?'['+kind+'] ':'')+text;console[kind==='ERR'?'error':'log'](line);lines.push(line);while(lines.length>20)lines.shift();status.textContent=lines.join('\n')};
-    const fit=()=>{stage.style.transform=`scale(${Math.min(innerWidth/W,innerHeight/H)})`};addEventListener('resize',fit);fit();canvas.focus();
-    window.Module={canvas,arguments:['--renderer','gl','--data','/data'],print:(...a)=>log('OUT',a.join(' ')),printErr:(...a)=>log('ERR',a.join(' ')),onRuntimeInitialized:()=>log('OUT','WASM hazır; 1298 Data/UI filesystem bağlandı.')};
+  (() => {
+    'use strict';
+    const W=1024,H=768;
+    const stage=document.getElementById('stage');
+    const canvas=document.getElementById('canvas');
+    const status=document.getElementById('status');
+    const lines=[];
+    const state=window.__OLDKO_BOOTSTRAP__={
+      webgl2Available:false,
+      runtimeReady:false,
+      runDependencies:null,
+      fatal:null
+    };
+
+    const log=(kind,text)=>{
+      const line=(kind?'['+kind+'] ':'')+String(text);
+      console[kind==='ERR'||kind==='FATAL'?'error':'log'](line);
+      lines.push(line);
+      while(lines.length>20)lines.shift();
+      status.textContent=lines.join('\n');
+    };
+    const fail=(reason)=>{
+      state.fatal=String(reason||'bilinmeyen runtime hatası');
+      log('FATAL',state.fatal);
+    };
+    const fit=()=>{
+      stage.style.transform=`scale(${Math.min(innerWidth/W,innerHeight/H)})`;
+    };
+
+    addEventListener('resize',fit);
+    addEventListener('error',event=>fail(event.message||event.error||'window error'));
+    addEventListener('unhandledrejection',event=>fail(event.reason||'unhandled promise rejection'));
+    fit();
+
+    const probe=document.createElement('canvas');
+    const probeGL=probe.getContext('webgl2');
+    state.webgl2Available=!!probeGL;
+    if(probeGL){
+      const lose=probeGL.getExtension('WEBGL_lose_context');
+      if(lose)lose.loseContext();
+    }
+    if(!state.webgl2Available){
+      fail('WebGL2 desteklenmiyor; gerçek OldKO renderer başlatılamaz.');
+      return;
+    }
+    log('BOOT','WebGL2 hazır; gerçek C++/WASM client yükleniyor.');
+
+    const resolveRuntimeFile=(path)=>{
+      try{return new URL(path,document.baseURI).href;}
+      catch(_){return path;}
+    };
+
+    window.Module={
+      canvas,
+      arguments:['--renderer','gl','--data','/data'],
+      locateFile:(path)=>resolveRuntimeFile(path),
+      print:(...args)=>log('OUT',args.join(' ')),
+      printErr:(...args)=>log('ERR',args.join(' ')),
+      monitorRunDependencies:(left)=>{
+        state.runDependencies=left;
+        if(left>0)log('LOAD',`1298 paket bağımlılıkları: ${left}`);
+      },
+      onRuntimeInitialized:()=>{
+        state.runtimeReady=true;
+        state.runDependencies=0;
+        log('RUNTIME','WASM_RUNTIME_READY; KnightOnLine.data preload tamamlandı.');
+        canvas.focus();
+      },
+      onAbort:(reason)=>fail(`WASM abort: ${reason}`)
+    };
+
+    const runtimeScript=document.createElement('script');
+    runtimeScript.src='KnightOnLine.js';
+    runtimeScript.async=false;
+    runtimeScript.onerror=()=>fail('KnightOnLine.js yüklenemedi.');
+    document.body.appendChild(runtimeScript);
   })();
   </script>
-  <script async src="KnightOnLine.js"></script>
-</body></html>
+</body>
+</html>
