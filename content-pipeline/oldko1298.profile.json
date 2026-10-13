@@ -1,0 +1,34 @@
+{
+  "files": [
+    {
+      "path": "index.html",
+      "required": true,
+      "role": "html",
+      "contentType": "text/html; charset=utf-8"
+    },
+    {
+      "path": "KnightOnLine.js",
+      "required": true,
+      "role": "loader-js",
+      "contentType": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "KnightOnLine.wasm",
+      "required": true,
+      "role": "wasm",
+      "contentType": "application/wasm"
+    },
+    {
+      "path": "KnightOnLine.data",
+      "required": true,
+      "role": "data",
+      "contentType": "application/octet-stream"
+    },
+    {
+      "path": "BUILD.txt",
+      "required": false,
+      "role": "metadata",
+      "contentType": "text/plain; charset=utf-8"
+    }
+  ]
+}

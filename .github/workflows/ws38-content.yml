@@ -1,0 +1,70 @@
+name: WS38 Client Content Contract
+
+on:
+  push:
+    paths:
+      - 'content-pipeline/**'
+      - 'tools/ws38_content/**'
+      - 'tests/content-pipeline/**'
+      - 'workstreams/ws38/**'
+      - '.github/workflows/ws38-content.yml'
+  pull_request:
+    paths:
+      - 'content-pipeline/**'
+      - 'tools/ws38_content/**'
+      - 'tests/content-pipeline/**'
+      - 'workstreams/ws38/**'
+      - '.github/workflows/ws38-content.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Unit tests
+        run: python -m unittest discover -s tests/content-pipeline -p 'test_*.py' -v
+
+      - name: Generator and verifier smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="${RUNNER_TEMP}/ws38-package"
+          OUT="${RUNNER_TEMP}/ws38-out"
+          mkdir -p "$ROOT" "$OUT"
+          printf '<!doctype html>\n' > "$ROOT/index.html"
+          printf 'console.log("OldKOWeb");\n' > "$ROOT/KnightOnLine.js"
+          printf '\x00asm\x01\x00\x00\x00' > "$ROOT/KnightOnLine.wasm"
+          printf 'synthetic-data' > "$ROOT/KnightOnLine.data"
+          printf 'ci smoke\n' > "$ROOT/BUILD.txt"
+
+          python -m tools.ws38_content.generate_manifest \
+            --root "$ROOT" \
+            --profile content-pipeline/oldko1298.profile.json \
+            --content-version 1298-ci.1 \
+            --build-id "ci-${GITHUB_RUN_ID}" \
+            --source-commit "$GITHUB_SHA" \
+            --source-ref "$GITHUB_REF_NAME" \
+            --output "$OUT/manifest.json" \
+            --publication-marker-output "$OUT/_complete.json" \
+            --cdn-publication-marker-path client-content/v1/1298-ci.1/_complete.json \
+            --latest-output "$OUT/latest.json" \
+            --cdn-manifest-path client-content/v1/1298-ci.1/manifest.json
+
+          python -m tools.ws38_content.verify_manifest \
+            --root "$ROOT" \
+            --manifest "$OUT/manifest.json" \
+            --expected-content-version 1298-ci.1 \
+            --publication-marker "$OUT/_complete.json" \
+            --require-publication-marker \
+            --latest-pointer "$OUT/latest.json"
