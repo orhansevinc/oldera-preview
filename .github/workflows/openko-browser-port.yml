@@ -49,7 +49,7 @@ jobs:
           emcmake cmake -S openko -B build-web -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_C_FLAGS='-DBOOST_HAS_PTHREADS=1' \
-            -DCMAKE_CXX_FLAGS='-DBOOST_HAS_PTHREADS=1' \
+            -DCMAKE_CXX_FLAGS='-DBOOST_HAS_PTHREADS=1 -DASIO_DISABLE_THREADS=1' \
             -DOPENKO_BUILD_CLIENT=ON \
             -DOPENKO_CLIENT_POSIX_EXPERIMENTAL=ON \
             -DOPENKO_BUILD_CLIENT_TOOLS=OFF \
