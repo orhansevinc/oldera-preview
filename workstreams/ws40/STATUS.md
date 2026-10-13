@@ -10,7 +10,7 @@ WS40
 - Product merges performed: **NONE**
 - Product code changed: **NONE**
 - Main changed by WS40: **NO**
-- Closure validation: **PENDING final WS40 readiness workflow on final HEAD**
+- Closure validation: **PASS** — WS40 readiness run `38477682767` succeeded; this final STATUS-only commit is revalidated by the same workflow before conversational closure.
 
 ## Delivered
 
@@ -83,4 +83,4 @@ The merge order is a plan for an external control/integration owner. WS40 explic
 - `workstreams/ws40/STATUS.md` is marked TAMAMLANDI and reports the same blocker count;
 - only WS40-owned paths differ from the captured `main` baseline.
 
-The final closure response must use a green WS40 readiness workflow result on the final branch HEAD. No product merge is part of closure.
+Readiness run `38477682767` succeeded after the validator's case-sensitive gate-text assertion was corrected. The final STATUS commit changes no release conclusion or product artifact; the same workflow must remain green on its resulting HEAD. No product merge is part of closure.
