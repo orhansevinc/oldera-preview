@@ -28,17 +28,14 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          # Emscripten already supplies an OpenAL implementation backed by browser audio.
-          # Do not build/link desktop openal-soft in the web target.
+          # Browser audio: use Emscripten OpenAL/WebAudio, not desktop openal-soft.
           p = Path('openko/cmake/FindOpenALSoft.cmake')
           s = p.read_text()
           browser = '''if(EMSCRIPTEN)\n  add_library(OpenAL INTERFACE)\n  target_link_libraries(OpenAL INTERFACE "-lopenal")\n  set(openalsoft_FOUND TRUE)\n  return()\nendif()\n\n'''
           if not s.startswith('if(EMSCRIPTEN)'):
               p.write_text(browser + s)
 
-          # Emscripten's OpenAL headers typedef ALCcontext_struct/ALCdevice_struct.
-          # The POSIX client's native forward declarations use different struct tags,
-          # which is harmless natively but conflicts with the browser headers.
+          # Emscripten OpenAL uses ALCcontext_struct/ALCdevice_struct typedefs.
           p = Path('openko/src/N3Base/N3SndMgr.h')
           s = p.read_text(encoding='utf-8-sig')
           old = 'struct ALCcontext;\nstruct ALCdevice;'
@@ -47,12 +44,35 @@ jobs:
               raise SystemExit('N3SndMgr.h OpenAL declarations changed upstream')
           p.write_text(s.replace(old, new), encoding='utf-8')
 
-          # Native Linux packaging expects a concrete OpenAL shared-library target.
-          # The browser OpenAL target is interface-only, so skip that packaging block.
+          # libjpeg must be static in a standalone WebAssembly executable.
+          p = Path('openko/cmake/FindJpeg.cmake')
+          s = p.read_text()
+          s = s.replace('if(WIN32)\n  set(LIBJPEG_BUILD_SHARED_LIBS OFF',
+                        'if(WIN32 OR EMSCRIPTEN)\n  set(LIBJPEG_BUILD_SHARED_LIBS OFF')
+          s = s.replace('if(WIN32)\n  target_link_libraries(libjpeg INTERFACE jpeg_static)',
+                        'if(WIN32 OR EMSCRIPTEN)\n  target_link_libraries(libjpeg INTERFACE jpeg_static)')
+          p.write_text(s)
+
+          # Skip desktop-only package install and make WarFare a browser HTML app.
           p = Path('openko/src/Client/WarFare/CMakeLists.txt')
           s = p.read_text()
           s = s.replace('if(UNIX AND NOT APPLE)\n    # Linux: a freedesktop menu entry',
                         'if(UNIX AND NOT APPLE AND NOT EMSCRIPTEN)\n    # Linux: a freedesktop menu entry')
+          s += r'''
+
+if(EMSCRIPTEN)
+  set_target_properties(WarFare PROPERTIES SUFFIX ".html")
+  target_link_options(WarFare PRIVATE
+    "-sMIN_WEBGL_VERSION=2"
+    "-sMAX_WEBGL_VERSION=2"
+    "-sALLOW_MEMORY_GROWTH=1"
+    "-sFORCE_FILESYSTEM=1"
+    "-sASYNCIFY"
+    "-sEXIT_RUNTIME=1"
+    "-sASSERTIONS=1"
+  )
+endif()
+'''
           p.write_text(s)
           PY
 
@@ -94,7 +114,7 @@ jobs:
             -DOPENKO_COMPILE_WARNINGS_AS_ERROR=OFF \
             2>&1 | tee configure-web.log
 
-      - name: Build real WarFare client
+      - name: Build real WarFare browser client
         id: build
         if: steps.configure.outcome == 'success'
         continue-on-error: true
@@ -109,7 +129,7 @@ jobs:
         run: |
           echo "=== configure outcome: ${{ steps.configure.outcome }} ==="
           echo "=== build outcome: ${{ steps.build.outcome }} ==="
-          find build-web -maxdepth 8 -type f \( -name '*.html' -o -name '*.js' -o -name '*.wasm' -o -name 'KnightOnLine*' \) -print 2>/dev/null | sort || true
+          find build-web/bin/Release -maxdepth 1 -type f -printf '%f %s bytes\n' 2>/dev/null | sort || true
           mkdir -p browser-probe-artifact
           cp configure-web.log browser-probe-artifact/ 2>/dev/null || true
           cp build-web.log browser-probe-artifact/ 2>/dev/null || true
@@ -135,3 +155,5 @@ jobs:
             echo "OpenKO WarFare Emscripten build failed; inspect build-web.log."
             exit 1
           fi
+          test -s build-web/bin/Release/KnightOnLine.html
+          test -s build-web/bin/Release/KnightOnLine.wasm
