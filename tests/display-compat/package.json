@@ -1,0 +1,12 @@
+{
+  "name": "ws43-display-compat-tests",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "test:unit": "node --test geometry.test.cjs",
+    "test:browser": "playwright test --config=playwright.config.cjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.55.1"
+  }
+}
