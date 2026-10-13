@@ -1,0 +1,32 @@
+name: WS36 World Clock
+
+on:
+  push:
+    branches:
+      - ws36-world-clock
+    paths:
+      - 'services/ko1298-world-clock/**'
+      - 'tests/ko1298-world-clock/**'
+      - 'workstreams/ws36/**'
+      - '.github/workflows/ws36-world-clock.yml'
+  pull_request:
+    paths:
+      - 'services/ko1298-world-clock/**'
+      - 'tests/ko1298-world-clock/**'
+      - 'workstreams/ws36/**'
+      - '.github/workflows/ws36-world-clock.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run WS36 world clock tests
+        run: node --test tests/ko1298-world-clock/*.test.cjs
