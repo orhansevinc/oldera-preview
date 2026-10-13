@@ -71,6 +71,7 @@ function showToast(title,text){
 
 function appendAudit(action,target='—',result='DEMO'){
   const tbody=document.getElementById('auditRows');
+  if(!tbody)return;
   const now=new Date().toLocaleTimeString('tr-TR',{hour12:false});
   const trace=`ADM-${Math.random().toString(36).slice(2,7).toUpperCase()}`;
   const row=document.createElement('tr');
@@ -81,8 +82,6 @@ function appendAudit(action,target='—',result='DEMO'){
 async function dispatchAdminCommand(name,{target='',arg=''}={}){
   const payload={command:name,target,arg,actor:'ORHAN',authority:'ROOT_OWNER',source:'web-control-center'};
 
-  // Integration contract: when the authoritative game/admin API exists,
-  // switch state.mode to "live" and POST this payload to /api/admin/commands.
   if(state.mode==='live'){
     const response=await fetch('/api/admin/commands',{
       method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(payload)
@@ -104,6 +103,24 @@ async function execute(name,target='',arg=''){
     showToast('Command failed',err.message);
   }
 }
+
+async function mutate(path,method='POST',body={},auditAction='ADMIN_MUTATION',target='—'){
+  const payload={...body,actor:'ORHAN',authority:'ROOT_OWNER',source:'web-control-center'};
+  if(state.mode==='live'){
+    const response=await fetch(`/api/admin${path}`,{
+      method,headers:{'Content-Type':'application/json'},credentials:'include',body:method==='GET'?undefined:JSON.stringify(payload)
+    });
+    if(!response.ok) throw new Error(`Admin mutation failed (${response.status})`);
+    const data=await response.json();
+    appendAudit(auditAction,target,'SUCCESS');
+    return data;
+  }
+  console.info('[OldERA Admin Mutation Demo]',method,path,payload);
+  appendAudit(auditAction,target,'DEMO');
+  return {ok:true,demo:true,path,method,payload};
+}
+
+window.OldERAAdmin={state,COMMANDS,openView,showToast,appendAudit,dispatchAdminCommand,execute,mutate};
 
 document.querySelectorAll('[data-command]').forEach(btn=>btn.addEventListener('click',()=>{
   const target=document.getElementById('gmTarget')?.value?.trim()||'osevinc';
@@ -131,12 +148,20 @@ document.getElementById('globalSearch').addEventListener('keydown',e=>{
   }
 });
 
-document.getElementById('charTabs').addEventListener('click',e=>{
+const legacyTabs=document.getElementById('charTabs');
+if(legacyTabs)legacyTabs.addEventListener('click',e=>{
   const btn=e.target.closest('button');if(!btn)return;
   [...e.currentTarget.querySelectorAll('button')].forEach(x=>x.classList.toggle('active',x===btn));
-  showToast('Character section',`${btn.textContent} panel is reserved for the live character service.`);
 });
 
+function loadCharacterControl(){
+  const style=document.createElement('link');
+  style.rel='stylesheet';style.href='./character-control.css';document.head.appendChild(style);
+  const script=document.createElement('script');
+  script.src='./character-control.js';script.defer=true;document.body.appendChild(script);
+}
+
 renderCommands();
+loadCharacterControl();
 const initial=location.hash.slice(1);
 if(TITLES[initial]) openView(initial);
