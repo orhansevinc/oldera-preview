@@ -1,0 +1,14 @@
+{
+  "name": "@oldkoweb/ko1298-movement",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Authoritative OldKO 1298 movement and position synchronization core.",
+  "type": "commonjs",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "node --test ../../tests/ko1298-movement/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

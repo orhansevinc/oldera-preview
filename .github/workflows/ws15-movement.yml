@@ -1,0 +1,39 @@
+name: WS15 Movement Sync
+
+on:
+  push:
+    branches: [ws15-movement-sync]
+    paths:
+      - 'services/ko1298-movement/**'
+      - 'tests/ko1298-movement/**'
+      - 'workstreams/ws15/**'
+      - '.github/workflows/ws15-movement.yml'
+  pull_request:
+    paths:
+      - 'services/ko1298-movement/**'
+      - 'tests/ko1298-movement/**'
+      - 'workstreams/ws15/**'
+      - '.github/workflows/ws15-movement.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax check
+        run: |
+          node --check services/ko1298-movement/src/protocol.js
+          node --check services/ko1298-movement/src/flood-guard.js
+          node --check services/ko1298-movement/src/zone-bounds.js
+          node --check services/ko1298-movement/src/movement-service.js
+          node --check services/ko1298-movement/src/index.js
+      - name: Movement tests
+        run: node --test tests/ko1298-movement/*.test.js
