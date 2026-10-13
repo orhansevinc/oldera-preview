@@ -247,7 +247,7 @@ EM_BOOL CAPISocket::BrowserOnMessage(int, const EmscriptenWebSocketMessageEvent*
 	if (event == nullptr || event->isText || event->numBytes == 0)
 		return EM_TRUE;
 
-	self->m_CB.PutData(reinterpret_cast<const char*>(event->data), static_cast<int>(event->numBytes));
+	self->m_CB.PutData(reinterpret_cast<char*>(event->data), static_cast<int>(event->numBytes));
 #ifdef _N3GAME
 	CLogWriter::Write("browser WebSocket received {} KO bytes", event->numBytes);
 #endif
