@@ -1,23 +1,142 @@
-# WS03 KO 1298 protocol notes
+WS03
 
-Source of truth: `luisfelipe18/old-school-openko` branch `feature/port-posix`, commit `97eb0ea20207afc0c360bfed6915113572711be3`, the same upstream used by the browser-port workflow. No modern KO packet definitions are used.
+# KO 1298 session protocol evidence
 
-## Framing
-Client `APISocket.cpp` and Ebenezer `User.cpp` agree on an unencrypted frame: `AA 55 | uint16_le payload_length | payload | 55 AA`. Minimum payload is one opcode byte.
+WS03 implements only packet/session behavior proven by the real 1298 client evidence consumed for this control task. Character UI behavior remains WS04-owned and world bootstrap remains WS14-owned.
 
-## Verified opcode table
-| Plane | Opcode | Direction | Verified body |
-|---|---:|---|---|
-| AUTH | `0xF5` LS_SERVERLIST | C→S/S→C | request opcode only; response `count:u8`, repeated `ip:str16`, `name:str16`, `concurrent:i16` |
-| AUTH | `0xF3` LS_LOGIN_REQ | C→S/S→C | request `account:str16,password:str16`; response `result:u8` |
-| AUTH | `0xF6` LS_NEWS | C→S/S→C | response `label:str16,content:str16` |
-| GAME | `0x2B` WIZ_VERSION_CHECK | C→S/S→C | response begins `version:i16`; upstream server can append JV public key when crypt enabled |
-| GAME | `0x01` WIZ_LOGIN | C→S/S→C | request `account:str16,password:str16`; response first byte is nation (`0`, `1`, `2`, `0xFF`) |
-| GAME | `0x05` WIZ_SEL_NATION | C→S/S→C | request/response `nation:u8` |
-| GAME | `0x0C` WIZ_ALLCHAR_INFO_REQ | C→S | request opcode only; full successful response intentionally not emitted until the complete 1298 character wire record is pinned |
-| GAME | `0x02` WIZ_NEW_CHAR | — | opcode verified; body not yet promoted into implementation |
-| GAME | `0x04` WIZ_SEL_CHAR | C→S | verified request starts `account:str16,char:str16,init:u8,zone:u8`; response/world bootstrap pending |
-| GAME | `0x0D` WIZ_GAMESTART | — | opcode verified; world bootstrap pending WS14 integration |
+## Evidence pins
 
-## Cryptography boundary
-The reference Ebenezer version reply includes an 8-byte JV public key and may enable JV cryption afterwards. The browser client compiles this behind `_CRYPTION`. WS03 deliberately does **not** fabricate key material or a crypto mode. Integration must confirm whether the actual WASM build defines `_CRYPTION`; if yes, JV crypto must be implemented before claiming real-client GAME login PASS.
+- WS11 protocol lab: `ws11-protocol-lab@05562662d9d3f13a4b0500d0478e065fd802cfd0`
+- WS04 client contract: `ws04-character-client@fffbd9372b67c2aaef600f7e50595bec7e23fe88`
+- WS14 world contract: `ws14-world-session@82cdcef40bed265ff4c4ce0fb7c8f6ad8cf2f52b`
+- Control snapshot read from `main@6bf5ffa72585249ded580645bcbdb53359838953`
+
+## KO frame
+
+Plaintext packet framing remains:
+
+```text
+AA 55 | payload_length:u16LE | payload | 55 AA
+```
+
+The decoder treats TCP as a byte stream; it does not depend on one packet per socket read.
+
+## Version / JV cryption decision
+
+The actual browser-client source inspected by WS11 compiles `_CRYPTION`. Its `WIZ_VERSION_CHECK` response parser reads:
+
+```text
+0x2B | version:i16LE | publicKey:u64LE
+```
+
+The same evidence proves that `InitCrypt(publicKey)` enables JvCryption only when `publicKey != 0`. WS03 therefore returns version `1298` plus an explicit eight-byte zero key. This is not a guessed crypt implementation: it is the source-verified no-crypto mode of the actual client variant. WS03 rejects configuration of a non-zero key because it does not implement JvCryption.
+
+Default response payload:
+
+```text
+2B 12 05 00 00 00 00 00 00 00 00
+```
+
+## Character list — WIZ_ALLCHAR_INFO_REQ (0x0C)
+
+Client request:
+
+```text
+0C
+```
+
+Authenticated success response:
+
+```text
+0C | 01 | slot0 | slot1 | slot2
+```
+
+Exactly three records are emitted. Each occupied record is:
+
+```text
+nameLen:i16LE
+name:bytes[nameLen]
+race:u8
+class:i16LE
+level:u8
+face:u8
+hair:u8
+zone:u8
+helmetItem:u32LE      helmetDurability:i16LE
+upperItem:u32LE       upperDurability:i16LE
+cloakItem:u32LE       cloakDurability:i16LE
+rightHandItem:u32LE   rightHandDurability:i16LE
+leftHandItem:u32LE    leftHandDurability:i16LE
+lowerItem:u32LE       lowerDurability:i16LE
+glovesItem:u32LE      glovesDurability:i16LE
+shoesItem:u32LE       shoesDurability:i16LE
+```
+
+An empty slot is exactly 57 zero bytes. Thus the authenticated empty-list payload is 173 bytes and its complete AA55 frame is 179 bytes, matching the WS11 source-derived fixture.
+
+## Character create — WIZ_NEW_CHAR (0x02)
+
+Request consumed from the real WS04 client contract:
+
+```text
+02
+slot:u8
+name:str16
+race:u8
+class:i16LE
+face:u8
+hair:u8
+strength:u8
+stamina:u8
+dexterity:u8
+intelligence:u8
+magicAttack:u8
+```
+
+The source-verified client success response is exactly:
+
+```text
+02 00
+```
+
+On success the client returns to Character Select and immediately requests `0x0C` again. WS03 persists the new character in its repository boundary before returning success, so that refresh contains the occupied slot.
+
+Only `0` is asserted as a verified success result here. WS03 uses a generic non-zero failure internally for invalid development-fixture requests and does not claim an unverified mapping of legacy create error numbers.
+
+## Character select — WIZ_SEL_CHAR (0x04)
+
+Request:
+
+```text
+04
+account:str16
+character:str16
+zoneInit:u8
+zoneCurrent:u8
+```
+
+Before world handoff WS03 verifies:
+
+- a game account is authenticated;
+- request account equals the authenticated account;
+- `zoneInit == 1` for initial character entry;
+- the selected character exists in that authenticated account.
+
+WS03 does not build a competing success response. With the WS14 provider present, it calls:
+
+```js
+world.beginSelectedCharacter({ accountId, characterId, socketId })
+```
+
+and relays WS14's first `clientPackets` entry. WS14 owns the success packet layout and Moradon placement. Without that provider WS03 returns `04 00` rather than fabricating world success.
+
+## Post-select WS14 routing
+
+After a successful WS14 selection handoff, only WS14-owned world-session opcodes are forwarded to `world.handleClientPacket(socketId, payload)`:
+
+- `0x0D` WIZ_GAMESTART
+- `0x16` WIZ_REQ_USERIN
+- `0x1D` WIZ_REQ_NPCIN
+- `0x27` WIZ_ZONE_CHANGE
+
+Returned `clientPackets` are sent back on the existing GAME connection. `broadcastPackets` are surfaced to the caller through the WS03 broadcast callback; WS03 does not duplicate WS14 region/world logic.
