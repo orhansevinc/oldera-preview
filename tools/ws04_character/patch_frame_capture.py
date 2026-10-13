@@ -2,8 +2,8 @@
 """Add a WS04-only Emscripten frame-capture hook to the temporary OpenKO checkout.
 
 The browser's compositor screenshot API is unreliable while the real SDL/WebGL
-main loop is running.  This patch captures the actual GL backbuffer *before*
-SDL_GL_SwapWindow when the JS driver requests it.  Desktop builds are untouched.
+main loop is running. This patch captures the actual GL backbuffer *before*
+SDL_GL_SwapWindow when the JS driver requests it. Desktop builds are untouched.
 """
 from pathlib import Path
 
@@ -37,8 +37,8 @@ present_patch = r'''HRESULT RHIDeviceGL::Present()
 {
 #ifdef __EMSCRIPTEN__
 	// WS04 visual proof must observe the frame while it is still the GL back
-	// buffer.  Chromium may discard that buffer immediately after presentation,
-	// which made CDP/readPixels-after-swap evidence flaky/black.  The JS driver
+	// buffer. Chromium may discard that buffer immediately after presentation,
+	// which made CDP/readPixels-after-swap evidence flaky/black. The JS driver
 	// requests a numbered capture; the existing real RHI DumpFramePPM() writes
 	// exactly what the KO renderer drew, before SDL swaps it away.
 	const int ws04CaptureRequest = EM_ASM_INT({
@@ -61,6 +61,18 @@ present_patch = r'''HRESULT RHIDeviceGL::Present()
 	SDL_GL_SwapWindow(m_pWindow);
 '''
 s = replace_once(s, present_anchor, present_patch, "Present pre-swap capture")
-
 path.write_text(s, encoding="utf-8")
-print("WS04 deterministic pre-swap GL frame capture patch applied")
+
+# Expose the Emscripten filesystem to the Playwright page only in this WS04
+# proof build so the PPM written by DumpFramePPM can be collected as an artifact.
+cmake = Path("openko/src/Client/WarFare/CMakeLists.txt")
+s = cmake.read_text(encoding="utf-8")
+chr_preload = '    "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/../ko-assets/Chr@/data/Chr"\n'
+fs_export = '    "-sEXPORTED_RUNTIME_METHODS=FS"\n'
+if fs_export not in s:
+    if chr_preload not in s:
+        raise SystemExit("WS04 Chr preload anchor missing before MEMFS export")
+    s = s.replace(chr_preload, chr_preload + fs_export, 1)
+cmake.write_text(s, encoding="utf-8")
+
+print("WS04 deterministic pre-swap GL frame capture + MEMFS export patch applied")
