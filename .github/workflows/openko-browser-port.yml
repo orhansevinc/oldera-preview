@@ -112,6 +112,88 @@ jobs:
           echo "Browser package sizes:"
           du -h build-web/bin/Release/KnightOnLine.{js,wasm,data}
 
+      - name: Runtime smoke test in real headless Chrome
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=build-web/bin/Release
+          CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          if [ -z "$CHROME" ]; then
+            echo "No Chrome/Chromium found on GitHub runner" >&2
+            exit 1
+          fi
+          echo "Runtime browser: $($CHROME --version)"
+
+          cat > "$OUT/smoke.html" <<'EOF'
+          <!doctype html>
+          <html><head><meta charset="utf-8"><title>OldERA runtime smoke</title></head>
+          <body style="margin:0;background:#000">
+          <canvas id="canvas" width="1024" height="768"></canvas>
+          <pre id="status"></pre>
+          <script>
+          (() => {
+            const status = document.getElementById('status');
+            const canvas = document.getElementById('canvas');
+            const write = (kind, args) => {
+              const line = '[' + kind + '] ' + args.join(' ');
+              status.textContent += line + '\n';
+              console.log(line);
+            };
+            window.Module = {
+              canvas,
+              arguments: ['--renderer','gl','--data','/data'],
+              print: (...a) => write('OUT', a),
+              printErr: (...a) => write('ERR', a),
+              onRuntimeInitialized: () => write('SMOKE', ['WASM_RUNTIME_READY'])
+            };
+          })();
+          </script>
+          <script src="KnightOnLine.js"></script>
+          </body></html>
+          EOF
+
+          python3 -m http.server 8000 --bind 127.0.0.1 --directory "$OUT" >browser-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          sleep 2
+
+          set +e
+          timeout 80s "$CHROME" \
+            --headless=new \
+            --no-sandbox \
+            --disable-dev-shm-usage \
+            --use-angle=swiftshader \
+            --enable-unsafe-swiftshader \
+            --enable-webgl \
+            --ignore-gpu-blocklist \
+            --autoplay-policy=no-user-gesture-required \
+            --virtual-time-budget=30000 \
+            --dump-dom http://127.0.0.1:8000/smoke.html \
+            >browser-runtime.log 2>&1
+          CHROME_RC=$?
+          set -e
+
+          echo "--- browser runtime tail ---"
+          tail -n 100 browser-runtime.log || true
+          echo "--- http server tail ---"
+          tail -n 30 browser-http.log || true
+
+          # Chrome can be terminated by timeout after an intentionally endless
+          # game loop. Runtime evidence, not process exit, is the acceptance gate.
+          grep -q "WASM_RUNTIME_READY" browser-runtime.log
+          grep -q "render backend: OpenGL" browser-runtime.log
+          grep -q "login scene: CGameProcedure brought up" browser-runtime.log
+          grep -q "browser login scene ready; network deferred to WebSocket gateway" browser-runtime.log
+          if grep -q "render backend: Null" browser-runtime.log; then
+            echo "Browser fell back to Null renderer" >&2
+            exit 1
+          fi
+          if grep -q "game data not found" browser-runtime.log; then
+            echo "Browser could not see preloaded 1298 data" >&2
+            exit 1
+          fi
+          echo "Headless Chrome proved genuine 1298 login scene + WebGL2 runtime. chrome_rc=$CHROME_RC"
+
       - name: Publish browser login build into branch
         shell: bash
         run: |
@@ -200,6 +282,8 @@ jobs:
           path: |
             configure-web.log
             build-web.log
+            browser-runtime.log
+            browser-http.log
             build-web/bin/Release/KnightOnLine.html
             build-web/bin/Release/KnightOnLine.js
             build-web/bin/Release/KnightOnLine.wasm
