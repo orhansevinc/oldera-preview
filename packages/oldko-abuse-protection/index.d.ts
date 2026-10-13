@@ -13,8 +13,13 @@ export interface RateLimitPolicy {
   trustedInternal?: { mode?: TrustedInternalMode; multiplier?: number };
 }
 
-export interface StoreConsumeRequest extends RateLimitPolicy {
+export interface StoreConsumeRequest {
   key: string;
+  algorithm: RateLimitAlgorithm;
+  limit: number;
+  windowMs?: number;
+  capacity?: number;
+  refillPerSecond?: number;
   cost?: number;
   now?: number;
 }
@@ -31,11 +36,16 @@ export interface DistributedRateLimitStore {
   consume(request: StoreConsumeRequest): Promise<StoreConsumeResult>;
 }
 
-export interface RateLimitDecision extends StoreConsumeResult {
+export interface RateLimitDecision {
+  allowed: boolean;
   reason: "allowed" | "rate_limited" | "store_error_fail_open" | "store_error_fail_closed" | "trusted_internal_bypass";
   policy: string;
   action: string;
+  limit: number | null;
+  remaining: number | null;
+  retryAfterMs: number;
   retryAfterSeconds: number;
+  resetAt: number | null;
 }
 
 export class InMemoryRateLimitStore implements DistributedRateLimitStore {
