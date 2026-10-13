@@ -64,7 +64,9 @@ jobs:
           p.write_text(s.replace(bad, good))
           print('Corrected both GLSL ES 300 shader headers')
           PY
-          grep -q 'browser login transport active: KO socket -> WebSocket gateway' openko/src/Client/WarFare/GameProcLogIn_1298.cpp
+          grep -q 'browser login transport active: direct Emscripten WebSocket gateway' openko/src/Client/WarFare/GameProcLogIn_1298.cpp
+          grep -q 'm_BrowserWebSocket' openko/src/Client/WarFare/APISocket.h
+          grep -q 'emscripten_websocket_new' openko/src/Client/WarFare/APISocket.cpp
           grep -q -- '-lwebsocket.js' openko/src/Client/WarFare/CMakeLists.txt
 
       - name: Install build and JS tools
@@ -173,10 +175,11 @@ jobs:
             await page.goto('http://127.0.0.1:8000/network-smoke.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
             await page.waitForFunction(() => {
               const text = document.getElementById('status')?.textContent || '';
-              return text.includes('browser login transport active: KO socket -> WebSocket gateway')
+              return text.includes('browser login transport active: direct Emscripten WebSocket gateway')
+                && text.includes('browser WebSocket open')
                 && text.includes('login scene: CGameProcedure brought up');
             }, null, { timeout: 90000 });
-            await page.waitForTimeout(5000);
+            await page.waitForTimeout(2500);
             const status = await page.locator('#status').textContent().catch(() => '');
             fs.writeFileSync('browser-network-status.txt', status || '');
             await page.screenshot({ path: 'browser-network.png', fullPage: false });
@@ -201,7 +204,8 @@ jobs:
           grep -q 'browser connected' gateway-runtime.log
           grep -q 'tcp connected 127.0.0.1:16100' gateway-runtime.log
           grep -q 'KO_FRAME_OK opcode=0xf5' gateway-probe-result.txt
-          grep -q 'browser login transport active: KO socket -> WebSocket gateway' browser-network-status.txt
+          grep -q 'browser login transport active: direct Emscripten WebSocket gateway' browser-network-status.txt
+          grep -q 'browser WebSocket open' browser-network-status.txt
           grep -q 'login scene: CGameProcedure brought up' browser-network-status.txt
           if grep -Eq '\[pageerror\]|GL_INVALID_(ENUM|VALUE|OPERATION)|WebGL: INVALID_|WebGL: too many errors' browser-network.log; then
             echo 'Browser/WebGL error detected' >&2
