@@ -1,0 +1,43 @@
+{
+  "zoneId": 21,
+  "zoneName": "Moradon",
+  "provenance": {
+    "template": "Open-KO/OpenKO-db ManualSetup/6_InsertData_K_NPC.sql @ bec619466938d278339c30e5b1a4bff3c9413bab",
+    "position": "Open-KO/OpenKO-db ManualSetup/6_InsertData_K_NPCPOS.sql @ bec619466938d278339c30e5b1a4bff3c9413bab",
+    "note": "No client resource/model ID is invented. Terrain Y is intentionally unresolved because K_NPCPOS stores X/Z/path/direction, not Y."
+  },
+  "templates": [
+    {
+      "templateSid": 13001,
+      "resourceId": 22000,
+      "name": "Caspy[Accessory]",
+      "npcType": 21,
+      "sellingGroup": 203002,
+      "size": 100,
+      "weapon1": 0,
+      "weapon2": 0,
+      "group": 2,
+      "level": 50,
+      "maxHp": 30000,
+      "hp": 30000
+    }
+  ],
+  "instances": [
+    {
+      "instanceId": 10000,
+      "templateSid": 13001,
+      "zoneId": 21,
+      "x": 307,
+      "y": null,
+      "z": 398,
+      "direction": 0,
+      "gateOpen": 1,
+      "objectType": 0,
+      "static": true,
+      "source": {
+        "npcPosRow": "(21, 13001, 103, 0, 0, 0, 0, 307, 399, 310, 397, 306, 400, 310, 396, 1, 4400, 0, 2, N'0307039803090398')",
+        "firstPathPoint": "307,398"
+      }
+    }
+  ]
+}

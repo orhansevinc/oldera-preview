@@ -1,0 +1,27 @@
+name: WS16 NPC world
+
+on:
+  push:
+    branches: [ws16-npc-world]
+    paths:
+      - 'services/ko1298-npc/**'
+      - 'tests/ko1298-npc/**'
+      - 'world-data/npc/**'
+      - 'workstreams/ws16/**'
+      - '.github/workflows/ws16-npc.yml'
+  pull_request:
+    paths:
+      - 'services/ko1298-npc/**'
+      - 'tests/ko1298-npc/**'
+      - 'world-data/npc/**'
+      - 'workstreams/ws16/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node --test tests/ko1298-npc/*.test.js
