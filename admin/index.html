@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>OldERA Control Center</title>
+  <link rel="stylesheet" href="./admin.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">OE</div>
+        <div><strong>OldERA</strong><span>CONTROL CENTER</span></div>
+      </div>
+
+      <div class="owner-card">
+        <span class="owner-dot"></span>
+        <div><small>ACTIVE AUTHORITY</small><strong>ROOT OWNER</strong></div>
+      </div>
+
+      <nav id="sideNav" class="side-nav" aria-label="Admin navigation">
+        <button class="nav-item active" data-view="dashboard"><span>◈</span>Dashboard</button>
+        <button class="nav-item" data-view="players"><span>♟</span>Players</button>
+        <button class="nav-item" data-view="characters"><span>♜</span>Characters</button>
+        <button class="nav-item" data-view="items"><span>◇</span>Items & Economy</button>
+        <button class="nav-item" data-view="world"><span>⌖</span>World & Zones</button>
+        <button class="nav-item" data-view="gm"><span>⚔</span>GM Command Center</button>
+        <button class="nav-item" data-view="server"><span>▣</span>Server Control</button>
+        <button class="nav-item" data-view="logs"><span>≡</span>Audit & Logs</button>
+      </nav>
+
+      <div class="sidebar-foot">
+        <div class="env"><i></i><span>OldERA I</span><b>ONLINE</b></div>
+        <small>1298 CONTROL PROFILE</small>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <div class="crumb">ADMINISTRATION / <span id="crumbTitle">DASHBOARD</span></div>
+          <h1 id="pageTitle">Control Center</h1>
+        </div>
+        <div class="top-actions">
+          <label class="global-search"><span>⌕</span><input id="globalSearch" placeholder="Account, character, clan, item serial..." /></label>
+          <button class="icon-btn" id="refreshBtn" title="Refresh">↻</button>
+          <div class="owner-pill"><span>ORHAN</span><small>ROOT OWNER</small></div>
+        </div>
+      </header>
+
+      <section id="dashboard" class="view active">
+        <div class="alert-bar"><strong>OWNER MODE</strong><span>Web panel and in-game admin character will use the same authoritative command service.</span><b>SECURE SESSION</b></div>
+
+        <div class="metrics">
+          <article><small>ONLINE PLAYERS</small><strong id="mOnline">247</strong><span class="up">+18 last hour</span></article>
+          <article><small>ACCOUNTS</small><strong id="mAccounts">1,842</strong><span>32 registered today</span></article>
+          <article><small>CHARACTERS</small><strong id="mChars">3,991</strong><span>2.17 / account</span></article>
+          <article><small>SERVER UPTIME</small><strong>19h 42m</strong><span class="ok">Healthy</span></article>
+        </div>
+
+        <div class="grid-2">
+          <article class="panel">
+            <div class="panel-head"><div><small>LIVE OPERATIONS</small><h2>Server Overview</h2></div><span class="live">● LIVE</span></div>
+            <div class="server-overview">
+              <div class="server-ring"><strong>247</strong><span>ONLINE</span></div>
+              <div class="server-bars">
+                <div><label>El Morad <b>131</b></label><span><i style="width:53%"></i></span></div>
+                <div><label>Karus <b>116</b></label><span><i style="width:47%"></i></span></div>
+                <div><label>Moradon <b>92</b></label><span><i style="width:37%"></i></span></div>
+                <div><label>Colony Zone <b>68</b></label><span><i style="width:28%"></i></span></div>
+              </div>
+            </div>
+            <div class="service-row">
+              <div><i class="dot okdot"></i><span>Login</span><b>ONLINE</b></div>
+              <div><i class="dot okdot"></i><span>Game</span><b>ONLINE</b></div>
+              <div><i class="dot okdot"></i><span>Database</span><b>ONLINE</b></div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head"><div><small>FAST ACCESS</small><h2>Owner Actions</h2></div><span class="muted">1298 GM core</span></div>
+            <div class="action-grid">
+              <button data-command="NOTICEALL"><b>NOTICE ALL</b><span>Global announcement</span></button>
+              <button data-command="SUMMONUSER"><b>SUMMON USER</b><span>Bring player to owner</span></button>
+              <button data-command="INVISIBLE"><b>INVISIBLE</b><span>Toggle GM visibility</span></button>
+              <button data-command="ARREST"><b>ARREST</b><span>GM enforcement action</span></button>
+              <button data-command="FORBIDCHAT"><b>FORBID CHAT</b><span>Mute selected player</span></button>
+              <button data-command="CUTOFF"><b>CUTOFF</b><span>Disconnect selected player</span></button>
+            </div>
+          </article>
+        </div>
+
+        <div class="grid-2 lower">
+          <article class="panel">
+            <div class="panel-head"><div><small>PLAYER FINDER</small><h2>Direct Character Control</h2></div></div>
+            <form class="player-find" id="playerFindForm">
+              <input id="playerFindInput" value="osevinc" placeholder="Character name" />
+              <button>SEARCH</button>
+            </form>
+            <div class="player-card" id="playerCard">
+              <div class="portrait">O</div>
+              <div class="player-main"><small>ONLINE · MORADON</small><strong>osevinc</strong><span>Level 70 · Warrior · El Morad</span></div>
+              <div class="player-numbers"><div><small>NP</small><b>48,920</b></div><div><small>COIN</small><b>37.4M</b></div></div>
+              <button class="open-btn" data-view-target="characters">OPEN CONTROL</button>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head"><div><small>SECURITY</small><h2>Recent Admin Activity</h2></div><button class="text-btn" data-view-target="logs">VIEW ALL</button></div>
+            <div class="timeline" id="timeline">
+              <div><time>21:17:42</time><i></i><p><b>ORHAN</b> opened Control Center <span>OWNER_LOGIN</span></p></div>
+              <div><time>21:13:08</time><i></i><p><b>SYSTEM</b> server health check passed <span>HEALTH_OK</span></p></div>
+              <div><time>20:58:31</time><i></i><p><b>SYSTEM</b> economy snapshot generated <span>ECONOMY_SCAN</span></p></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="players" class="view">
+        <article class="panel full">
+          <div class="panel-head"><div><small>ACCOUNT / CHARACTER LOOKUP</small><h2>Player Search</h2></div><span class="muted">Account · Character · Clan · IP · Serial</span></div>
+          <div class="search-builder">
+            <select><option>Character</option><option>Account</option><option>Clan</option><option>Item Serial</option><option>IP</option></select>
+            <input value="osevinc" />
+            <button>SEARCH DATABASE</button>
+          </div>
+          <div class="table-wrap"><table><thead><tr><th>Status</th><th>Character</th><th>Account</th><th>Nation</th><th>Class</th><th>Level</th><th>Zone</th><th>Last Activity</th><th></th></tr></thead><tbody><tr><td><span class="badge green">ONLINE</span></td><td><b>osevinc</b></td><td>osevinc</td><td>El Morad</td><td>Warrior</td><td>70</td><td>Moradon</td><td>Now</td><td><button class="mini" data-view-target="characters">CONTROL</button></td></tr></tbody></table></div>
+        </article>
+      </section>
+
+      <section id="characters" class="view">
+        <div class="character-head panel">
+          <div class="portrait big">O</div>
+          <div class="char-title"><small>ONLINE · SESSION #A17F</small><h2>osevinc</h2><span>Level 70 Warrior · El Morad · Moradon</span></div>
+          <div class="char-actions"><button data-command="SUMMONUSER">SUMMON</button><button data-command="VIEW">VIEW</button><button class="danger" data-command="CUTOFF">DISCONNECT</button></div>
+        </div>
+        <div class="tabs" id="charTabs"><button class="active" data-tab="overview">Overview</button><button data-tab="inventory">Inventory</button><button data-tab="inn">Inn Hostess</button><button data-tab="stats">Stats & Skills</button><button data-tab="history">Transactions</button><button data-tab="sanctions">Sanctions</button></div>
+        <div class="grid-3">
+          <article class="panel"><small>POSITION</small><h3>Moradon</h3><div class="kv"><span>Zone ID</span><b>21</b><span>X / Z</span><b>815 / 430</b><span>Bind</span><b>Moradon</b></div><button class="wide">TELEPORT / REPOSITION</button></article>
+          <article class="panel"><small>CHARACTER CORE</small><h3>Combat State</h3><div class="kv"><span>HP</span><b>3,842 / 3,842</b><span>MP</span><b>1,204 / 1,204</b><span>EXP</span><b>62.4%</b></div><button class="wide">EDIT CHARACTER</button></article>
+          <article class="panel"><small>AUTHORITY</small><h3>Account State</h3><div class="kv"><span>Login</span><b class="ok">Allowed</b><span>Chat</span><b class="ok">Allowed</b><span>Trade</span><b class="ok">Allowed</b></div><button class="wide danger" data-command="FORBIDUSER">SANCTION</button></article>
+        </div>
+      </section>
+
+      <section id="items" class="view"><article class="panel full"><div class="panel-head"><div><small>ITEM DATABASE & ECONOMY</small><h2>Item Control</h2></div></div><p class="placeholder">Item search, unique serial tracing, inventory/bank ownership history, creation source, upgrade history and economy counters will live here. The action layer is reserved for server-authoritative operations only.</p></article></section>
+      <section id="world" class="view"><article class="panel full"><div class="panel-head"><div><small>1298 WORLD CONTROL</small><h2>Zones · NPC · Monsters · Weather</h2></div></div><div class="action-grid large"><button data-command="RAINING"><b>RAINING</b><span>Original GM command</span></button><button data-command="SNOWING"><b>SNOWING</b><span>Original GM command</span></button><button data-command="TIME"><b>TIME</b><span>World time control</span></button><button data-command="CLEAN"><b>CLEAN</b><span>World cleanup command</span></button></div></article></section>
+
+      <section id="gm" class="view">
+        <article class="panel full">
+          <div class="panel-head"><div><small>ORIGINAL 1298 ADMIN COMMAND SURFACE</small><h2>GM Command Center</h2></div><span class="badge gold">ROOT OWNER</span></div>
+          <div class="command-toolbar"><input id="gmTarget" placeholder="Target character (optional)" value="osevinc"/><input id="gmArg" placeholder="Command argument / message"/><button id="dryRunBtn">EXECUTE SELECTED</button></div>
+          <div class="command-list" id="commandList"></div>
+        </article>
+      </section>
+
+      <section id="server" class="view">
+        <div class="grid-2">
+          <article class="panel"><div class="panel-head"><div><small>RUNTIME</small><h2>Server Services</h2></div></div><div class="service-list"><div><span><i class="dot okdot"></i>Login Server</span><b>ONLINE</b></div><div><span><i class="dot okdot"></i>Game Server</span><b>ONLINE</b></div><div><span><i class="dot okdot"></i>Database</span><b>ONLINE</b></div><div><span><i class="dot okdot"></i>Admin Command Bus</span><b>READY</b></div></div></article>
+          <article class="panel danger-panel"><div class="panel-head"><div><small>CRITICAL OPERATIONS</small><h2>Owner Only</h2></div></div><p>Restart, maintenance and shutdown controls require re-authentication and an audit reason before execution.</p><div class="critical-actions"><button>MAINTENANCE MODE</button><button>RESTART GAME SERVICE</button><button class="danger">SHUTDOWN</button></div></article>
+        </div>
+      </section>
+
+      <section id="logs" class="view"><article class="panel full"><div class="panel-head"><div><small>IMMUTABLE OWNER AUDIT</small><h2>Audit & Game Logs</h2></div></div><div class="table-wrap"><table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th><th>Result</th><th>Trace</th></tr></thead><tbody id="auditRows"><tr><td>21:17:42</td><td>ORHAN</td><td>OWNER_LOGIN</td><td>Control Center</td><td><span class="badge green">SUCCESS</span></td><td>A17F-001</td></tr></tbody></table></div></article></section>
+    </main>
+  </div>
+
+  <div class="toast" id="toast"><strong id="toastTitle">Command queued</strong><span id="toastText"></span></div>
+  <script src="./admin.js"></script>
+</body>
+</html>
