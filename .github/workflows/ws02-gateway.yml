@@ -1,0 +1,40 @@
+name: WS02 Gateway
+
+on:
+  push:
+    branches: [ws02-websocket-gateway]
+    paths:
+      - 'services/ko-gateway/**'
+      - 'tests/ko-gateway/**'
+      - 'workstreams/ws02/**'
+      - '.github/workflows/ws02-gateway.yml'
+  pull_request:
+    paths:
+      - 'services/ko-gateway/**'
+      - 'tests/ko-gateway/**'
+      - 'workstreams/ws02/**'
+      - '.github/workflows/ws02-gateway.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax check
+        run: |
+          node --check services/ko-gateway/src/config.js
+          node --check services/ko-gateway/src/ws.js
+          node --check services/ko-gateway/src/gateway.js
+          node --check services/ko-gateway/src/server.js
+      - name: Gateway tests
+        run: node --test tests/ko-gateway/*.test.js
+      - name: Docker build
+        run: docker build -f services/ko-gateway/Dockerfile -t oldkoweb-ko-gateway:ws02 .
