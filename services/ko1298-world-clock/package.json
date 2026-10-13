@@ -1,0 +1,14 @@
+{
+  "name": "@oldko/ko1298-world-clock",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OldKO 1.298 authoritative world clock, weather and deterministic scheduled-event domain.",
+  "type": "commonjs",
+  "main": "index.cjs",
+  "scripts": {
+    "test": "node --test ../../tests/ko1298-world-clock/*.test.cjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
