@@ -1,0 +1,5 @@
+[
+  { "npcId": "fixture.guide", "action": "interact", "eventId": "fixture.guide.interact" },
+  { "npcId": "fixture.guide", "action": "accept_first_steps", "eventId": "fixture.guide.accept_first_steps" },
+  { "npcId": "fixture.guide", "action": "complete_first_steps", "eventId": "fixture.guide.complete_first_steps" }
+]
