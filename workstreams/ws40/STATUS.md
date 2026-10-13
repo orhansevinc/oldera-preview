@@ -10,7 +10,7 @@ WS40
 - Product merges performed: **NONE**
 - Product code changed: **NONE**
 - Main changed by WS40: **NO**
-- Closure validation: **PENDING WS40 readiness workflow**
+- Closure validation: **PENDING final WS40 readiness workflow on final HEAD**
 
 ## Delivered
 
@@ -20,7 +20,7 @@ WS40
 - `integration-plans/DEPENDENCY_GRAPH.md`
 - `integration-plans/CONFLICTS.md`
 - `workstreams/ws40/STATUS.md`
-- `.github/workflows/ws40-readiness.yml` (closure validation)
+- `.github/workflows/ws40-readiness.yml`
 
 ## Assessment result
 
@@ -41,22 +41,32 @@ WS40
 
 ## Strict evidence policy applied
 
-WS40 did not treat a branch as completed merely because it existed. A missing `STATUS.md` remained incomplete/unknown even when code or a workflow existed. Isolated module success was separated from release-gate success. Latest observed failing workflows were retained as blockers instead of being overridden by older local success claims.
+WS40 did not treat a branch as completed merely because it existed. A missing `STATUS.md` remained incomplete/unknown even when code or a green workflow existed. Isolated module success was separated from release-gate success. Latest observed failing workflows were retained as blockers instead of being overridden by older local claims.
 
-At the assessment snapshot, insufficient completion evidence remained for WS05, WS06, WS07, WS10, WS11, WS31, WS34 and WS39. WS04, WS10 and WS20 also had failing latest workflow evidence relevant to release gating.
+The audit was refreshed while parallel work continued. WS11, WS14, WS31, WS34 and WS39 advanced and their new STATUS/test evidence was incorporated before closure. At the final refreshed assessment, insufficient completion evidence remained only for **WS05, WS06, WS07 and WS10**. Relevant failing/non-green evidence remained for **WS04, WS10 and WS20**.
 
-## Key release blockers
+## Important refreshed findings
 
-The detailed register is in `release/RELEASE_GATES.md`. The dominant blocker groups are:
+- WS11 protocol lab: COMPLETE/PASS; source-pinned framing/JvCryption evidence is available.
+- WS14 world session: COMPLETE/PASS; 1298 selected-character world bootstrap is available server-side.
+- WS31 data catalog: COMPLETE/PASS; 134 catalog records, 0 canonical collisions, 2 HIGH legacy PID/SID alias risks.
+- WS34 character rules: COMPLETE/PASS; 15/15 and green Actions, but WS03/repository/world/item adapters remain external.
+- WS39 contract compatibility: COMPLETE/PASS as tooling; current report is **14 breaking / 16 priority contracts**.
+- WS39's own freshness note predates late WS14/WS31/WS34/WS38 advances, so the compatibility report must be regenerated/re-reviewed against frozen integration SHAs before release decisions.
 
-- Character Create/Select end-to-end failure and missing WS34/WS39 closure evidence.
-- Missing WS05/WS06 Moradon client/asset readiness proof.
-- WS07 completion/composition evidence gap despite green PostgreSQL CI.
-- Missing WS31 authoritative 1298 data catalog/validation.
-- Inn storage contract conflict (192 vs 196 vs broader DB coordinate bounds).
-- WS20 HIGH admin signing fallback and non-green reliability/security evidence.
-- Production adoption gaps for WS29 observability, WS35 config, WS38 content publication and WS30 final-schema restore rehearsal.
-- No single assembled candidate yet proves WS03 -> WS14 -> WS15/16 plus persistence as an integrated flow.
+## Dominant release blockers
+
+The canonical 17 blocker groups are in `release/RELEASE_GATES.md`. Dominant groups are:
+
+- WS04 Character Create/Select CI failure and WS10 M12 E2E failure.
+- Missing WS05 Moradon client delivery and WS06 asset audit.
+- WS07 completion/production adapter gap despite green PostgreSQL CI.
+- WS39 freshness requirement plus 14 reported breaking cross-service contracts.
+- Inn storage geometry conflict: 192 vs 196 vs much wider DB coordinate bounds.
+- Canonical data activation gaps: WS31 is green, but two HIGH legacy ID aliases and synthetic/incomplete downstream gameplay data/formulas remain.
+- WS20 HIGH admin-signing fallback and non-green reliability/security evidence.
+- WS29 observability, WS35 runtime config, WS38 manifest and WS30 final-schema recovery are not yet adopted/validated as one production candidate.
+- No single assembled candidate yet proves character -> world -> movement/NPC -> persistence with refreshed contracts.
 
 ## Integration policy
 
@@ -69,7 +79,8 @@ The merge order is a plan for an external control/integration owner. WS40 explic
 - all required WS40 deliverables exist;
 - WS01-WS39 are represented in the readiness and merge-order documents;
 - RC0-RC10 have only allowed gate states;
-- the blocker register contains exactly 17 unique blockers;
+- the blocker register contains exactly 17 unique blocker groups;
+- `workstreams/ws40/STATUS.md` is marked TAMAMLANDI and reports the same blocker count;
 - only WS40-owned paths differ from the captured `main` baseline.
 
-The final closure response must use the green workflow result on the final branch HEAD. No product merge is part of closure.
+The final closure response must use a green WS40 readiness workflow result on the final branch HEAD. No product merge is part of closure.
