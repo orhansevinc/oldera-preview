@@ -62,13 +62,20 @@ if "#ifdef __EMSCRIPTEN__\n\t(void) loader;" not in s:
     s = replace_once(s, tail, "\treturn ok;\n#endif\n}\n\n} // namespace gl", "GLLoader tail")
 p.write_text(s)
 
-# WebGL2 shader language is GLSL ES 300, not desktop GLSL 330.
+# WebGL2 shader language is GLSL ES 300, not desktop GLSL 330. Also request
+# a GLES 3.0 context explicitly in browsers instead of the desktop 3.3-core
+# profile used by Linux/macOS. Emscripten maps GLES3 to WebGL2.
 p = Path("openko/src/Client/WarFare/RHIDeviceGL.cpp")
 s = p.read_text()
 if "#version 330 core" in s:
     if s.count("#version 330 core") < 2:
         raise SystemExit("RHIDeviceGL shader anchors changed upstream")
     s = s.replace("#version 330 core", "#version 300 es\\nprecision highp float;")
+
+context_attrs = '''\tSDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);\n\tSDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);\n\tSDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);\n\tSDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);'''
+context_attrs_web = '''#ifdef __EMSCRIPTEN__\n\tSDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);\n\tSDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);\n\tSDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);\n\tSDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);\n#else\n\tSDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);\n\tSDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);\n\tSDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);\n\tSDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);\n#endif'''
+if "SDL_GL_CONTEXT_PROFILE_ES" not in s:
+    s = replace_once(s, context_attrs, context_attrs_web, "RHIDeviceGL WebGL2 context")
 p.write_text(s)
 
 # Fixed KO logical viewport. CSS does presentation scaling only.
@@ -76,9 +83,24 @@ p = Path("openko/src/Client/WarFare/WarFareMainSDL.cpp")
 s = p.read_text()
 if "CN3Base::s_Options.iViewWidth  = 1024" not in s:
     anchor = "\tLoadGameOptions();\n\n\t__Options::PosixRenderer eRenderer"
-    repl = '''\tLoadGameOptions();\n\n#ifdef __EMSCRIPTEN__\n\tCN3Base::s_Options.iViewWidth   = 1024;\n\tCN3Base::s_Options.iViewHeight  = 768;\n\tCN3Base::s_Options.bWindowMode  = true;\n\tCN3Base::s_Options.bWindowCursor = false;\n#endif\n\n\t__Options::PosixRenderer eRenderer'''
+    repl = '''\tLoadGameOptions();\n\n#ifdef __EMSCRIPTEN__\n\tCN3Base::s_Options.iViewWidth    = 1024;\n\tCN3Base::s_Options.iViewHeight   = 768;\n\tCN3Base::s_Options.bWindowMode   = true;\n\tCN3Base::s_Options.bWindowCursor = false;\n#endif\n\n\t__Options::PosixRenderer eRenderer'''
     s = replace_once(s, anchor, repl, "WarFareMainSDL options")
 p.write_text(s)
+
+# The real 1298 login procedure immediately opens a raw TCP socket from
+# Server.ini during Init(). Browsers cannot make raw TCP connections. Until
+# the WebSocket<->TCP gateway is attached, keep the genuine login scene alive
+# instead of letting the failed 127.0.0.1 connection post BEHAVIOR_EXIT.
+p = Path("openko/src/Client/WarFare/GameProcLogIn_1298.cpp")
+s = p.read_text(encoding="utf-8-sig")
+connect_anchor = '''\tif (iServer >= 0 && lstrlen(szIPs[iServer]) > 0)\n\t{'''
+connect_browser = '''#ifdef __EMSCRIPTEN__\n\t(void) iServer;\n\tm_pUILogIn->FocusToID();\n\tspdlog::info("browser login scene ready; network deferred to WebSocket gateway");\n#else\n\tif (iServer >= 0 && lstrlen(szIPs[iServer]) > 0)\n\t{'''
+if "browser login scene ready; network deferred to WebSocket gateway" not in s:
+    s = replace_once(s, connect_anchor, connect_browser, "GameProcLogIn browser network begin")
+    connect_tail = '''\telse\n\t{\n\t\tMessageBoxPost("No server list", "LogIn Server fail", MB_OK, BEHAVIOR_EXIT); // 끝낸다.\n\t}\n\n\t// 게임 계정으로 들어 왔으면..'''
+    connect_tail_browser = '''\telse\n\t{\n\t\tMessageBoxPost("No server list", "LogIn Server fail", MB_OK, BEHAVIOR_EXIT); // 끝낸다.\n\t}\n#endif\n\n\t// 게임 계정으로 들어 왔으면..'''
+    s = replace_once(s, connect_tail, connect_tail_browser, "GameProcLogIn browser network end")
+p.write_text(s, encoding="utf-8")
 
 # Browser linker settings + first genuine 1298 runtime asset slice.
 p = Path("openko/src/Client/WarFare/CMakeLists.txt")
@@ -88,11 +110,11 @@ s = s.replace(
     "if(UNIX AND NOT APPLE AND NOT EMSCRIPTEN)\n    # Linux: a freedesktop menu entry",
 )
 
-# CMake de-duplicates repeated linker options.  A sequence such as
+# CMake de-duplicates repeated linker options. A sequence such as
 #   --preload-file path1 --preload-file path2
 # therefore becomes
 #   --preload-file path1 path2
-# and Emscripten interprets path2 as a normal input object.  Keep every
+# and Emscripten interprets path2 as a normal input object. Keep every
 # preload pair inside its own SHELL: option so each mapping survives intact.
 browser_block = '''\nif(EMSCRIPTEN)\n  set_target_properties(WarFare PROPERTIES SUFFIX ".html")\n  target_link_options(WarFare PRIVATE\n    "-sMIN_WEBGL_VERSION=2"\n    "-sMAX_WEBGL_VERSION=2"\n    "-sFULL_ES3=1"\n    "-sGL_ENABLE_GET_PROC_ADDRESS=1"\n    "-sALLOW_MEMORY_GROWTH=1"\n    "-sFORCE_FILESYSTEM=1"\n    "-sASYNCIFY"\n    "-sEXIT_RUNTIME=1"\n    "-sASSERTIONS=1"\n    "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/../ko-assets/Data@/data/Data"\n    "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/../ko-assets/UI_US@/data/UI_US"\n    "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/../ko-assets/Snd/Intro_Sound.mp3@/data/Snd/Intro_Sound.mp3"\n    "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/../ko-assets/Server.ini@/data/Server.ini")\nendif()\n'''
 if 'if(EMSCRIPTEN)\n  set_target_properties(WarFare PROPERTIES SUFFIX ".html")' not in s:
@@ -103,4 +125,4 @@ else:
     s = s[:start] + browser_block.strip("\n") + s[end:]
 p.write_text(s)
 
-print("OldERA browser patches applied: WebGL2 + 1024x768 + 1298 login asset preload")
+print("OldERA browser patches applied: WebGL2 ES3 + 1024x768 + genuine 1298 login assets")
