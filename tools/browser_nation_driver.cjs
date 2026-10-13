@@ -13,13 +13,28 @@ const { PNG } = require('pngjs');
   });
 
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
-  page.on('console', m => console.log(`[console:${m.type()}] ${m.text()}`));
+  const runtimeLines = [];
+  page.on('console', m => {
+    const text = m.text();
+    runtimeLines.push(text);
+    console.log(`[console:${m.type()}] ${text}`);
+  });
   page.on('pageerror', e => console.log(`[pageerror] ${e.stack}`));
+
+  const waitForRuntime = async (needle, timeout = 15000) => {
+    const started = Date.now();
+    while (Date.now() - started < timeout) {
+      if (runtimeLines.some(line => line.includes(needle))) return;
+      await page.waitForTimeout(50);
+    }
+    throw new Error(`Runtime log timeout waiting for: ${needle}`);
+  };
 
   const saveStatus = async () => {
     const status = await page.locator('#status').textContent().catch(() => '');
-    fs.writeFileSync('browser-nation-status.txt', status || '');
-    return status || '';
+    const merged = `${status || ''}\n${runtimeLines.join('\n')}`;
+    fs.writeFileSync('browser-nation-status.txt', merged);
+    return merged;
   };
 
   const pixelStats = (png) => {
@@ -36,9 +51,7 @@ const { PNG } = require('pngjs');
     const cdp = await page.context().newCDPSession(page);
     const shot = await Promise.race([
       cdp.send('Page.captureScreenshot', {
-        format: 'png',
-        fromSurface: true,
-        captureBeyondViewport: false,
+        format: 'png', fromSurface: true, captureBeyondViewport: false,
         clip: { x: 0, y: 0, width: 1024, height: 768, scale: 1 }
       }),
       new Promise((_, reject) => setTimeout(() => reject(new Error('CDP screenshot timed out')), 8000))
@@ -54,7 +67,6 @@ const { PNG } = require('pngjs');
       if (!canvas) return { error: 'canvas missing', nonBlack: 0, total: 0, ratio: 0 };
       const gl = canvas.getContext('webgl2');
       if (!gl) return { error: 'webgl2 context missing', nonBlack: 0, total: canvas.width * canvas.height, ratio: 0 };
-
       gl.finish();
       const pixels = new Uint8Array(canvas.width * canvas.height * 4);
       gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
@@ -81,11 +93,7 @@ const { PNG } = require('pngjs');
     const compositorRatio = compositor ? compositor.ratio : 0;
     const ratio = Math.max(framebufferRatio, compositorRatio);
     const source = compositorRatio >= framebufferRatio ? 'compositor' : 'framebuffer';
-
-    if (ratio < 0.01) {
-      throw new Error(`${label} is effectively black: framebuffer=${framebufferRatio.toFixed(4)} compositor=${compositorRatio.toFixed(4)}`);
-    }
-
+    if (ratio < 0.01) throw new Error(`${label} is effectively black: framebuffer=${framebufferRatio.toFixed(4)} compositor=${compositorRatio.toFixed(4)}`);
     console.log(`[nation-driver] ${label}_VISUAL_OK source=${source} ratio=${ratio.toFixed(4)}`);
   };
 
@@ -96,58 +104,30 @@ const { PNG } = require('pngjs');
   };
 
   try {
-    await page.goto('http://127.0.0.1:8000/nation.html', {
-      waitUntil: 'domcontentloaded', timeout: 30000
-    });
-
-    await page.waitForFunction(() => {
-      const t = document.getElementById('status')?.textContent || '';
-      return t.includes("browser server list entry: name='OldERA' ip='127.0.0.1' users=7");
-    }, null, { timeout: 90000 });
+    await page.goto('http://127.0.0.1:8000/nation.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await waitForRuntime("browser server list entry: name='OldERA' ip='127.0.0.1' users=7", 90000);
 
     await page.locator('#canvas').focus();
     await page.waitForTimeout(100);
     console.log('[nation-driver] typing ID into real Edit_ID');
     await page.keyboard.type(process.env.TEST_ID, { delay: 30 });
-
     console.log('[nation-driver] moving real KO focus to Edit_PW');
     await pressHeld('Tab', 90);
     await page.waitForTimeout(120);
-
     console.log('[nation-driver] typing password into real Edit_PW');
     await page.keyboard.type(process.env.TEST_PW, { delay: 30 });
-
     console.log('[nation-driver] submitting login');
     await pressHeld('Enter', 90);
 
-    await page.waitForFunction(() => {
-      const t = document.getElementById('status')?.textContent || '';
-      return t.includes('server list opened (1 server(s) available)');
-    }, null, { timeout: 30000 });
-
+    await waitForRuntime('server list opened (1 server(s) available)', 30000);
     await page.waitForTimeout(350);
     console.log('[nation-driver] pressing Enter on real 1298 server list');
     await pressHeld('Enter', 100);
 
-    await page.waitForFunction(() => {
-      const t = document.getElementById('status')?.textContent || '';
-      return t.includes("connecting to game server 'OldERA' at 127.0.0.1:15001");
-    }, null, { timeout: 15000 });
-
-    await page.waitForFunction(() => {
-      const t = document.getElementById('status')?.textContent || '';
-      return t.includes('game server version check answered: version=1298 (client expects 1298)');
-    }, null, { timeout: 15000 });
-
-    await page.waitForFunction(() => {
-      const t = document.getElementById('status')?.textContent || '';
-      return t.includes('game server login answered: nation=0');
-    }, null, { timeout: 15000 });
-
-    await page.waitForFunction(() => {
-      const t = document.getElementById('status')?.textContent || '';
-      return t.includes('scene change: login -> nation-select');
-    }, null, { timeout: 15000 });
+    await waitForRuntime("connecting to game server 'OldERA' at 127.0.0.1:15001");
+    await waitForRuntime('game server version check answered: version=1298 (client expects 1298)');
+    await waitForRuntime('game server login answered: nation=0');
+    await waitForRuntime('scene change: login -> nation-select');
 
     await page.waitForTimeout(1000);
     await saveStatus();
@@ -157,41 +137,24 @@ const { PNG } = require('pngjs');
     await page.locator('#canvas').focus();
     console.log('[nation-driver] clicking real 1298 El Morad nation button');
     await page.mouse.click(258, 495, { delay: 120 });
-
-    await page.waitForFunction(() => {
-      const t = document.getElementById('status')?.textContent || '';
-      return t.includes('scene change: nation-select -> character-select');
-    }, null, { timeout: 20000 });
+    await waitForRuntime('scene change: nation-select -> character-select', 20000);
 
     await page.waitForTimeout(1500);
     let finalStatus = await saveStatus();
-    if (finalStatus.includes('DFont: no usable font found')) {
-      throw new Error('Runtime font preload failed: DFont still reports no usable font');
-    }
+    if (finalStatus.includes('DFont: no usable font found')) throw new Error('Runtime font preload failed: DFont still reports no usable font');
     console.log('[nation-driver] FONT_RUNTIME_OK');
-
     await assertVisual('CHARACTER');
     console.log('[nation-driver] CHARACTER_UI_OK');
 
-    // The game stub returns three genuinely empty character slots. The original
-    // 1298 Character Select UI routes Enter on the focused center slot through
-    // CharacterSelectOrCreate(), which opens Character Create without a fake DOM UI.
     await page.locator('#canvas').focus();
     await page.waitForTimeout(250);
     console.log('[nation-driver] pressing Enter on empty center slot to open real Character Create');
     await pressHeld('Enter', 100);
-
-    await page.waitForFunction(() => {
-      const t = document.getElementById('status')?.textContent || '';
-      return t.includes('scene change: character-select -> character-create');
-    }, null, { timeout: 20000 });
+    await waitForRuntime('scene change: character-select -> character-create', 20000);
 
     await page.waitForTimeout(1500);
     finalStatus = await saveStatus();
-    if (finalStatus.includes('DFont: no usable font found')) {
-      throw new Error('Character Create lost the runtime font');
-    }
-
+    if (finalStatus.includes('DFont: no usable font found')) throw new Error('Character Create lost the runtime font');
     await assertVisual('CREATE');
     console.log('[nation-driver] CHARACTER_CREATE_UI_OK');
   } catch (err) {
