@@ -37,6 +37,147 @@ if "browser login transport active: KO socket -> WebSocket gateway" not in s:
     )
 p.write_text(s, encoding="utf-8")
 
+# Emscripten's POSIX TCP emulation creates the underlying WebSocket
+# asynchronously. OpenKO sends LS_SERVERLIST immediately after Connect(); if
+# the WebSocket is still CONNECTING, send() reports EAGAIN. Native OpenKO can
+# wait for writability, but doing that on the browser main thread prevents the
+# WebSocket open event itself from running. Queue only the unsent framed bytes
+# in browser builds and flush them from Poll() on later game ticks.
+p = Path("openko/src/Client/WarFare/APISocket.h")
+s = p.read_text(encoding="utf-8-sig")
+if "m_BrowserPendingSends" not in s:
+    s = replace_once(s, "#include <memory>\n", "#include <deque>\n#include <memory>\n", "APISocket deque include")
+    s = replace_once(
+        s,
+        "\tBOOL m_bConnectionLost; // set when the transport detects a close/error\n\n\tExpandableCircularBuffer m_CB;",
+        '''\tBOOL m_bConnectionLost; // set when the transport detects a close/error
+
+#ifdef __EMSCRIPTEN__
+\tstd::deque<std::vector<char>> m_BrowserPendingSends;
+\tsize_t m_BrowserPendingSendOffset = 0;
+\tvoid FlushBrowserPendingSends();
+#endif
+
+\tExpandableCircularBuffer m_CB;''',
+        "APISocket browser pending queue",
+    )
+p.write_text(s, encoding="utf-8")
+
+p = Path("openko/src/Client/WarFare/APISocket.cpp")
+s = p.read_text(encoding="utf-8")
+if "FlushBrowserPendingSends" not in s:
+    s = replace_once(
+        s,
+        '''\tm_bConnected      = FALSE;
+\tm_bConnectionLost = FALSE;
+\tm_bEnableSend     = TRUE; // 보내기 가능..?
+
+#ifdef _CRYPTION''',
+        '''\tm_bConnected      = FALSE;
+\tm_bConnectionLost = FALSE;
+\tm_bEnableSend     = TRUE; // 보내기 가능..?
+#ifdef __EMSCRIPTEN__
+\tm_BrowserPendingSends.clear();
+\tm_BrowserPendingSendOffset = 0;
+#endif
+
+#ifdef _CRYPTION''',
+        "APISocket disconnect pending reset",
+    )
+
+    poll_old = '''BOOL CAPISocket::Poll()
+{
+\tif (m_bConnected)
+\t\tReceive();'''
+    poll_new = '''BOOL CAPISocket::Poll()
+{
+#ifdef __EMSCRIPTEN__
+\tif (m_bConnected)
+\t\tFlushBrowserPendingSends();
+#endif
+\tif (m_bConnected)
+\t\tReceive();'''
+    s = replace_once(s, poll_old, poll_new, "APISocket browser flush poll")
+
+    receive_anchor = '''void CAPISocket::Receive()
+{'''
+    flush_impl = '''#ifdef __EMSCRIPTEN__
+void CAPISocket::FlushBrowserPendingSends()
+{
+\twhile (m_bConnected && m_pTransport->Socket.is_open() && !m_BrowserPendingSends.empty())
+\t{
+\t\tauto& pending = m_BrowserPendingSends.front();
+\t\tif (m_BrowserPendingSendOffset >= pending.size())
+\t\t{
+\t\t\tm_BrowserPendingSends.pop_front();
+\t\t\tm_BrowserPendingSendOffset = 0;
+\t\t\tcontinue;
+\t\t}
+
+\t\tasio::error_code ec;
+\t\tconst size_t written = m_pTransport->Socket.write_some(
+\t\t\tasio::buffer(pending.data() + m_BrowserPendingSendOffset,
+\t\t\t\tpending.size() - m_BrowserPendingSendOffset), ec);
+\t\tm_BrowserPendingSendOffset += written;
+
+\t\tif (ec == asio::error::would_block || ec == asio::error::try_again)
+\t\t\treturn;
+
+\t\tif (ec)
+\t\t{
+#ifdef _N3GAME
+\t\t\tCLogWriter::Write("browser socket queued send error! : {}", ec.message());
+#endif
+\t\t\tm_bConnected      = FALSE;
+\t\t\tm_bConnectionLost = TRUE;
+\t\t\treturn;
+\t\t}
+
+\t\tif (m_BrowserPendingSendOffset >= pending.size())
+\t\t{
+#ifdef _N3GAME
+\t\t\tCLogWriter::Write("browser socket flushed queued KO frame ({} bytes)", pending.size());
+#endif
+\t\t\tm_BrowserPendingSends.pop_front();
+\t\t\tm_BrowserPendingSendOffset = 0;
+\t\t}
+\t}
+}
+#endif
+
+void CAPISocket::Receive()
+{'''
+    s = replace_once(s, receive_anchor, flush_impl, "APISocket browser flush implementation")
+
+    would_block_old = '''\t\tif (ec == asio::error::would_block || ec == asio::error::try_again)
+\t\t{
+\t\t\t// Outgoing packets are small; wait for writability and continue.
+\t\t\tasio::error_code waitError;
+\t\t\tm_pTransport->Socket.wait(asio::ip::tcp::socket::wait_write, waitError);
+\t\t\tcontinue;
+\t\t}'''
+    would_block_new = '''\t\tif (ec == asio::error::would_block || ec == asio::error::try_again)
+\t\t{
+#ifdef __EMSCRIPTEN__
+\t\t\t// The browser cannot synchronously wait for a WebSocket OPEN event.
+\t\t\t// Preserve the exact remaining KO frame and retry it from Poll().
+\t\t\tm_BrowserPendingSends.emplace_back(
+\t\t\t\tm_SendBuf.begin() + static_cast<std::ptrdiff_t>(nSent),
+\t\t\t\tm_SendBuf.begin() + static_cast<std::ptrdiff_t>(nTotalSize));
+#ifdef _N3GAME
+\t\t\tCLogWriter::Write("browser socket queued KO frame remainder ({} bytes)", nTotalSize - nSent);
+#endif
+\t\t\tbreak;
+#else
+\t\t\t// Native transports can synchronously wait for writability.
+\t\t\tasio::error_code waitError;
+\t\t\tm_pTransport->Socket.wait(asio::ip::tcp::socket::wait_write, waitError);
+\t\t\tcontinue;
+#endif
+\t\t}'''
+    s = replace_once(s, would_block_old, would_block_new, "APISocket browser EAGAIN queue")
+p.write_text(s, encoding="utf-8")
+
 # Link Emscripten's WebSocket support explicitly. The browser cannot open raw
 # TCP; its POSIX socket shim turns connect(127.0.0.1:15100) into a binary
 # WebSocket. In production the public gateway endpoint will replace the local
@@ -52,4 +193,4 @@ if '"-lwebsocket.js"' not in s:
     )
 p.write_text(s)
 
-print("OldERA login bridge patch applied: real CAPISocket -> Emscripten WebSocket gateway")
+print("OldERA login bridge patch applied: CAPISocket -> WebSocket gateway + browser send queue")
