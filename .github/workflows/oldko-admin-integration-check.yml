@@ -5,11 +5,15 @@ on:
     paths:
       - 'admin/**'
       - 'server/**'
+      - 'previewbridge1298.js'
+      - 'client1298.html'
       - '.github/workflows/oldko-admin-integration-check.yml'
   pull_request:
     paths:
       - 'admin/**'
       - 'server/**'
+      - 'previewbridge1298.js'
+      - 'client1298.html'
 
 jobs:
   validate:
@@ -21,7 +25,9 @@ jobs:
           node-version: '20'
       - name: Check browser JavaScript syntax
         run: |
+          node --check previewbridge1298.js
           node --check admin/admin.js
+          node --check admin/preview-link.js
           node --check admin/character-control.js
           node --check admin/admin-assets.js
           node --check admin/live-api.js
