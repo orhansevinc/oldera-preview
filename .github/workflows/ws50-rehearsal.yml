@@ -35,7 +35,16 @@ jobs:
           PYTHONDONTWRITEBYTECODE: '1'
         run: |
           cd tools/ws50_integration
-          python3 -m unittest -v test_rehearse.py
+          python3 -m unittest -v
+
+      - name: Verify WS40 planned branch existence
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 tools/ws50_integration/planned_branch_check.py \
+            --repo "$GITHUB_WORKSPACE" \
+            --plan-ref refs/remotes/origin/ws40-release-readiness \
+            | tee "$RUNNER_TEMP/ws50-branch-check.txt"
 
       - name: Assert checkout clean before rehearsal
         run: |
@@ -63,12 +72,14 @@ jobs:
           if test -f "$RUNNER_TEMP/ws50-output/integration-rehearsal/REHEARSAL_REPORT.md"; then
             cat "$RUNNER_TEMP/ws50-output/integration-rehearsal/REHEARSAL_REPORT.md" >> "$GITHUB_STEP_SUMMARY"
           fi
-          if test -f "$RUNNER_TEMP/ws50-summary.txt"; then
-            echo '' >> "$GITHUB_STEP_SUMMARY"
-            echo '```text' >> "$GITHUB_STEP_SUMMARY"
-            cat "$RUNNER_TEMP/ws50-summary.txt" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-          fi
+          for f in "$RUNNER_TEMP/ws50-branch-check.txt" "$RUNNER_TEMP/ws50-summary.txt"; do
+            if test -f "$f"; then
+              echo '' >> "$GITHUB_STEP_SUMMARY"
+              echo '```text' >> "$GITHUB_STEP_SUMMARY"
+              cat "$f" >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
 
       - name: Upload rehearsal outputs
         if: always()
@@ -78,4 +89,5 @@ jobs:
           path: |
             ${{ runner.temp }}/ws50-output/**
             ${{ runner.temp }}/ws50-summary.txt
+            ${{ runner.temp }}/ws50-branch-check.txt
           if-no-files-found: error
