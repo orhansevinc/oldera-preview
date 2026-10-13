@@ -1,0 +1,34 @@
+name: WS48 Abuse Protection
+
+on:
+  push:
+    branches:
+      - ws48-abuse-protection
+    paths:
+      - "packages/oldko-abuse-protection/**"
+      - "abuse-protection/**"
+      - "tests/abuse-protection/**"
+      - "workstreams/ws48/**"
+      - ".github/workflows/ws48-abuse.yml"
+  pull_request:
+    paths:
+      - "packages/oldko-abuse-protection/**"
+      - "abuse-protection/**"
+      - "tests/abuse-protection/**"
+      - "workstreams/ws48/**"
+      - ".github/workflows/ws48-abuse.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Run WS48 tests
+        run: node --test tests/abuse-protection/*.test.mjs
