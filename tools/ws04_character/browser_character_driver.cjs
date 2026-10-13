@@ -57,53 +57,53 @@ const { PNG } = require('pngjs');
     return { nonBlack, total, ratio: total ? nonBlack / total : 0 };
   };
 
-  const capture = async (name) => {
-    const cdp = await page.context().newCDPSession(page);
-    const shot = await Promise.race([
-      cdp.send('Page.captureScreenshot', {
-        format: 'png', fromSurface: true, captureBeyondViewport: false,
-        clip: { x: 0, y: 0, width: 1024, height: 768, scale: 1 }
-      }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('CDP screenshot timed out')), 8000))
-    ]);
-    const buffer = Buffer.from(shot.data, 'base64');
-    fs.writeFileSync(`ws04-${name}.png`, buffer);
-    return PNG.sync.read(buffer);
+  // Character Select/Create render correctly in Chromium's compositor while the
+  // default WebGL backbuffer can already be discarded by the time readPixels()
+  // runs. The canonical base gate proved that behavior. Therefore WS04 uses the
+  // actual composited browser frame as its visual source instead of blocking the
+  // game main loop with a known-black gl.readPixels call.
+  const capture = async (name, attempts = 2) => {
+    let lastError = null;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      if (attempt > 1) await page.waitForTimeout(1500);
+      const cdp = await page.context().newCDPSession(page);
+      try {
+        const shot = await Promise.race([
+          cdp.send('Page.captureScreenshot', {
+            format: 'png', fromSurface: true, captureBeyondViewport: false,
+            clip: { x: 0, y: 0, width: 1024, height: 768, scale: 1 }
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('CDP screenshot timed out')), 20000))
+        ]);
+        const buffer = Buffer.from(shot.data, 'base64');
+        fs.writeFileSync(`ws04-${name}.png`, buffer);
+        console.log(`[ws04-driver] screenshot ${name} captured attempt=${attempt}`);
+        cdp.detach().catch(() => {});
+        return PNG.sync.read(buffer);
+      } catch (err) {
+        lastError = err;
+        console.log(`[ws04-driver] screenshot ${name} attempt=${attempt} failed: ${err.message}`);
+        cdp.detach().catch(() => {});
+      }
+    }
+    throw lastError || new Error(`screenshot ${name} failed`);
   };
 
   const assertVisual = async (label, fileName) => {
-    const framebuffer = await page.evaluate(() => {
-      const canvas = document.getElementById('canvas');
-      if (!canvas) return { error: 'canvas missing', nonBlack: 0, total: 0, ratio: 0 };
-      const gl = canvas.getContext('webgl2');
-      if (!gl) return { error: 'webgl2 context missing', nonBlack: 0, total: canvas.width * canvas.height, ratio: 0 };
-      gl.finish();
-      const pixels = new Uint8Array(canvas.width * canvas.height * 4);
-      gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-      const glError = gl.getError();
-      let nonBlack = 0;
-      for (let i = 0; i < pixels.length; i += 4) {
-        if (pixels[i] > 10 || pixels[i + 1] > 10 || pixels[i + 2] > 10) nonBlack++;
-      }
-      const total = canvas.width * canvas.height;
-      return { glError, nonBlack, total, ratio: total ? nonBlack / total : 0 };
-    });
-
     const png = await capture(fileName);
     const compositor = pixelStats(png);
-    const ratio = Math.max(Number(framebuffer.ratio || 0), compositor.ratio);
-    const source = compositor.ratio >= Number(framebuffer.ratio || 0) ? 'compositor' : 'framebuffer';
-    console.log(`[ws04-driver] ${label} framebuffer=${Number(framebuffer.ratio || 0).toFixed(4)} compositor=${compositor.ratio.toFixed(4)}`);
-    if (ratio < 0.01) throw new Error(`${label} is effectively black`);
-    console.log(`[ws04-driver] ${label}_VISUAL_OK source=${source} ratio=${ratio.toFixed(4)}`);
+    console.log(`[ws04-driver] ${label} compositor nonBlack=${compositor.nonBlack}/${compositor.total} ratio=${compositor.ratio.toFixed(4)}`);
+    if (compositor.ratio < 0.01) throw new Error(`${label} compositor is effectively black`);
+    console.log(`[ws04-driver] ${label}_VISUAL_OK source=compositor ratio=${compositor.ratio.toFixed(4)}`);
     return png;
   };
 
   const assertModelPreview = async () => {
     const png = await capture('create-ready');
-    // The genuine 1298 create UI leaves this rectangle black until a real UPC
-    // model is loaded/rendered. Background/UI pixels are deliberately excluded.
-    const region = { x: 355, y: 55, width: 320, height: 565 };
+    // The genuine 1298 create UI leaves the inner preview rectangle black until
+    // a real UPC model is loaded/rendered. Stay inside its gold border and away
+    // from every text/button/background pixel.
+    const region = { x: 360, y: 60, width: 315, height: 565 };
     const stats = pixelStats(png, region);
     console.log(`[ws04-driver] CREATE_MODEL region nonBlack=${stats.nonBlack}/${stats.total} ratio=${stats.ratio.toFixed(4)}`);
     if (stats.ratio < 0.002) {
@@ -135,25 +135,27 @@ const { PNG } = require('pngjs');
     await waitForRuntime('game server login answered: nation=0', 30000);
     await waitForRuntime('scene change: login -> nation-select', 30000);
 
-    await page.waitForTimeout(800);
+    await page.waitForTimeout(1000);
     await assertVisual('NATION', 'nation');
 
     await page.locator('#canvas').focus();
     await page.mouse.click(258, 495, { delay: 100 }); // real El Morad button
     await waitForRuntime('scene change: nation-select -> character-select', 20000);
     await waitForRuntime('WS04_CHAR_LIST parsed result=1 slots=3 occupied=0', 20000);
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(1800);
     await assertVisual('CHARACTER_SELECT', 'character-select');
     console.log('[ws04-driver] NATION_TO_CHAR_SELECT_OK');
     console.log('[ws04-driver] CHAR_LIST_PARSE_OK slots=3 occupied=0');
 
-    // Genuine Character Select center hitbox; empty slot must route to real create proc.
+    // The canonical 1298 client gate already proves Enter selects the focused
+    // empty center slot. Keep the exact native control path instead of guessing a
+    // screen hitbox.
     await page.locator('#canvas').focus();
-    await page.mouse.click(512, 550, { delay: 100 });
+    await pressHeld('Enter', 100);
     await waitForRuntime('WS04_SLOT_ACTION index=0 occupied=0', 10000);
     await waitForRuntime('scene change: character-select -> character-create', 20000);
     await waitForRuntime('WS04_CHAR_CREATE_UI', 10000);
-    await page.waitForTimeout(800);
+    await page.waitForTimeout(1800);
     await assertVisual('CHARACTER_CREATE', 'character-create');
     console.log('[ws04-driver] EMPTY_SLOT_TO_CREATE_OK');
 
@@ -161,7 +163,7 @@ const { PNG } = require('pngjs');
     await page.mouse.click(170, 145, { delay: 100 });
     await page.waitForTimeout(500);
     await page.mouse.click(170, 325, { delay: 100 });
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(1200);
 
     // Allocate every available bonus point to STR. Extra clicks are harmless:
     // the real UI ignores them after m_iBonusPoint reaches zero.
@@ -173,7 +175,7 @@ const { PNG } = require('pngjs');
     await page.mouse.click(510, 678, { delay: 80 });
     await page.keyboard.press('Control+A');
     await page.keyboard.type(characterName, { delay: 25 });
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(700);
 
     await assertModelPreview();
 
@@ -197,12 +199,12 @@ const { PNG } = require('pngjs');
       console.log('[ws04-driver] CHAR_CREATE_RESPONSE_OK');
       await waitForRuntime('scene change: character-create -> character-select', 20000);
       await waitForRuntime('WS04_CHAR_LIST parsed result=1 slots=3 occupied=1', 20000);
-      await page.waitForTimeout(1000);
+      await page.waitForTimeout(1800);
       await assertVisual('CHARACTER_SLOT_REFRESH', 'character-slot-refresh');
       console.log('[ws04-driver] CHAR_CREATE_SLOT_REFRESH_OK');
 
       await page.locator('#canvas').focus();
-      await page.mouse.click(512, 550, { delay: 100 });
+      await pressHeld('Enter', 100);
       await waitForRuntime('WS04_SLOT_ACTION index=0 occupied=1', 10000);
       await waitForRuntime('WS04_CHAR_SELECT_REQUEST index=0', 10000);
       console.log('[ws04-driver] CHAR_SELECT_PACKET_OK');
