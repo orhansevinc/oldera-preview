@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "testOnly": true,
+  "category": "item",
+  "scenarios": [
+    {
+      "id": "ws49.item.empty-inventory",
+      "seed": 49201,
+      "description": "Character fixture with an explicitly empty inventory collection.",
+      "payload": {
+        "characterId": { "$fixtureId": ["character", "empty-inventory"] },
+        "inventory": []
+      }
+    },
+    {
+      "id": "ws49.item.full-inventory",
+      "seed": 49202,
+      "description": "Full inventory intent that defers real slot capacity to the catalog adapter.",
+      "payload": {
+        "characterId": { "$fixtureId": ["character", "full-inventory"] },
+        "inventoryPolicy": {
+          "fillStrategy": "TO_CAPACITY",
+          "capacity": { "$catalog": "inventory.slot-capacity" },
+          "itemTemplate": { "$catalog": "item.non-stackable.common" }
+        }
+      }
+    },
+    {
+      "id": "ws49.item.stackable-item",
+      "seed": 49203,
+      "description": "Stackable item instance with real item template selection delegated to WS31.",
+      "payload": {
+        "item": {
+          "instanceId": { "$fixtureId": ["item-instance", "stackable"] },
+          "serial": { "$serial": ["item", "stackable"] },
+          "template": { "$catalog": "item.stackable.common" },
+          "stackCount": 7
+        }
+      }
+    },
+    {
+      "id": "ws49.item.non-stackable",
+      "seed": 49204,
+      "description": "Non-stackable item instance with a deterministic fixture serial.",
+      "payload": {
+        "item": {
+          "instanceId": { "$fixtureId": ["item-instance", "non-stackable"] },
+          "serial": { "$serial": ["item", "non-stackable"] },
+          "template": { "$catalog": "item.non-stackable.common" },
+          "stackCount": 1
+        }
+      }
+    },
+    {
+      "id": "ws49.item.duplicate-serial-negative",
+      "seed": 49205,
+      "description": "Negative fixture with two distinct item instances sharing one synthetic serial.",
+      "payload": {
+        "negativeTest": true,
+        "items": [
+          {
+            "instanceId": { "$fixtureId": ["item-instance", "duplicate-serial-a"] },
+            "serial": { "$serial": ["item", "duplicate-serial"] },
+            "template": { "$catalog": "item.non-stackable.common" }
+          },
+          {
+            "instanceId": { "$fixtureId": ["item-instance", "duplicate-serial-b"] },
+            "serial": { "$serial": ["item", "duplicate-serial"] },
+            "template": { "$catalog": "item.non-stackable.common" }
+          }
+        ],
+        "expected": "REJECT_DUPLICATE_SERIAL"
+      }
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "name": "@oldkoweb/test-fixtures",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic test-only fixture primitives for OldKOWeb integration and E2E tests.",
+  "exports": "./src/index.js",
+  "engines": {
+    "node": ">=20"
+  }
+}

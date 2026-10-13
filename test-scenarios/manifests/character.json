@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "testOnly": true,
+  "category": "character",
+  "scenarios": [
+    {
+      "id": "ws49.character.empty-account",
+      "seed": 49101,
+      "description": "Account fixture with no characters and an explicitly empty slot collection.",
+      "payload": {
+        "accountId": { "$fixtureId": ["account", "empty-character-account"] },
+        "characters": []
+      }
+    },
+    {
+      "id": "ws49.character.one-character",
+      "seed": 49102,
+      "description": "Account fixture containing one deterministic living character.",
+      "payload": {
+        "accountId": { "$fixtureId": ["account", "one-character"] },
+        "characters": [
+          { "id": { "$fixtureId": ["character", "one-character"] }, "slot": 0, "lifeState": "ALIVE" }
+        ]
+      }
+    },
+    {
+      "id": "ws49.character.full-character-slots",
+      "seed": 49103,
+      "description": "Full character slot intent without hard-coding a real 1298 slot capacity.",
+      "payload": {
+        "accountId": { "$fixtureId": ["account", "full-character-slots"] },
+        "slotPolicy": {
+          "fillStrategy": "TO_CAPACITY",
+          "capacity": { "$catalog": "character.slot-capacity" },
+          "prototype": { "lifeState": "ALIVE", "idNamespace": "character" }
+        }
+      }
+    },
+    {
+      "id": "ws49.character.karus",
+      "seed": 49104,
+      "description": "Character fixture whose real Karus nation identifier is catalog-resolved.",
+      "payload": {
+        "character": {
+          "id": { "$fixtureId": ["character", "karus"] },
+          "nation": { "$catalog": "nation.karus" },
+          "lifeState": "ALIVE"
+        }
+      }
+    },
+    {
+      "id": "ws49.character.el-morad",
+      "seed": 49105,
+      "description": "Character fixture whose real El Morad nation identifier is catalog-resolved.",
+      "payload": {
+        "character": {
+          "id": { "$fixtureId": ["character", "el-morad"] },
+          "nation": { "$catalog": "nation.el-morad" },
+          "lifeState": "ALIVE"
+        }
+      }
+    },
+    {
+      "id": "ws49.character.different-classes",
+      "seed": 49106,
+      "description": "Class coverage fixture expressed as roles rather than invented numeric class IDs.",
+      "payload": {
+        "classRoles": ["WARRIOR", "ROGUE", "MAGE", "PRIEST"],
+        "resolutionPolicy": "CONSUMER_RESOLVES_NATION_SPECIFIC_CLASS_VIA_WS31"
+      }
+    },
+    {
+      "id": "ws49.character.dead-alive",
+      "seed": 49107,
+      "description": "Paired character fixtures covering deterministic alive and dead states.",
+      "payload": {
+        "characters": [
+          { "id": { "$fixtureId": ["character", "alive"] }, "lifeState": "ALIVE" },
+          { "id": { "$fixtureId": ["character", "dead"] }, "lifeState": "DEAD" }
+        ]
+      }
+    }
+  ]
+}

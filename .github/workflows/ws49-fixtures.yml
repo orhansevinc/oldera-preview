@@ -1,0 +1,35 @@
+name: WS49 Test Fixtures
+
+on:
+  push:
+    branches: [ws49-test-scenarios]
+    paths:
+      - "test-scenarios/**"
+      - "packages/oldko-test-fixtures/**"
+      - "tests/test-fixtures/**"
+      - "workstreams/ws49/**"
+      - ".github/workflows/ws49-fixtures.yml"
+  pull_request:
+    paths:
+      - "test-scenarios/**"
+      - "packages/oldko-test-fixtures/**"
+      - "tests/test-fixtures/**"
+      - "workstreams/ws49/**"
+      - ".github/workflows/ws49-fixtures.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-fixtures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Validate deterministic fixture standard
+        env:
+          NODE_ENV: test
+        run: node --test tests/test-fixtures/*.test.mjs

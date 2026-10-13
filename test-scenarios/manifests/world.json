@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "testOnly": true,
+  "category": "world",
+  "scenarios": [
+    {
+      "id": "ws49.world.moradon-spawn",
+      "seed": 49401,
+      "description": "Moradon spawn scenario with zone and spawn identity supplied by WS31.",
+      "payload": {
+        "characterId": { "$fixtureId": ["character", "moradon-spawn"] },
+        "zone": { "$catalog": "zone.moradon" },
+        "spawn": { "$catalog": "spawn.moradon.default" }
+      }
+    },
+    {
+      "id": "ws49.world.movement",
+      "seed": 49402,
+      "description": "Deterministic movement path in fixture-local coordinates inside a catalog-resolved zone.",
+      "payload": {
+        "characterId": { "$fixtureId": ["character", "movement"] },
+        "zone": { "$catalog": "zone.moradon" },
+        "coordinateSpace": "FIXTURE_LOCAL_NOT_REAL_1298",
+        "path": [
+          { "x": 0, "z": 0 },
+          { "x": 3, "z": 4 },
+          { "x": 8, "z": 4 }
+        ]
+      }
+    },
+    {
+      "id": "ws49.world.npc-interaction",
+      "seed": 49403,
+      "description": "NPC interaction scenario using a catalog query rather than an invented NPC ID.",
+      "payload": {
+        "characterId": { "$fixtureId": ["character", "npc-interaction"] },
+        "npc": { "$catalog": "npc.interactable.any" },
+        "interaction": "OPEN_DIALOG"
+      }
+    },
+    {
+      "id": "ws49.world.mob-combat",
+      "seed": 49404,
+      "description": "Mob combat setup with deterministic character identity and catalog-resolved mob identity.",
+      "payload": {
+        "characterId": { "$fixtureId": ["character", "mob-combat"] },
+        "mob": { "$catalog": "mob.combat.any" },
+        "combatState": { "characterHp": 100, "mobHp": 100, "round": 0 }
+      }
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "testOnly": true,
+  "category": "economy",
+  "scenarios": [
+    {
+      "id": "ws49.economy.buy-sell",
+      "seed": 49501,
+      "description": "NPC buy and sell fixture with catalog-resolved merchant and tradeable item.",
+      "payload": {
+        "characterId": { "$fixtureId": ["character", "economy-buy-sell"] },
+        "merchant": { "$catalog": "npc.merchant.any" },
+        "item": { "$catalog": "item.tradeable.any" },
+        "startingCoins": 100000,
+        "flow": ["BUY", "SELL"]
+      }
+    },
+    {
+      "id": "ws49.economy.trade-rollback",
+      "seed": 49502,
+      "description": "Two-party trade fixture with an explicit rollback checkpoint and invariant.",
+      "payload": {
+        "tradeId": { "$fixtureId": ["trade", "rollback"] },
+        "leftCharacterId": { "$fixtureId": ["character", "trade-left"] },
+        "rightCharacterId": { "$fixtureId": ["character", "trade-right"] },
+        "item": { "$catalog": "item.tradeable.any" },
+        "checkpoint": "AFTER_LEFT_COMMIT_BEFORE_RIGHT_COMMIT",
+        "expected": "ROLLBACK_TO_PRE_TRADE_STATE"
+      }
+    },
+    {
+      "id": "ws49.economy.inn-transfer",
+      "seed": 49503,
+      "description": "Character-to-account-inn transfer fixture using catalog-resolved item identity.",
+      "payload": {
+        "accountId": { "$fixtureId": ["account", "inn-transfer"] },
+        "characterId": { "$fixtureId": ["character", "inn-transfer"] },
+        "itemInstanceId": { "$fixtureId": ["item-instance", "inn-transfer"] },
+        "item": { "$catalog": "item.non-stackable.common" },
+        "direction": "INVENTORY_TO_INN"
+      }
+    }
+  ]
+}

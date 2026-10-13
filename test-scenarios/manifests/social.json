@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "testOnly": true,
+  "category": "social",
+  "scenarios": [
+    {
+      "id": "ws49.social.friends",
+      "seed": 49301,
+      "description": "Two deterministic characters connected by an accepted friend relation.",
+      "payload": {
+        "characters": [
+          { "id": { "$fixtureId": ["character", "friend-a"] } },
+          { "id": { "$fixtureId": ["character", "friend-b"] } }
+        ],
+        "relation": "FRIENDS"
+      }
+    },
+    {
+      "id": "ws49.social.blocked",
+      "seed": 49302,
+      "description": "One deterministic character blocking another deterministic character.",
+      "payload": {
+        "actorId": { "$fixtureId": ["character", "blocker"] },
+        "targetId": { "$fixtureId": ["character", "blocked"] },
+        "relation": "BLOCKED"
+      }
+    },
+    {
+      "id": "ws49.social.party",
+      "seed": 49303,
+      "description": "Deterministic party with one leader and one member fixture.",
+      "payload": {
+        "partyId": { "$fixtureId": ["party", "basic-party"] },
+        "leaderId": { "$fixtureId": ["character", "party-leader"] },
+        "memberIds": [
+          { "$fixtureId": ["character", "party-leader"] },
+          { "$fixtureId": ["character", "party-member"] }
+        ]
+      }
+    },
+    {
+      "id": "ws49.social.clan",
+      "seed": 49304,
+      "description": "Deterministic clan membership graph with chief and member fixtures.",
+      "payload": {
+        "clanId": { "$fixtureId": ["clan", "basic-clan"] },
+        "chiefId": { "$fixtureId": ["character", "clan-chief"] },
+        "memberIds": [
+          { "$fixtureId": ["character", "clan-chief"] },
+          { "$fixtureId": ["character", "clan-member"] }
+        ]
+      }
+    }
+  ]
+}

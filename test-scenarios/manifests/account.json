@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "testOnly": true,
+  "category": "account",
+  "scenarios": [
+    {
+      "id": "ws49.account.normal-player",
+      "seed": 49001,
+      "description": "Active normal player account with guarded development credentials.",
+      "payload": {
+        "account": {
+          "id": { "$fixtureId": ["account", "normal-player"] },
+          "state": "ACTIVE",
+          "credentials": { "$testCredential": "osevinc" },
+          "banned": false
+        }
+      }
+    },
+    {
+      "id": "ws49.account.banned-account",
+      "seed": 49002,
+      "description": "Account fixture carrying a deterministic test-only account ban.",
+      "payload": {
+        "account": {
+          "id": { "$fixtureId": ["account", "banned-account"] },
+          "state": "BANNED",
+          "banned": true,
+          "banReason": "WS49_TEST_BAN"
+        }
+      }
+    },
+    {
+      "id": "ws49.account.ip-banned",
+      "seed": 49003,
+      "description": "Account fixture attached to an RFC 5737 documentation-range banned IP.",
+      "payload": {
+        "account": { "id": { "$fixtureId": ["account", "ip-banned"] }, "state": "ACTIVE" },
+        "ipBan": { "ip": "203.0.113.49", "active": true, "reason": "WS49_TEST_IP_BAN" }
+      }
+    },
+    {
+      "id": "ws49.account.duplicate-login",
+      "seed": 49004,
+      "description": "One account represented by two competing deterministic session leases.",
+      "payload": {
+        "account": { "id": { "$fixtureId": ["account", "duplicate-login"] }, "state": "ACTIVE" },
+        "sessions": [
+          { "id": { "$fixtureId": ["session", "duplicate-login-a"] }, "ordinal": 1, "state": "ACTIVE" },
+          { "id": { "$fixtureId": ["session", "duplicate-login-b"] }, "ordinal": 2, "state": "ACTIVE" }
+        ],
+        "expectedArbitration": "ONE_OWNER_ONLY"
+      }
+    }
+  ]
+}
