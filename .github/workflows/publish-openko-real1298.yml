@@ -1,0 +1,63 @@
+name: Publish Real 1298 Browser Preview
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-openko-real1298.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Pull proven OpenKO browser package from port branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin openko-browser-port
+          rm -rf real1298 openko-web
+          git archive origin/openko-browser-port openko-web | tar -x
+          mkdir -p real1298
+          mv openko-web/* real1298/
+          rmdir openko-web
+          test -s real1298/index.html
+          test -s real1298/KnightOnLine.js
+          test -s real1298/KnightOnLine.wasm
+          test -s real1298/KnightOnLine.data
+          echo 'Real 1298 browser package staged:'
+          du -h real1298/KnightOnLine.{js,wasm,data}
+
+      - name: Mark public preview build
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > real1298/BUILD.txt <<EOF
+          OldKOWeb real 1298 browser preview
+          Source branch: openko-browser-port
+          Source commit: $(git rev-parse origin/openko-browser-port)
+          Published by GitHub Actions from proven OpenKO WASM/WebGL2 package.
+          EOF
+
+      - name: Publish package to main for GitHub Pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'OldKOWeb Build Bot'
+          git config user.email 'actions@github.com'
+          git add -f real1298
+          if git diff --cached --quiet; then
+            echo 'real1298 package already current.'
+            exit 0
+          fi
+          git commit -m 'Publish real 1298 browser preview [skip ci]'
+          git push origin HEAD:main
