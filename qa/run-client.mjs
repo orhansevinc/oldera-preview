@@ -63,8 +63,30 @@ try{
   try{const m=await wait(/render backend: OpenGL/i,30000);const gl=await page.evaluate(()=>!!document.querySelector('canvas')?.getContext('webgl2'));if(!gl)throw new Error('WebGL2 context missing');rep.pass(2,'OpenGL/WebGL2 renderer active and Null renderer absent',{marker:m,webgl2:gl});}catch(e){markFail(2,e);}
   try{const m=await wait(/login scene: CGameProcedure brought up/i,30000);const v=await waitVisual('M3-login','login',50000);rep.pass(3,'Login procedure is up and canvas is visibly rendered',{marker:m,visual:v});}catch(e){markFail(3,e);}
   try{await wait(/browser server list entry:/i,30000);await page.locator('canvas').focus();await page.keyboard.type(id,{delay:20});await held('Tab');await page.keyboard.type(pw,{delay:20});await held('Enter');await wait(/browser login response: cmd=0xf3 result=1/i,30000);if(!bb.state.auth.authReq||!bb.state.auth.authMatched||!bb.state.auth.authResp)throw new Error('auth fixture did not observe matched request/response');rep.pass(4,'Credential packet round-trip observed by independent KO stub',{...bb.state.auth});}catch(e){markFail(4,e,{...bb.state?.auth});}
-  try{const m=await wait(/server list opened \(1 server\(s\) available\)/i,30000);if(!bb.state.auth.serverListReq||!bb.state.auth.serverListResp)throw new Error('server-list packet round-trip missing');rep.pass(5,'Real client opened a server list after protocol response',{marker:m});}catch(e){markFail(5,e);}
-  try{await held('Enter',100);const m=await wait(/connecting to game server .*127\.0\.0\.1:15001/i,20000);await wait(/game server version check answered:/i,20000);if(!bb.state.game.connections&&!bb.state.game.wsConnections)throw new Error('game connection not observed');rep.pass(6,'Client connected to game transport',{marker:m,connections:bb.state.game.connections,wsConnections:bb.state.game.wsConnections});}catch(e){markFail(6,e);}
+  try{
+    const re=/server list opened \(1 server\(s\) available\)/i;
+    let m=lines.find(x=>re.test(x));
+    if(!m){
+      try{m=await wait(re,2500);}catch{
+        await page.locator('canvas').focus();
+        await held('Enter',100);
+        m=await wait(re,7000);
+      }
+    }
+    if(!bb.state.auth.serverListReq||!bb.state.auth.serverListResp)throw new Error('server-list packet round-trip missing');
+    const v=await waitVisual('M5-server-list','server list',10000);
+    rep.pass(5,'Real client opened and visibly rendered the protocol-backed server list',{marker:m,visual:v,serverListReq:bb.state.auth.serverListReq,serverListResp:bb.state.auth.serverListResp});
+  }catch(e){markFail(5,e,{...bb.state?.auth});}
+  try{
+    await page.locator('canvas').focus();
+    await page.mouse.click(258,495,{delay:100});
+    await page.waitForTimeout(250);
+    await held('Enter',100);
+    const m=await wait(/connecting to game server .*127\.0\.0\.1:15001/i,25000);
+    await wait(/game server version check answered:/i,25000);
+    if(!bb.state.game.connections&&!bb.state.game.wsConnections)throw new Error('game connection not observed');
+    rep.pass(6,'Client selected the real server row and connected to game transport',{marker:m,connections:bb.state.game.connections,wsConnections:bb.state.game.wsConnections});
+  }catch(e){markFail(6,e,{...bb.state?.game});}
   try{const m=await wait(/game server version check answered: version=1298 \(client expects 1298\)/i,20000);if(bb.state.game.versionResp!==1298)throw new Error('fixture did not return 1298');rep.pass(7,'1298 version negotiation proven',{marker:m,version:bb.state.game.versionResp});}catch(e){markFail(7,e);}
   try{const m=await wait(/game server login answered: nation=0/i,20000);if(!bb.state.game.loginReq||!bb.state.game.loginMatched||!bb.state.game.loginResp)throw new Error('game login packet chain incomplete');rep.pass(8,'Game-server login request and successful response observed',{marker:m});}catch(e){markFail(8,e);}
   try{const m=await wait(/scene change: login -> nation-select/i,20000);const v=await waitVisual('M9-nation-select','nation select',50000);rep.pass(9,'Nation Select reached and canvas is visibly rendered',{marker:m,visual:v});}catch(e){markFail(9,e);}
