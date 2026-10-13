@@ -1,0 +1,32 @@
+{
+  "brand": {
+    "product": "OldKOWeb",
+    "game": "OldKO",
+    "patch": "1298"
+  },
+  "cacheVersion": "ws12-1298-preview-1",
+  "client": {
+    "entryUrl": "../real1298/index.html",
+    "buildUrl": "../real1298/BUILD.txt",
+    "requiredFiles": [
+      "../real1298/KnightOnLine.js",
+      "../real1298/KnightOnLine.wasm",
+      "../real1298/KnightOnLine.data"
+    ]
+  },
+  "gateway": {
+    "url": "",
+    "required": false,
+    "timeoutMs": 3000
+  },
+  "runtime": {
+    "readySelector": "#status",
+    "readyText": "WASM hazır",
+    "errorText": "[ERR]",
+    "timeoutMs": 45000
+  },
+  "mobile": {
+    "policy": "warn",
+    "message": "OldKO 1298 masaüstü klavye/fare akışı için tasarlandı. Mobilde launcher açılabilir ancak oyun kontrolü desteklenmeyebilir."
+  }
+}
