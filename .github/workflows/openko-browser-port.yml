@@ -57,7 +57,24 @@ jobs:
           du -sh ko-assets/Data ko-assets/UI_US ko-assets/Snd/Intro_Sound.mp3
 
       - name: Patch OpenKO for WebGL2 browser runtime
-        run: python3 tools/patch_openko_browser.py
+        shell: bash
+        run: |
+          python3 tools/patch_openko_browser.py
+          # The patcher intentionally stores C++ replacement text as Python
+          # strings. Correct the one GLSL escape that must become an actual
+          # source newline before compiling the browser target.
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('openko/src/Client/WarFare/RHIDeviceGL.cpp')
+          s = p.read_text()
+          bad = r'#version 300 es\nprecision highp float;'
+          good = '#version 300 es\nprecision highp float;'
+          count = s.count(bad)
+          if count != 2:
+              raise SystemExit(f'expected 2 escaped GLSL headers, found {count}')
+          p.write_text(s.replace(bad, good))
+          print('Corrected both GLSL ES 300 shader headers to real newlines')
+          PY
 
       - name: Install build tools
         run: |
@@ -79,7 +96,8 @@ jobs:
           emcmake cmake -S openko -B build-web -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_C_FLAGS='-DBOOST_HAS_PTHREADS=1' \
-            -DCMAKE_CXX_FLAGS='-DBOOST_HAS_PTHREADS=1 -DASIO_DISABLE_THREADS=1' \
+            -DCMAKE_CXX_FLAGS='-DBOOST_HAS_PTHREADS=1 -DASIO_DISABLE_THREADS=1 -fexceptions' \
+            -DCMAKE_EXE_LINKER_FLAGS='-fexceptions' \
             -DOPENKO_BUILD_CLIENT=ON \
             -DOPENKO_CLIENT_POSIX_EXPERIMENTAL=ON \
             -DOPENKO_BUILD_CLIENT_TOOLS=OFF \
@@ -180,8 +198,7 @@ jobs:
               ]
             });
             const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
-            const lines = [];
-            const push = (line) => { lines.push(line); console.log(line); };
+            const push = (line) => console.log(line);
             page.on('console', msg => push('[console:' + msg.type() + '] ' + msg.text()));
             page.on('pageerror', err => push('[pageerror] ' + err.stack));
             page.on('requestfailed', req => push('[requestfailed] ' + req.url() + ' ' + (req.failure()?.errorText || '')));
