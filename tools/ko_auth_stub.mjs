@@ -5,8 +5,13 @@ import net from 'node:net';
 const host = process.env.KO_STUB_HOST || '127.0.0.1';
 const port = Number(process.env.KO_STUB_PORT || 16100);
 const resultPath = process.env.KO_AUTH_RESULT || 'ko-auth-result.txt';
-const expectedID = process.env.KO_TEST_ID || 'osevinc';
-const expectedPW = process.env.KO_TEST_PW || 'osevinc';
+const expectedID = process.env.KO_TEST_ID;
+const expectedPW = process.env.KO_TEST_PW;
+
+if (!expectedID || !expectedPW) {
+  console.error('[auth-stub] KO_TEST_ID and KO_TEST_PW are required at runtime');
+  process.exit(2);
+}
 
 const u16 = (n) => { const b = Buffer.allocUnsafe(2); b.writeUInt16LE(n & 0xffff, 0); return b; };
 const s2 = (s) => { const b = Buffer.from(s, 'latin1'); return Buffer.concat([u16(b.length), b]); };
