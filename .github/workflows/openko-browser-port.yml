@@ -28,23 +28,20 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          # Browser audio: use Emscripten OpenAL/WebAudio, not desktop openal-soft.
           p = Path('openko/cmake/FindOpenALSoft.cmake')
           s = p.read_text()
           browser = '''if(EMSCRIPTEN)\n  add_library(OpenAL INTERFACE)\n  target_link_libraries(OpenAL INTERFACE "-lopenal")\n  set(openalsoft_FOUND TRUE)\n  return()\nendif()\n\n'''
           if not s.startswith('if(EMSCRIPTEN)'):
               p.write_text(browser + s)
 
-          # Emscripten OpenAL uses ALCcontext_struct/ALCdevice_struct typedefs.
           p = Path('openko/src/N3Base/N3SndMgr.h')
           s = p.read_text(encoding='utf-8-sig')
           old = 'struct ALCcontext;\nstruct ALCdevice;'
-          new = '''#ifdef __EMSCRIPTEN__\n#include <AL/alc.h>\n#else\nstruct ALCcontext;\nstruct ALCdevice;\n#endif'''
+          new = '#ifdef __EMSCRIPTEN__\n#include <AL/alc.h>\n#else\nstruct ALCcontext;\nstruct ALCdevice;\n#endif'
           if old not in s:
               raise SystemExit('N3SndMgr.h OpenAL declarations changed upstream')
           p.write_text(s.replace(old, new), encoding='utf-8')
 
-          # libjpeg must be static in a standalone WebAssembly executable.
           p = Path('openko/cmake/FindJpeg.cmake')
           s = p.read_text()
           s = s.replace('if(WIN32)\n  set(LIBJPEG_BUILD_SHARED_LIBS OFF',
@@ -53,26 +50,10 @@ jobs:
                         'if(WIN32 OR EMSCRIPTEN)\n  target_link_libraries(libjpeg INTERFACE jpeg_static)')
           p.write_text(s)
 
-          # Skip desktop-only package install and make WarFare a browser HTML app.
           p = Path('openko/src/Client/WarFare/CMakeLists.txt')
           s = p.read_text()
           s = s.replace('if(UNIX AND NOT APPLE)\n    # Linux: a freedesktop menu entry',
                         'if(UNIX AND NOT APPLE AND NOT EMSCRIPTEN)\n    # Linux: a freedesktop menu entry')
-          s += r'''
-
-if(EMSCRIPTEN)
-  set_target_properties(WarFare PROPERTIES SUFFIX ".html")
-  target_link_options(WarFare PRIVATE
-    "-sMIN_WEBGL_VERSION=2"
-    "-sMAX_WEBGL_VERSION=2"
-    "-sALLOW_MEMORY_GROWTH=1"
-    "-sFORCE_FILESYSTEM=1"
-    "-sASYNCIFY"
-    "-sEXIT_RUNTIME=1"
-    "-sASSERTIONS=1"
-  )
-endif()
-'''
           p.write_text(s)
           PY
 
@@ -104,6 +85,8 @@ endif()
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_C_FLAGS='-DBOOST_HAS_PTHREADS=1' \
             -DCMAKE_CXX_FLAGS='-DBOOST_HAS_PTHREADS=1 -DASIO_DISABLE_THREADS=1' \
+            -DCMAKE_EXECUTABLE_SUFFIX='.html' \
+            -DCMAKE_EXE_LINKER_FLAGS='-sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2 -sALLOW_MEMORY_GROWTH=1 -sFORCE_FILESYSTEM=1 -sASYNCIFY -sEXIT_RUNTIME=1 -sASSERTIONS=1' \
             -DOPENKO_BUILD_CLIENT=ON \
             -DOPENKO_CLIENT_POSIX_EXPERIMENTAL=ON \
             -DOPENKO_BUILD_CLIENT_TOOLS=OFF \
