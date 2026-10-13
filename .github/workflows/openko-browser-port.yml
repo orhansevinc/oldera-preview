@@ -129,7 +129,7 @@ jobs:
           <html><head><meta charset="utf-8"><title>OldERA runtime smoke</title></head>
           <body style="margin:0;background:#000">
           <canvas id="canvas" width="1024" height="768"></canvas>
-          <pre id="status"></pre>
+          <pre id="status" style="color:#fff"></pre>
           <script>
           (() => {
             const status = document.getElementById('status');
@@ -157,42 +157,86 @@ jobs:
           trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
           sleep 2
 
+          mkdir -p /tmp/oldera-playwright
+          npm --prefix /tmp/oldera-playwright init -y >/dev/null 2>&1
+          npm --prefix /tmp/oldera-playwright install --no-audit --no-fund playwright-core@1.55.0 >/dev/null
+
+          cat > browser-smoke.cjs <<'EOF'
+          const fs = require('fs');
+          const { chromium } = require('/tmp/oldera-playwright/node_modules/playwright-core');
+
+          (async () => {
+            const browser = await chromium.launch({
+              headless: true,
+              executablePath: process.env.CHROME,
+              args: [
+                '--no-sandbox',
+                '--disable-dev-shm-usage',
+                '--use-angle=swiftshader',
+                '--enable-unsafe-swiftshader',
+                '--enable-webgl',
+                '--ignore-gpu-blocklist',
+                '--autoplay-policy=no-user-gesture-required'
+              ]
+            });
+            const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+            const lines = [];
+            const push = (line) => { lines.push(line); console.log(line); };
+            page.on('console', msg => push('[console:' + msg.type() + '] ' + msg.text()));
+            page.on('pageerror', err => push('[pageerror] ' + err.stack));
+            page.on('requestfailed', req => push('[requestfailed] ' + req.url() + ' ' + (req.failure()?.errorText || '')));
+
+            let ok = false;
+            try {
+              await page.goto('http://127.0.0.1:8000/smoke.html', {
+                waitUntil: 'domcontentloaded', timeout: 30000
+              });
+              await page.waitForFunction(() => {
+                const text = document.getElementById('status')?.textContent || '';
+                return text.includes('browser login scene ready; network deferred to WebSocket gateway')
+                  && text.includes('login scene: CGameProcedure brought up');
+              }, null, { timeout: 90000 });
+              ok = true;
+            } catch (err) {
+              push('[runner-error] ' + err.stack);
+            } finally {
+              const status = await page.locator('#status').textContent().catch(() => '');
+              push('--- DOM STATUS ---\n' + status + '\n--- END DOM STATUS ---');
+              await page.screenshot({ path: 'browser-runtime.png', fullPage: false }).catch(err => push('[screenshot-error] ' + err));
+              fs.writeFileSync('browser-status.txt', status || '');
+              await browser.close();
+            }
+            process.exit(ok ? 0 : 1);
+          })().catch(err => {
+            console.error(err);
+            process.exit(1);
+          });
+          EOF
+
           set +e
-          timeout 80s "$CHROME" \
-            --headless=new \
-            --no-sandbox \
-            --disable-dev-shm-usage \
-            --use-angle=swiftshader \
-            --enable-unsafe-swiftshader \
-            --enable-webgl \
-            --ignore-gpu-blocklist \
-            --autoplay-policy=no-user-gesture-required \
-            --virtual-time-budget=30000 \
-            --dump-dom http://127.0.0.1:8000/smoke.html \
-            >browser-runtime.log 2>&1
-          CHROME_RC=$?
+          CHROME="$CHROME" timeout 120s node browser-smoke.cjs 2>&1 | tee browser-runtime.log
+          NODE_RC=${PIPESTATUS[0]}
           set -e
 
           echo "--- browser runtime tail ---"
-          tail -n 100 browser-runtime.log || true
+          tail -n 120 browser-runtime.log || true
           echo "--- http server tail ---"
           tail -n 30 browser-http.log || true
 
-          # Chrome can be terminated by timeout after an intentionally endless
-          # game loop. Runtime evidence, not process exit, is the acceptance gate.
-          grep -q "WASM_RUNTIME_READY" browser-runtime.log
-          grep -q "render backend: OpenGL" browser-runtime.log
-          grep -q "login scene: CGameProcedure brought up" browser-runtime.log
-          grep -q "browser login scene ready; network deferred to WebSocket gateway" browser-runtime.log
-          if grep -q "render backend: Null" browser-runtime.log; then
+          test "$NODE_RC" -eq 0
+          grep -q "WASM_RUNTIME_READY" browser-status.txt
+          grep -q "render backend: OpenGL" browser-status.txt
+          grep -q "login scene: CGameProcedure brought up" browser-status.txt
+          grep -q "browser login scene ready; network deferred to WebSocket gateway" browser-status.txt
+          if grep -q "render backend: Null" browser-status.txt; then
             echo "Browser fell back to Null renderer" >&2
             exit 1
           fi
-          if grep -q "game data not found" browser-runtime.log; then
+          if grep -q "game data not found" browser-status.txt; then
             echo "Browser could not see preloaded 1298 data" >&2
             exit 1
           fi
-          echo "Headless Chrome proved genuine 1298 login scene + WebGL2 runtime. chrome_rc=$CHROME_RC"
+          echo "Headless Chrome proved genuine 1298 login scene + WebGL2 runtime."
 
       - name: Publish browser login build into branch
         shell: bash
@@ -283,6 +327,8 @@ jobs:
             configure-web.log
             build-web.log
             browser-runtime.log
+            browser-status.txt
+            browser-runtime.png
             browser-http.log
             build-web/bin/Release/KnightOnLine.html
             build-web/bin/Release/KnightOnLine.js
