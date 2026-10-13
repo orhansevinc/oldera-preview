@@ -1,0 +1,36 @@
+name: WS41 Browser Input
+
+on:
+  push:
+    branches: [ws41-browser-input]
+    paths:
+      - 'tools/ws41_input/**'
+      - 'tests/browser-input/**'
+      - 'workstreams/ws41/**'
+      - '.github/workflows/ws41-input.yml'
+  pull_request:
+    paths:
+      - 'tools/ws41_input/**'
+      - 'tests/browser-input/**'
+      - 'workstreams/ws41/**'
+      - '.github/workflows/ws41-input.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  input-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Unit tests
+        run: node --test tests/browser-input/*.test.mjs
+      - name: Chromium browser smoke
+        env:
+          WS41_REQUIRE_BROWSER: '1'
+        run: node tests/browser-input/run_browser_smoke.mjs

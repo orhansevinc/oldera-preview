@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>WS41 Browser Input Harness</title>
+<style>
+  body { font-family: sans-serif; margin: 20px; }
+  #canvas { width: 640px; height: 360px; border: 1px solid; display: block; }
+  #result[data-status="PASS"] { font-weight: 700; }
+  #result[data-status="FAIL"] { font-weight: 700; }
+</style>
+</head>
+<body>
+<h1>WS41 Browser Input Harness</h1>
+<canvas id="canvas" width="1280" height="720" tabindex="0"></canvas>
+<label>DOM text control <input id="text-input" value="browser text input"></label>
+<pre id="result" data-status="RUNNING">RUNNING</pre>
+<script type="module" src="./harness.mjs"></script>
+</body>
+</html>
