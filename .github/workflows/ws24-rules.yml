@@ -1,0 +1,31 @@
+name: WS24 1298 Rules
+
+on:
+  push:
+    branches: [ws24-pvp-zone-rules]
+    paths:
+      - 'services/ko1298-rules/**'
+      - 'tests/ko1298-rules/**'
+      - 'workstreams/ws24/**'
+      - '.github/workflows/ws24-rules.yml'
+  pull_request:
+    paths:
+      - 'services/ko1298-rules/**'
+      - 'tests/ko1298-rules/**'
+      - 'workstreams/ws24/**'
+      - '.github/workflows/ws24-rules.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S tests/ko1298-rules -B build/ws24
+      - name: Build
+        run: cmake --build build/ws24 --parallel
+      - name: Test
+        run: ctest --test-dir build/ws24 --output-on-failure
