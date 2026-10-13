@@ -241,6 +241,13 @@ jobs:
           tail -n 30 browser-http.log || true
 
           test "$NODE_RC" -eq 0
+          # Reaching CGameProcedure is necessary, but a blank/broken framebuffer
+          # is not a successful login milestone. Chrome reports invalid WebGL
+          # draws as console warnings, which previously passed this gate.
+          if grep -Eq '\[pageerror\]|GL_INVALID_(ENUM|VALUE|OPERATION)|WebGL: INVALID_|WebGL: too many errors' browser-runtime.log; then
+            echo "Browser runtime or WebGL draw errors detected; publication blocked" >&2
+            exit 1
+          fi
           grep -q "WASM_RUNTIME_READY" browser-status.txt
           grep -q "render backend: OpenGL" browser-status.txt
           grep -q "login scene: CGameProcedure brought up" browser-status.txt
