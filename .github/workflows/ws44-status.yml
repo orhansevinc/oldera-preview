@@ -1,0 +1,31 @@
+name: WS44 Server Status
+
+on:
+  push:
+    branches: [ws44-server-status]
+    paths:
+      - 'services/server-status-api/**'
+      - 'tests/server-status-api/**'
+      - 'workstreams/ws44/**'
+      - '.github/workflows/ws44-status.yml'
+  pull_request:
+    paths:
+      - 'services/server-status-api/**'
+      - 'tests/server-status-api/**'
+      - 'workstreams/ws44/**'
+      - '.github/workflows/ws44-status.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test server status API
+        run: node --test tests/server-status-api/*.test.mjs
