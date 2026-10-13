@@ -1,0 +1,33 @@
+name: WS23 Quests
+
+on:
+  push:
+    branches: [ws23-quest-events]
+    paths:
+      - 'services/ko1298-quests/**'
+      - 'tests/ko1298-quests/**'
+      - 'quest-data/**'
+      - 'workstreams/ws23/**'
+      - '.github/workflows/ws23-quests.yml'
+  pull_request:
+    paths:
+      - 'services/ko1298-quests/**'
+      - 'tests/ko1298-quests/**'
+      - 'quest-data/**'
+      - 'workstreams/ws23/**'
+      - '.github/workflows/ws23-quests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run WS23 quest tests
+        run: node --test tests/ko1298-quests/*.test.js
