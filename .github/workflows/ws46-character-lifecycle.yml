@@ -1,0 +1,32 @@
+name: WS46 Character Lifecycle
+
+on:
+  push:
+    branches: [ws46-character-lifecycle]
+    paths:
+      - 'services/ko1298-character-lifecycle/**'
+      - 'tests/ko1298-character-lifecycle/**'
+      - 'workstreams/ws46/**'
+      - '.github/workflows/ws46-character-lifecycle.yml'
+  pull_request:
+    paths:
+      - 'services/ko1298-character-lifecycle/**'
+      - 'tests/ko1298-character-lifecycle/**'
+      - 'workstreams/ws46/**'
+      - '.github/workflows/ws46-character-lifecycle.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax check
+        run: |
+          node --check services/ko1298-character-lifecycle/contracts.js
+          node --check services/ko1298-character-lifecycle/character-lifecycle-service.js
+          node --check services/ko1298-character-lifecycle/index.js
+      - name: Unit tests
+        run: node --test tests/ko1298-character-lifecycle/*.test.js

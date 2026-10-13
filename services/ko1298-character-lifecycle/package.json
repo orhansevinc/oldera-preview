@@ -1,0 +1,10 @@
+{
+  "name": "@oldkoweb/ko1298-character-lifecycle",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "check": "node --check contracts.js && node --check character-lifecycle-service.js && node --check index.js",
+    "test": "node --test ../../tests/ko1298-character-lifecycle/*.test.js"
+  }
+}
