@@ -49,7 +49,7 @@ export async function startBlackbox({id='qauser',pw='qapass',nation=2}={}) {
     const op=p[0];
     if(op===0xf5){st.serverListReq=true;s.write(frame(Buffer.concat([Buffer.from([0xf5,0x01]),s2('127.0.0.1'),s2('OldKO'),u16(7)])));st.serverListResp=true;}
     if(op===0xf3){st.authReq=true;const q=parseLogin(p);st.authMatched=!!q&&q.id===id&&q.pw===pw;if(st.authMatched){s.write(frame(Buffer.from([0xf3,0x01,0xff,0xff])));st.authResp=true;}}
-    if(op===0xf6&&st.authMatched){s.write(frame(Buffer.concat([Buffer.from([0xf6]),s2('QA'),s2(' ')])));st.newsResp=true;}
+    if(op===0xf6&&st.authMatched){s.write(frame(Buffer.concat([Buffer.from([0xf6]),s2('Login Notice'),s2(' ')])));st.newsResp=true;}
   },state.auth);
   const empty=()=>Buffer.alloc(57);
   const game=await framedServer(16101,(p,s,st)=>{
