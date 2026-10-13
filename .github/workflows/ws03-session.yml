@@ -1,0 +1,16 @@
+name: WS03 KO1298 Session
+on:
+  push:
+    branches: [ws03-ko1298-session]
+    paths: ['services/ko1298-session/**','tests/ko1298-session/**','workstreams/ws03/**','.github/workflows/ws03-session.yml']
+  pull_request:
+    paths: ['services/ko1298-session/**','tests/ko1298-session/**','workstreams/ws03/**','.github/workflows/ws03-session.yml']
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '20'}
+      - run: npm test
+        working-directory: services/ko1298-session
