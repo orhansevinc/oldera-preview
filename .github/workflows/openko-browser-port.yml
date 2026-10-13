@@ -82,7 +82,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build cmake python3 git
-          npm install --no-save --no-audit --no-fund ws@8.18.3 playwright-core@1.55.0
+          npm install --no-save --no-audit --no-fund ws@8.18.3 playwright-core@1.55.0 pngjs@7.0.0
 
       - name: Setup Emscripten
         uses: mymindstorm/setup-emsdk@v14
@@ -132,7 +132,7 @@ jobs:
           test -s build-web/bin/Release/KnightOnLine.data
           du -h build-web/bin/Release/KnightOnLine.{js,wasm,data}
 
-      - name: Canonical real UI auth roundtrip gate
+      - name: Canonical real UI login to Nation Select gate
         shell: bash
         run: |
           set -euo pipefail
@@ -145,19 +145,35 @@ jobs:
           TEST_PW="p${GITHUB_RUN_NUMBER}x7"
           export TEST_ID TEST_PW
 
-          rm -f ko-auth-result.txt ko-auth-stub.log gateway-auth.log browser-auth.log browser-auth-status.txt browser-auth-canvas.png http-auth.log
+          rm -f \
+            ko-auth-result.txt ko-game-result.txt \
+            ko-auth-stub.log ko-game-stub.log \
+            gateway-auth.log gateway-game.log \
+            browser-nation.log browser-nation-status.txt browser-nation-canvas.png \
+            http-nation.log
+
           KO_STUB_PORT=16100 KO_AUTH_RESULT=ko-auth-result.txt KO_TEST_ID="$TEST_ID" KO_TEST_PW="$TEST_PW" \
             node tools/ko_auth_stub.mjs >ko-auth-stub.log 2>&1 &
-          STUB_PID=$!
+          AUTH_STUB_PID=$!
+
+          KO_GAME_STUB_PORT=16101 KO_GAME_RESULT=ko-game-result.txt KO_TEST_ID="$TEST_ID" KO_TEST_PW="$TEST_PW" KO_EXPECTED_VERSION=1298 \
+            node tools/ko_game_stub.mjs >ko-game-stub.log 2>&1 &
+          GAME_STUB_PID=$!
+
           KO_TARGET_HOST=127.0.0.1 KO_TARGET_PORT=16100 OLDERA_GATEWAY_PORT=15100 \
             node gateway/oldera-gateway.mjs >gateway-auth.log 2>&1 &
-          GATEWAY_PID=$!
-          python3 -m http.server 8000 --bind 127.0.0.1 --directory "$OUT" >http-auth.log 2>&1 &
+          AUTH_GATEWAY_PID=$!
+
+          KO_TARGET_HOST=127.0.0.1 KO_TARGET_PORT=16101 OLDERA_GATEWAY_PORT=15001 \
+            node gateway/oldera-gateway.mjs >gateway-game.log 2>&1 &
+          GAME_GATEWAY_PID=$!
+
+          python3 -m http.server 8000 --bind 127.0.0.1 --directory "$OUT" >http-nation.log 2>&1 &
           HTTP_PID=$!
-          trap 'kill $HTTP_PID $GATEWAY_PID $STUB_PID 2>/dev/null || true' EXIT
+          trap 'kill $HTTP_PID $AUTH_GATEWAY_PID $GAME_GATEWAY_PID $AUTH_STUB_PID $GAME_STUB_PID 2>/dev/null || true' EXIT
           sleep 2
 
-          cat > "$OUT/auth.html" <<'EOF'
+          cat > "$OUT/nation.html" <<'EOF'
           <!doctype html><html><body style="margin:0;background:#000;overflow:hidden">
           <canvas id="canvas" width="1024" height="768" tabindex="0"></canvas>
           <pre id="status" style="display:none"></pre>
@@ -172,30 +188,42 @@ jobs:
           EOF
 
           CHROME="$CHROME" TEST_ID="$TEST_ID" TEST_PW="$TEST_PW" timeout 150s \
-            node tools/browser_auth_driver.cjs 2>&1 | tee browser-auth.log
+            node tools/browser_nation_driver.cjs 2>&1 | tee browser-nation.log
 
-          echo '=== CLIENT ==='; tail -n 140 browser-auth.log || true
-          echo '=== GATEWAY ==='; cat gateway-auth.log || true
+          echo '=== CLIENT ==='; tail -n 180 browser-nation.log || true
+          echo '=== LOGIN GATEWAY ==='; cat gateway-auth.log || true
+          echo '=== GAME GATEWAY ==='; cat gateway-game.log || true
           echo '=== AUTH STUB ==='; cat ko-auth-stub.log || true
+          echo '=== GAME STUB ==='; cat ko-game-stub.log || true
           echo '=== AUTH RESULT ==='; cat ko-auth-result.txt || true
+          echo '=== GAME RESULT ==='; cat ko-game-result.txt || true
 
           grep -q "AUTH_CHAIN request=1 matched=1 response=1 id=$TEST_ID news=1" ko-auth-result.txt
+          grep -q "GAME_CHAIN versionReq=1 versionResp=1 loginReq=1 matched=1 loginResp=1 nation=0 version=1298" ko-game-result.txt
           grep -q "login id='$TEST_ID'" ko-auth-stub.log
-          grep -q 'WASM_RUNTIME_READY' browser-auth-status.txt
-          grep -q 'render backend: OpenGL' browser-auth-status.txt
-          grep -q 'login scene: CGameProcedure brought up' browser-auth-status.txt
-          grep -q 'browser login response: cmd=0xf3 result=1' browser-auth-status.txt
-          grep -q 'server list opened (1 server(s) available)' browser-auth-status.txt
-          grep -q 'AUTH_UI_OK' browser-auth.log
-          if grep -Eq '\[pageerror\]|GL_INVALID_(ENUM|VALUE|OPERATION)|WebGL: INVALID_|WebGL: too many errors' browser-auth.log; then
+          grep -q "login id='$TEST_ID'" ko-game-stub.log
+          grep -q 'WASM_RUNTIME_READY' browser-nation-status.txt
+          grep -q 'render backend: OpenGL' browser-nation-status.txt
+          grep -q 'login scene: CGameProcedure brought up' browser-nation-status.txt
+          grep -q 'browser login response: cmd=0xf3 result=1' browser-nation-status.txt
+          grep -q 'server list opened (1 server(s) available)' browser-nation-status.txt
+          grep -q "connecting to game server 'OldERA' at 127.0.0.1:15001" browser-nation-status.txt
+          grep -q 'game server version check answered: version=1298 (client expects 1298)' browser-nation-status.txt
+          grep -q 'game server login answered: nation=0' browser-nation-status.txt
+          grep -q 'scene change: login -> nation-select' browser-nation-status.txt
+          grep -q 'NATION_VISUAL_OK' browser-nation.log
+          grep -q 'NATION_UI_OK' browser-nation.log
+
+          if grep -Eq '\[pageerror\]|GL_INVALID_(ENUM|VALUE|OPERATION)|WebGL: INVALID_|WebGL: too many errors' browser-nation.log; then
             echo 'Browser/WebGL error detected; publication blocked' >&2
             exit 1
           fi
-          if grep -q 'render backend: Null' browser-auth-status.txt; then
+          if grep -q 'render backend: Null' browser-nation-status.txt; then
             echo 'Browser fell back to Null renderer; publication blocked' >&2
             exit 1
           fi
-          echo 'AUTH_CANONICAL_OK real 1298 Edit_ID/Edit_PW -> F3 -> WebSocket gateway -> TCP -> AUTH_OK -> F6 -> real server list UI'
+
+          echo 'NATION_CANONICAL_OK real 1298 login -> server list -> game:15001 -> WIZ_VERSION_CHECK 1298 -> WIZ_LOGIN -> nation=0 -> real Nation Select UI'
 
       - name: Publish proven browser client into branch
         shell: bash
@@ -213,7 +241,7 @@ jobs:
           <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-            <title>OldERA — Knight Online 1298</title>
+            <title>OldKOWeb — OldKO 1298</title>
             <style>
               *{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#000}
               body{display:grid;place-items:center}#stage{position:relative;width:1024px;height:768px;transform-origin:center center}
@@ -223,7 +251,7 @@ jobs:
           </head>
           <body>
             <div id="stage"><canvas id="canvas" width="1024" height="768" tabindex="0"></canvas></div>
-            <pre id="status">OldERA / gerçek KO 1298 client yükleniyor…</pre>
+            <pre id="status">OldKOWeb / gerçek OldKO 1298 client yükleniyor…</pre>
             <script>
             (()=>{
               const W=1024,H=768,stage=document.getElementById('stage'),canvas=document.getElementById('canvas'),status=document.getElementById('status'),lines=[];
@@ -237,20 +265,21 @@ jobs:
           EOF
 
           cat > openko-web/README.txt <<'EOF'
-          OldERA OpenKO browser-port — genuine 1298 real UI auth milestone.
+          OldKOWeb / OldKO OpenKO browser-port — genuine 1298 Nation Select milestone.
           Real OpenKO WarFare C++ client compiled to WASM/WebGL2 with genuine 1298 Data/UI assets.
           Browser CAPISocket uses Emscripten WebSocket transport while preserving original KO packet framing/parsing.
-          Canonical CI proves real Edit_ID/Edit_PW input -> F3 login -> WebSocket gateway -> TCP -> auth response -> F6 notice -> real server-list UI.
+          Canonical CI proves real Edit_ID/Edit_PW -> login auth -> real server list -> game port 15001 -> version 1298 -> game login -> genuine Nation Select UI.
+          Nation Select screenshot must also pass a non-black pixel gate before publication.
           No Three.js/DOM game UI recreation.
           EOF
 
-          git config user.name "OldERA Build Bot"
+          git config user.name "OldKOWeb Build Bot"
           git config user.email "actions@github.com"
           git add -f openko-web
           if git diff --cached --quiet; then
             echo 'Published files unchanged.'
           else
-            git commit -m 'Publish proven 1298 browser auth client [skip ci]'
+            git commit -m 'Publish proven 1298 Nation Select browser client [skip ci]'
             git push origin HEAD:openko-browser-port
           fi
 
@@ -258,17 +287,20 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: openko-browser-auth-canonical
+          name: openko-browser-nation-canonical
           path: |
             configure-web.log
             build-web.log
-            browser-auth.log
-            browser-auth-status.txt
-            browser-auth-canvas.png
+            browser-nation.log
+            browser-nation-status.txt
+            browser-nation-canvas.png
             gateway-auth.log
+            gateway-game.log
             ko-auth-stub.log
+            ko-game-stub.log
             ko-auth-result.txt
-            http-auth.log
+            ko-game-result.txt
+            http-nation.log
             build-web/bin/Release/KnightOnLine.html
             build-web/bin/Release/KnightOnLine.js
             build-web/bin/Release/KnightOnLine.wasm
