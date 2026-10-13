@@ -1,0 +1,36 @@
+name: WS29 Observability
+
+on:
+  push:
+    branches:
+      - ws29-observability
+    paths:
+      - 'observability/**'
+      - 'packages/oldko-observability/**'
+      - 'tests/observability/**'
+      - 'workstreams/ws29/**'
+      - '.github/workflows/ws29-observability.yml'
+  pull_request:
+    paths:
+      - 'observability/**'
+      - 'packages/oldko-observability/**'
+      - 'tests/observability/**'
+      - 'workstreams/ws29/**'
+      - '.github/workflows/ws29-observability.yml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Validate observability package syntax
+        working-directory: packages/oldko-observability
+        run: npm run check
+      - name: Run observability tests
+        working-directory: packages/oldko-observability
+        run: npm test
+      - name: Verify package metadata
+        run: node -e "JSON.parse(require('fs').readFileSync('packages/oldko-observability/package.json', 'utf8'))"

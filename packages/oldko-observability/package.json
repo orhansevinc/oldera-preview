@@ -1,0 +1,24 @@
+{
+  "name": "@oldko/observability",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Backend-agnostic observability contracts and utilities for OldKOWeb services.",
+  "exports": {
+    ".": "./src/index.js",
+    "./context": "./src/context.js",
+    "./logger": "./src/logger.js",
+    "./metrics": "./src/metrics.js",
+    "./health": "./src/health.js",
+    "./shutdown": "./src/shutdown.js",
+    "./prometheus": "./src/prometheus.js",
+    "./redaction": "./src/redaction.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test ../../tests/observability/*.test.mjs",
+    "check": "node --check src/index.js && node --check src/context.js && node --check src/redaction.js && node --check src/logger.js && node --check src/metrics.js && node --check src/health.js && node --check src/shutdown.js && node --check src/prometheus.js"
+  }
+}
