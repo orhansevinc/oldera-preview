@@ -1,0 +1,31 @@
+name: WS34 Character Rules
+
+on:
+  push:
+    branches:
+      - ws34-character-rules
+    paths:
+      - 'services/ko1298-character/**'
+      - 'tests/ko1298-character/**'
+      - 'workstreams/ws34/**'
+      - '.github/workflows/ws34-character.yml'
+  pull_request:
+    paths:
+      - 'services/ko1298-character/**'
+      - 'tests/ko1298-character/**'
+      - 'workstreams/ws34/**'
+      - '.github/workflows/ws34-character.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run WS34 tests
+        run: node --test tests/ko1298-character/*.test.js
