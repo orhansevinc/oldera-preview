@@ -51,7 +51,7 @@ const { PNG } = require('pngjs');
 
     await page.waitForFunction(() => {
       const t = document.getElementById('status')?.textContent || '';
-      return t.includes("browser server list entry: name='OldKO' ip='127.0.0.1' users=7");
+      return t.includes("browser server list entry: name='OldERA' ip='127.0.0.1' users=7");
     }, null, { timeout: 90000 });
 
     await page.locator('#canvas').focus();
@@ -80,7 +80,7 @@ const { PNG } = require('pngjs');
 
     await page.waitForFunction(() => {
       const t = document.getElementById('status')?.textContent || '';
-      return t.includes("connecting to game server 'OldKO' at 127.0.0.1:15001");
+      return t.includes("connecting to game server 'OldERA' at 127.0.0.1:15001");
     }, null, { timeout: 15000 });
 
     await page.waitForFunction(() => {
