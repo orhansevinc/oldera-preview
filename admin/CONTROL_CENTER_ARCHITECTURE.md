@@ -1,23 +1,23 @@
-# OldERA Control Center Architecture
+# OldKOWeb / OldKO Control Center Architecture
 
 ## Goal
-The web Control Center and the in-game ROOT OWNER character must operate the same authoritative administration layer. No critical action should exist only in JavaScript, and the browser must never write directly to the game database.
+The OldKOWeb Control Center and the in-game OldKO ROOT OWNER character must operate the same authoritative administration layer. No critical action should exist only in JavaScript, and the browser must never write directly to the game database.
 
 ## Surfaces
-- `oldera.com` — public website
-- `oldera.com/play` — browser game client
-- `admin.oldera.com` — Control Center
-- `forum.oldera.com` — future forum
+- `oldkoweb.com` — public website
+- `play.oldkoweb.com` — browser OldKO client
+- `admin.oldkoweb.com` — Control Center
+- `forum.oldkoweb.com` — future forum
 
 ## Shared administration path
 
 ```text
-Control Center UI ─┐
-                   ├─> Admin API / Command Bus ─> Game Server authority layer ─> DB / world state
-In-game Owner UI ──┘
+OldKOWeb Control Center ─┐
+                        ├─> Admin API / Command Bus ─> OldKO game-server authority ─> DB / world state
+In-game Owner UI ────────┘
 ```
 
-The Admin API is the only write surface for administrative actions. The game server remains authoritative.
+The Admin API is the only write surface for administrative actions. The OldKO game server remains authoritative.
 
 ## ROOT OWNER
 `ORHAN` / ROOT OWNER is the highest authority profile.
@@ -66,17 +66,7 @@ These command names are preserved as compatibility aliases. The actual server im
   "target": "PlayerName",
   "arg": "",
   "reason": "Owner action",
-  "source": "web-control-center"
-}
-```
-
-Expected response:
-
-```json
-{
-  "ok": true,
-  "traceId": "ADM-...",
-  "result": {}
+  "source": "oldko-web-control-center"
 }
 ```
 
@@ -94,12 +84,17 @@ Returns online count, nation/zone distribution, service health, registrations, c
 ### Character mutation
 `PATCH /api/admin/characters/:name`
 
-Allowed typed mutations are validated by ROOT OWNER permissions and game-server rules.
-
 ### Inventory / bank
 - `GET /api/admin/characters/:name/inventory`
 - `GET /api/admin/characters/:name/inn`
 - `GET /api/admin/items/:serial/history`
+
+### Sanctions
+- account ban / unban
+- IP ban / unban
+- chat restriction / restore
+- login restriction / restore
+- disconnect
 
 ### Audit
 `GET /api/admin/audit`
@@ -107,16 +102,7 @@ Allowed typed mutations are validated by ROOT OWNER permissions and game-server 
 Append-only write happens internally; the browser has no delete endpoint.
 
 ## In-game Owner integration
-The browser game client must identify the authenticated character authority returned by the server. When `authority=ROOT_OWNER`, the game UI can expose an Owner overlay / command palette. The overlay sends the same typed command payloads to the Admin API/command bus as the web Control Center.
-
-Examples:
-- Select player -> Summon
-- Select player -> Arrest
-- Select player -> Mute / Permit chat
-- Owner stealth -> Invisible
-- Global announcement -> Notice All
-- World weather/time -> Rain / Snow / Time
-- Server count -> Count
+The OldKO browser client must identify the authenticated character authority returned by the server. When `authority=ROOT_OWNER`, the game UI can expose an Owner overlay / command palette. The overlay sends the same typed command payloads to the Admin API/command bus as the OldKOWeb Control Center.
 
 The in-game client does not receive direct DB credentials and cannot self-assign authority.
 
