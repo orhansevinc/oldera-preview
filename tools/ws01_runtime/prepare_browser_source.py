@@ -35,7 +35,10 @@ for marker in (
     "-sASYNCIFY",
     "--preload-file ${CMAKE_SOURCE_DIR}/../ko-assets/Data@/data/Data",
     "--preload-file ${CMAKE_SOURCE_DIR}/../ko-assets/UI_US@/data/UI_US",
-    "--preload-file ${CMAKE_SOURCE_DIR}/../ko-assets/Server.ini@/data/Server.ini",
+    "--preload-file ${CMAKE_SOURCE_DIR}/../ko-assets/ChrSelect@/data/ChrSelect",
+    "--preload-file ${CMAKE_SOURCE_DIR}/../ko-assets/ChrSelect@/data/chrselect",
+    "--preload-file ${CMAKE_SOURCE_DIR}/../ko-assets/Fonts@/data/Fonts",
+    "--preload-file ${CMAKE_SOURCE_DIR}/../ko-assets/Server.ini@/data/Server.Ini",
 ):
     require(marker in cmake_text, f"missing Emscripten linker marker: {marker}")
 
