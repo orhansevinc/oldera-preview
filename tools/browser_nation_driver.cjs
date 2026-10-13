@@ -19,6 +19,7 @@ const { PNG } = require('pngjs');
   const saveStatus = async () => {
     const status = await page.locator('#status').textContent().catch(() => '');
     fs.writeFileSync('browser-nation-status.txt', status || '');
+    return status || '';
   };
 
   const pixelStats = (png) => {
@@ -47,9 +48,8 @@ const { PNG } = require('pngjs');
     return pixelStats(PNG.sync.read(buffer));
   };
 
-  const assertNationVisual = async () => {
-    // Primary gate: inspect the genuine WebGL2 framebuffer directly. This is
-    // independent of Playwright locator screenshot stability/animation rules.
+  const assertVisual = async (label) => {
+    // Primary gate: inspect the genuine WebGL2 framebuffer directly.
     const framebuffer = await page.evaluate(() => {
       const canvas = document.getElementById('canvas');
       if (!canvas) return { error: 'canvas missing', nonBlack: 0, total: 0, ratio: 0 };
@@ -68,17 +68,16 @@ const { PNG } = require('pngjs');
       return { glError, nonBlack, total, ratio: total ? nonBlack / total : 0 };
     });
 
-    console.log(`[nation-driver] framebuffer nonBlack=${framebuffer.nonBlack}/${framebuffer.total} ratio=${Number(framebuffer.ratio || 0).toFixed(4)} glError=${framebuffer.glError ?? 'n/a'}`);
+    console.log(`[nation-driver] ${label.toLowerCase()} framebuffer nonBlack=${framebuffer.nonBlack}/${framebuffer.total} ratio=${Number(framebuffer.ratio || 0).toFixed(4)} glError=${framebuffer.glError ?? 'n/a'}`);
 
-    // Also capture what Chrome actually composites to the viewport. This both
-    // gives us a human-viewable proof PNG and protects against browsers that
-    // discard the default framebuffer immediately after presenting it.
+    // Capture what Chrome actually composites. The second/final call therefore
+    // leaves browser-nation-canvas.png as the Character Select proof image.
     let compositor = null;
     try {
       compositor = await captureCompositorEvidence();
-      console.log(`[nation-driver] compositor nonBlack=${compositor.nonBlack}/${compositor.total} ratio=${compositor.ratio.toFixed(4)}`);
+      console.log(`[nation-driver] ${label.toLowerCase()} compositor nonBlack=${compositor.nonBlack}/${compositor.total} ratio=${compositor.ratio.toFixed(4)}`);
     } catch (err) {
-      console.log(`[nation-driver] compositor evidence failed: ${err.message}`);
+      console.log(`[nation-driver] ${label.toLowerCase()} compositor evidence failed: ${err.message}`);
     }
 
     const framebufferRatio = Number(framebuffer.ratio || 0);
@@ -87,10 +86,10 @@ const { PNG } = require('pngjs');
     const source = compositorRatio >= framebufferRatio ? 'compositor' : 'framebuffer';
 
     if (ratio < 0.01) {
-      throw new Error(`Nation Select is effectively black: framebuffer=${framebufferRatio.toFixed(4)} compositor=${compositorRatio.toFixed(4)}`);
+      throw new Error(`${label} is effectively black: framebuffer=${framebufferRatio.toFixed(4)} compositor=${compositorRatio.toFixed(4)}`);
     }
 
-    console.log(`[nation-driver] NATION_VISUAL_OK source=${source} ratio=${ratio.toFixed(4)}`);
+    console.log(`[nation-driver] ${label}_VISUAL_OK source=${source} ratio=${ratio.toFixed(4)}`);
   };
 
   const pressHeld = async (key, ms = 90) => {
@@ -155,8 +154,30 @@ const { PNG } = require('pngjs');
 
     await page.waitForTimeout(1000);
     await saveStatus();
-    await assertNationVisual();
+    await assertVisual('NATION');
     console.log('[nation-driver] NATION_UI_OK');
+
+    // Run 46 visually fixed the genuine El Morad button around this point in
+    // the native 1024x768 UI. Use a real mouse event so UINationSelectDlg and
+    // GameProcNationSelect send the original WIZ_SEL_NATION packet.
+    await page.locator('#canvas').focus();
+    console.log('[nation-driver] clicking real 1298 El Morad nation button');
+    await page.mouse.click(258, 495, { delay: 120 });
+
+    await page.waitForFunction(() => {
+      const t = document.getElementById('status')?.textContent || '';
+      return t.includes('scene change: nation-select -> character-select');
+    }, null, { timeout: 20000 });
+
+    await page.waitForTimeout(1500);
+    const finalStatus = await saveStatus();
+    if (finalStatus.includes('DFont: no usable font found')) {
+      throw new Error('Runtime font preload failed: DFont still reports no usable font');
+    }
+    console.log('[nation-driver] FONT_RUNTIME_OK');
+
+    await assertVisual('CHARACTER');
+    console.log('[nation-driver] CHARACTER_UI_OK');
   } catch (err) {
     await saveStatus();
     console.error(`[nation-driver] failure: ${err.message}`);
