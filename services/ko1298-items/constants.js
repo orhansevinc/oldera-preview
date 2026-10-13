@@ -1,0 +1,38 @@
+'use strict';
+
+const EQUIPMENT_SLOTS = Object.freeze({
+  RIGHT_EAR: 0,
+  HEAD: 1,
+  LEFT_EAR: 2,
+  NECK: 3,
+  BREAST: 4,
+  SHOULDER: 5,
+  RIGHT_HAND: 6,
+  WAIST: 7,
+  LEFT_HAND: 8,
+  RIGHT_RING: 9,
+  LEG: 10,
+  LEFT_RING: 11,
+  GLOVE: 12,
+  FOOT: 13,
+});
+
+const EQUIPMENT_SLOT_COUNT = 14;
+const INVENTORY_SLOT_COUNT = 28;
+const INN_SLOT_COUNT = 196;
+const LEGACY_STACK_LIMIT = 9999;
+
+const CONTAINER_TYPES = Object.freeze({
+  EQUIPMENT: 'equipment',
+  INVENTORY: 'inventory',
+  INN: 'inn',
+});
+
+module.exports = {
+  EQUIPMENT_SLOTS,
+  EQUIPMENT_SLOT_COUNT,
+  INVENTORY_SLOT_COUNT,
+  INN_SLOT_COUNT,
+  LEGACY_STACK_LIMIT,
+  CONTAINER_TYPES,
+};
