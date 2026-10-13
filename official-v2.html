@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="OldERA 1298 official website preview">
+<title>OldERA — Official 1298</title>
+<style>
+:root{--bg:#07090b;--panel:#0e1216;--panel2:#12171c;--line:#2a3037;--gold:#d0a85f;--gold2:#f1d694;--text:#f2eee4;--muted:#959ba2;--red:#8b302c;--green:#72b47a;--shell:1200px}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,Segoe UI,Arial,sans-serif;overflow-x:hidden}a{text-decoration:none;color:inherit}.shell{width:min(var(--shell),calc(100% - 40px));margin:auto}
+.topbar{position:fixed;top:0;left:0;right:0;z-index:50;background:linear-gradient(180deg,rgba(4,5,7,.95),rgba(4,5,7,.45),transparent);border-bottom:1px solid rgba(208,168,95,.08)}
+.nav{height:86px;display:flex;align-items:center;gap:28px}.brand{display:flex;align-items:center;gap:11px;min-width:max-content}.brand-badge{width:46px;height:46px;display:grid;place-items:center;transform:rotate(45deg);border:1px solid #8b6b34;background:linear-gradient(145deg,#2a2112,#0d0b07);box-shadow:0 0 28px rgba(208,168,95,.12),inset 0 0 0 4px #090a0b}.brand-badge b{transform:rotate(-45deg);font:700 14px Georgia,serif;color:var(--gold2)}.brand-copy{display:flex;flex-direction:column;line-height:1}.brand-copy strong{font:600 22px Georgia,serif;letter-spacing:.07em}.brand-copy small{margin-top:5px;color:var(--gold);font-size:9px;letter-spacing:.25em}.navlinks{display:flex;gap:24px;justify-content:center;flex:1}.navlinks a{font-size:12px;color:#bec1c5;letter-spacing:.02em;transition:.2s}.navlinks a:hover{color:var(--gold2)}.nav-actions{display:flex;align-items:center;gap:10px}.mini-btn{height:38px;padding:0 15px;display:flex;align-items:center;border:1px solid #3b4148;color:#bbc0c5;font-size:10px;letter-spacing:.12em;font-weight:800}.mini-btn.gold{border-color:#8d713f;color:#e8cf94;background:rgba(154,117,50,.09)}
+.hero{position:relative;min-height:820px;display:flex;align-items:center;isolation:isolate;overflow:hidden;background:#080a0c}.scene{position:absolute;inset:0;z-index:-4}.scene svg{width:100%;height:100%;display:block}.scene:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(5,6,8,.97) 0%,rgba(5,6,8,.82) 28%,rgba(5,6,8,.25) 58%,rgba(5,6,8,.52) 100%),linear-gradient(180deg,rgba(4,5,7,.28) 0%,rgba(4,5,7,0) 40%,#07090b 100%)}
+.hero-grain{position:absolute;inset:0;z-index:-2;opacity:.19;pointer-events:none;background-image:radial-gradient(circle at 15% 20%,#fff 0 .6px,transparent .8px),radial-gradient(circle at 70% 40%,#fff 0 .6px,transparent .8px);background-size:14px 14px,19px 19px;mix-blend-mode:soft-light}.hero-glow{position:absolute;width:520px;height:520px;border-radius:50%;right:7%;top:22%;z-index:-1;background:radial-gradient(circle,rgba(226,177,80,.16),rgba(120,70,20,.03) 42%,transparent 68%);filter:blur(6px)}
+.hero-content{position:relative;padding-top:100px;display:grid;grid-template-columns:minmax(0,1fr) 520px;align-items:center;gap:40px}.hero-copy{max-width:670px}.kicker{display:inline-flex;align-items:center;gap:10px;color:#c4a976;font-size:10px;letter-spacing:.24em;font-weight:800}.kicker:before{content:"";width:42px;height:1px;background:linear-gradient(90deg,transparent,var(--gold))}.hero h1{margin:18px 0 6px;font:500 clamp(68px,8vw,118px)/.86 Georgia,serif;letter-spacing:-.065em;text-shadow:0 8px 45px #000}.hero h1 span{display:block;font-size:.42em;letter-spacing:-.02em;color:var(--gold2);margin-top:22px}.lead{max-width:620px;margin:25px 0 0;color:#a9adb2;font-size:16px;line-height:1.8}.hero-tags{display:flex;gap:12px;flex-wrap:wrap;margin-top:30px}.hero-tags span{border:1px solid rgba(208,168,95,.2);background:rgba(13,16,19,.55);backdrop-filter:blur(6px);padding:9px 12px;color:#9da1a5;font-size:10px;letter-spacing:.08em}.hero-tags b{color:#e0c78e}
+.play-stage{position:relative;height:520px;display:grid;place-items:center}.arc{position:absolute;border-radius:50%;border:1px solid rgba(213,174,98,.18)}.arc.a1{width:420px;height:420px;animation:spin 28s linear infinite}.arc.a2{width:340px;height:340px;border-style:dashed;animation:spinReverse 36s linear infinite}.arc.a3{width:270px;height:270px;box-shadow:0 0 80px rgba(199,141,50,.07),inset 0 0 80px rgba(199,141,50,.04)}.rune{position:absolute;color:#947846;font:28px Georgia,serif;opacity:.75;text-shadow:0 0 16px rgba(219,175,88,.5)}.r1{top:39px}.r2{right:41px;top:244px}.r3{bottom:35px}.r4{left:43px;top:244px}.play-wrap{position:relative;z-index:5;display:grid;place-items:center}.play-corners:before,.play-corners:after{content:"";position:absolute;top:50%;width:90px;height:1px;background:linear-gradient(90deg,transparent,#b8914b)}.play-corners:before{right:calc(100% + 25px)}.play-corners:after{left:calc(100% + 25px);transform:scaleX(-1)}.ornate-play{position:relative;width:230px;height:230px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 45% 35%,#30250f,#0a0b0c 62%,#050607);border:1px solid #a98545;box-shadow:0 0 0 7px rgba(6,7,8,.8),0 0 0 8px rgba(208,168,95,.23),0 0 90px rgba(205,147,48,.25),inset 0 0 55px rgba(234,187,90,.08);transition:.28s}.ornate-play:before,.ornate-play:after{content:"";position:absolute;inset:14px;border-radius:50%;border:1px solid rgba(225,190,115,.2)}.ornate-play:after{inset:-18px;border-style:dashed;animation:spin 24s linear infinite}.ornate-play:hover{transform:scale(1.035);filter:brightness(1.12);box-shadow:0 0 0 7px rgba(6,7,8,.8),0 0 0 8px rgba(224,183,97,.35),0 0 130px rgba(205,147,48,.42),inset 0 0 55px rgba(234,187,90,.12)}.play-inner{text-align:center}.play-icon{width:54px;height:54px;margin:0 auto 13px;border-radius:50%;display:grid;place-items:center;border:1px solid #9f814a;background:linear-gradient(180deg,#ddba73,#9b7136);color:#14110b;font-size:20px;padding-left:4px;box-shadow:0 7px 30px rgba(0,0,0,.35)}.play-title{display:block;font-size:17px;font-weight:900;letter-spacing:.22em;color:#f2dfb0}.play-sub{display:block;margin-top:7px;color:#806c47;font-size:8px;letter-spacing:.25em}.stage-note{position:absolute;bottom:24px;color:#827d72;font-size:9px;letter-spacing:.16em;text-transform:uppercase}.stage-note i{display:inline-block;width:6px;height:6px;margin-right:8px;border-radius:50%;background:#71b67d;box-shadow:0 0 0 4px rgba(113,182,125,.09)}
+.scroll-cue{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:7px;color:#5e646a;font-size:8px;letter-spacing:.2em}.scroll-cue:after{content:"";height:36px;width:1px;background:linear-gradient(#696159,transparent)}
+.countdown{position:relative;z-index:10;margin-top:-44px}.count-card{position:relative;overflow:hidden;background:linear-gradient(180deg,#14110c,#0b0d10 72%);border:1px solid #4a3a20;box-shadow:0 25px 80px rgba(0,0,0,.4)}.count-card:before{content:"";position:absolute;inset:7px;border:1px solid rgba(205,163,79,.12);pointer-events:none}.count-grid{min-height:190px;display:grid;grid-template-columns:1.05fr 2fr;align-items:center}.count-intro{padding:30px 38px;border-right:1px solid #2b261c}.count-intro .eyebrow{color:#b6965b;font-size:9px;letter-spacing:.25em;font-weight:800}.count-intro h2{margin:6px 0 5px;font:500 37px Georgia,serif}.count-intro strong{display:block;color:#e4c57e;font-size:15px;letter-spacing:.18em}.count-intro p{margin:8px 0 0;color:#747a80;font-size:10px}.timer{display:grid;grid-template-columns:repeat(4,1fr);padding:24px}.timebox{text-align:center;border-right:1px solid #29261f}.timebox:last-child{border-right:0}.timebox b{display:block;font:500 clamp(40px,5vw,70px) Georgia,serif;line-height:1;color:#eee0bd;text-shadow:0 4px 22px rgba(208,168,95,.12)}.timebox span{display:block;margin-top:10px;color:#726b5d;font-size:8px;letter-spacing:.22em;font-weight:800}
+.quick{padding:44px 0 0}.quick-grid{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid #1e242a;background:#0b0e11}.quick a{min-height:88px;display:flex;align-items:center;gap:14px;padding:18px;border-right:1px solid #1e242a;transition:.2s}.quick a:last-child{border-right:0}.quick a:hover{background:#11161b}.quick .num{font:22px Georgia,serif;color:#5d4d31}.quick b{display:block;font-size:10px;letter-spacing:.12em}.quick small{display:block;margin-top:3px;color:#61686f;font-size:9px}.quick em{margin-left:auto;color:#705c38;font-style:normal}
+.section{padding:92px 0}.section-head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:30px;gap:20px}.section-head .eyebrow{font-size:9px;letter-spacing:.22em;color:#a98d59;font-weight:800}.section-head h2{margin:6px 0 0;font:500 38px Georgia,serif}.section-head a{font-size:10px;color:#8b7650}.news-grid{display:grid;grid-template-columns:1.25fr .75fr;gap:16px}.feature-card,.side-card{border:1px solid #22282e;background:#0d1013;overflow:hidden}.feature-visual{position:relative;height:270px;background:radial-gradient(circle at 60% 35%,rgba(213,165,75,.19),transparent 21%),linear-gradient(150deg,#181e21,#0c0f12 58%,#21180d)}.feature-visual:before{content:"";position:absolute;inset:0;background:linear-gradient(25deg,transparent 45%,rgba(227,184,98,.08) 46%,transparent 48%),radial-gradient(circle at 72% 66%,rgba(154,101,35,.25),transparent 14%)}.feature-copy{padding:24px}.date{color:#62686e;font-size:9px;letter-spacing:.12em}.feature-copy h3,.side-card h3{font:500 23px/1.25 Georgia,serif;margin:10px 0}.feature-copy p,.side-card p{color:#858b91;font-size:12px;line-height:1.7}.side-stack{display:grid;gap:16px}.side-card{padding:24px;display:flex;flex-direction:column;justify-content:center}.tag{align-self:flex-start;border:1px solid #594729;background:#241c10;color:#d2af69;padding:4px 7px;font-size:8px;letter-spacing:.12em;margin-bottom:8px}
+.dark{background:#0a0d10;border-top:1px solid #191e23;border-bottom:1px solid #191e23}.ranking{display:grid;grid-template-columns:1fr 300px;gap:16px}.rank-table{border:1px solid #23292f;overflow:hidden}.rank-head,.rank-row{display:grid;grid-template-columns:60px 1.4fr 1fr 90px 120px;align-items:center;min-height:55px;padding:0 18px;border-bottom:1px solid #1d2227}.rank-head{min-height:42px;background:#101419;color:#626970;font-size:8px;letter-spacing:.15em;font-weight:800}.rank-row{font-size:11px}.rank-row:last-child{border-bottom:0}.rank-row .pos{color:#bd9857;font:18px Georgia,serif}.nation-panel{border:1px solid #23292f;background:#0d1013;display:grid;grid-template-rows:1fr auto 1fr}.nation{display:grid;place-items:center;padding:24px;text-align:center}.nation b{font:34px Georgia,serif}.nation small{font-size:9px;letter-spacing:.16em}.nation.k small{color:#ce675a}.nation.e small{color:#7e97d0}.vs{text-align:center;color:#4d555c;font-size:9px;letter-spacing:.2em}
+.status-section{padding:84px 0}.status-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.status-card{border:1px solid #23292f;background:#0d1013;padding:24px}.status-card small{color:#666c72;font-size:9px;letter-spacing:.12em}.status-card b{display:block;font:31px Georgia,serif;margin:10px 0;color:#ded2b7}.status-card span{font-size:9px;color:#777e85}.dot{display:inline-block;width:7px;height:7px;margin-right:7px;border-radius:50%;background:#72b47a;box-shadow:0 0 0 4px rgba(114,180,122,.08)}
+.footer{border-top:1px solid #181c20;background:#06080a;padding:52px 0 25px}.footer-grid{display:flex;align-items:center;justify-content:space-between;gap:30px}.footer p{max-width:550px;color:#62686e;font-size:10px;line-height:1.7}.footer-links{display:flex;gap:18px;color:#777d83;font-size:10px}.copyright{margin-top:35px;padding-top:18px;border-top:1px solid #15191c;color:#444a50;font-size:9px;display:flex;justify-content:space-between}
+@keyframes spin{to{transform:rotate(360deg)}}@keyframes spinReverse{to{transform:rotate(-360deg)}}
+@media(max-width:1000px){.navlinks{display:none}.hero{min-height:980px}.hero-content{grid-template-columns:1fr;padding-top:130px}.play-stage{height:430px}.count-grid{grid-template-columns:1fr}.count-intro{border-right:0;border-bottom:1px solid #2b261c;text-align:center}.news-grid,.ranking{grid-template-columns:1fr}.nation-panel{grid-template-columns:1fr auto 1fr;grid-template-rows:none}.vs{display:grid;place-items:center}.status-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:650px){.shell{width:calc(100% - 24px)}.nav{height:72px}.nav-actions .mini-btn:first-child{display:none}.hero{min-height:920px}.hero-content{padding-top:105px}.hero h1{font-size:66px}.hero h1 span{font-size:.48em;line-height:1.08}.lead{font-size:13px}.play-stage{height:390px}.arc.a1{width:320px;height:320px}.arc.a2{width:270px;height:270px}.arc.a3{width:225px;height:225px}.ornate-play{width:190px;height:190px}.rune{display:none}.countdown{margin-top:-20px}.count-intro h2{font-size:30px}.timer{padding:17px 10px}.timebox b{font-size:38px}.quick-grid{grid-template-columns:1fr 1fr}.quick a:nth-child(2){border-right:0}.quick a:nth-child(-n+2){border-bottom:1px solid #1e242a}.section{padding:66px 0}.section-head h2{font-size:31px}.status-grid{grid-template-columns:1fr 1fr}.rank-head,.rank-row{grid-template-columns:42px 1.5fr 65px 80px}.rank-head>*:nth-child(3),.rank-row>*:nth-child(3){display:none}.footer-grid{align-items:flex-start;flex-direction:column}.copyright{flex-direction:column;gap:8px}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="shell nav">
+    <a class="brand" href="#top"><span class="brand-badge"><b>OE</b></span><span class="brand-copy"><strong>OldERA</strong><small>1298 CLASSIC</small></span></a>
+    <nav class="navlinks"><a href="#news">Haberler</a><a href="#ranking">Sıralamalar</a><a href="#status">Çevrimiçi</a><a href="#guide">Rehber</a><a href="#status">Sunucu Durumu</a></nav>
+    <div class="nav-actions"><a class="mini-btn" href="#">HESAP</a><a class="mini-btn gold" href="play.html">OYNA</a></div>
+  </div>
+</header>
+
+<main id="top">
+<section class="hero">
+  <div class="scene" aria-hidden="true">
+    <svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#24282b"/><stop offset=".48" stop-color="#4a4030"/><stop offset="1" stop-color="#111416"/></linearGradient>
+        <radialGradient id="sun"><stop stop-color="#f4d38b" stop-opacity=".95"/><stop offset=".25" stop-color="#ca8b36" stop-opacity=".45"/><stop offset="1" stop-color="#8d4a12" stop-opacity="0"/></radialGradient>
+        <linearGradient id="mist" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#d8c29b" stop-opacity="0"/><stop offset=".45" stop-color="#d8c29b" stop-opacity=".16"/><stop offset="1" stop-color="#d8c29b" stop-opacity="0"/></linearGradient>
+        <filter id="blur20"><feGaussianBlur stdDeviation="20"/></filter>
+      </defs>
+      <rect width="1600" height="900" fill="url(#sky)"/>
+      <circle cx="1160" cy="260" r="260" fill="url(#sun)"/>
+      <circle cx="1160" cy="260" r="65" fill="#d9b774" opacity=".45"/>
+      <path d="M0 550L200 405L330 480L500 330L680 475L820 390L1030 520L1240 355L1430 490L1600 410V900H0Z" fill="#191d1f" opacity=".8"/>
+      <path d="M0 620L280 500L430 585L650 470L850 570L1050 480L1290 585L1470 505L1600 550V900H0Z" fill="#0f1315"/>
+      <g fill="#0a0d0f">
+        <rect x="1030" y="418" width="275" height="245"/>
+        <rect x="972" y="468" width="70" height="205"/><rect x="1292" y="455" width="78" height="218"/>
+        <path d="M963 468L1007 405L1051 468Z"/><path d="M1280 455L1332 385L1384 455Z"/>
+        <rect x="1090" y="365" width="150" height="300"/><path d="M1075 365L1165 275L1255 365Z"/>
+        <rect x="1147" y="525" width="38" height="140" fill="#171818"/>
+        <g fill="#c99747" opacity=".36"><rect x="1000" y="520" width="11" height="23"/><rect x="1324" y="505" width="11" height="23"/><rect x="1119" y="431" width="12" height="25"/><rect x="1197" y="431" width="12" height="25"/></g>
+      </g>
+      <path d="M820 690C940 615 1090 610 1425 665L1600 700V900H760Z" fill="#080a0b"/>
+      <path d="M0 735C260 650 530 675 850 748L900 900H0Z" fill="#090b0d"/>
+      <ellipse cx="1030" cy="635" rx="510" ry="65" fill="url(#mist)" filter="url(#blur20)"/>
+      <ellipse cx="1210" cy="710" rx="580" ry="48" fill="url(#mist)" filter="url(#blur20)" opacity=".65"/>
+      <g fill="#e0a94a" opacity=".55"><circle cx="1410" cy="300" r="2"/><circle cx="1320" cy="410" r="1.6"/><circle cx="1490" cy="510" r="1.8"/><circle cx="1090" cy="180" r="1.6"/><circle cx="1260" cy="330" r="1.2"/></g>
+    </svg>
+  </div>
+  <div class="hero-grain"></div><div class="hero-glow"></div>
+  <div class="shell hero-content">
+    <div class="hero-copy">
+      <div class="kicker">1298 CLASSIC WEB EXPERIENCE</div>
+      <h1>OldERA<span>Klasik çağ geri dönüyor.</span></h1>
+      <p class="lead">Moradon, El Morad, Luferson ve Colony Zone ruhunu yeniden yaşa. Klasik 1298 deneyimi, modern web altyapısıyla doğrudan tarayıcıda.</p>
+      <div class="hero-tags"><span><b>1298</b> CLASSIC</span><span><b>WEB</b> CLIENT</span><span><b>NO</b> DOWNLOAD</span></div>
+    </div>
+    <div class="play-stage">
+      <div class="arc a1"></div><div class="arc a2"></div><div class="arc a3"></div>
+      <span class="rune r1">✦</span><span class="rune r2">◇</span><span class="rune r3">✧</span><span class="rune r4">◇</span>
+      <div class="play-wrap play-corners">
+        <a class="ornate-play" href="play.html" aria-label="OldERA oyununa gir">
+          <span class="play-inner"><span class="play-icon">▶</span><span class="play-title">PLAY NOW</span><span class="play-sub">ENTER OLDERA</span></span>
+        </a>
+      </div>
+      <div class="stage-note"><i></i> Web client preview hazır</div>
+    </div>
+  </div>
+  <div class="scroll-cue">AŞAĞI KAYDIR</div>
+</section>
+
+<section class="countdown">
+  <div class="shell count-card">
+    <div class="count-grid">
+      <div class="count-intro"><div class="eyebrow">OFFICIAL OPENING</div><h2>Kapılar açılıyor.</h2><strong>01.11.2026</strong><p>OldERA official açılışına kalan süre</p></div>
+      <div class="timer" id="timer">
+        <div class="timebox"><b id="days">00</b><span>GÜN</span></div>
+        <div class="timebox"><b id="hours">00</b><span>SAAT</span></div>
+        <div class="timebox"><b id="minutes">00</b><span>DAKİKA</span></div>
+        <div class="timebox"><b id="seconds">00</b><span>SANİYE</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="quick"><div class="shell quick-grid">
+  <a href="play.html"><span class="num">01</span><span><b>OYNA</b><small>Tarayıcıdan oyuna gir</small></span><em>→</em></a>
+  <a href="#ranking"><span class="num">02</span><span><b>RANKING</b><small>En güçlü oyuncular</small></span><em>→</em></a>
+  <a href="#guide"><span class="num">03</span><span><b>REHBER</b><small>1298 başlangıç rehberi</small></span><em>→</em></a>
+  <a href="#status"><span class="num">04</span><span><b>DURUM</b><small>Sunucu servisleri</small></span><em>→</em></a>
+</div></section>
+
+<section id="news" class="section"><div class="shell">
+  <div class="section-head"><div><div class="eyebrow">OLDERA GÜNLÜĞÜ</div><h2>Haberler & Güncellemeler</h2></div><a href="#">TÜM HABERLER →</a></div>
+  <div class="news-grid">
+    <article class="feature-card"><div class="feature-visual"></div><div class="feature-copy"><div class="date">13 EKİM 2026</div><h3>OldERA 1298 için yeni dönem hazırlanıyor</h3><p>Web istemcisi, klasik arayüz ve 1298 oyun akışı üzerinde geliştirme devam ediyor. Hedef, dönemin hissini modern tarayıcı ortamında korumak.</p></div></article>
+    <div class="side-stack"><article class="side-card"><span class="tag">OFFICIAL</span><div class="date">13 EKİM 2026</div><h3>01.11.2026 official açılış sayacı yayında</h3><p>Açılış tarihi için geri sayım official sayfaya eklendi.</p></article><article class="side-card"><span class="tag">1298</span><div class="date">12 EKİM 2026</div><h3>Klasik içerik çizgisi korunuyor</h3><p>Modern sistemler yerine dönemin haritaları, UI yapısı ve klasik ilerleyişi esas alınıyor.</p></article></div>
+  </div>
+</div></section>
+
+<section id="ranking" class="section dark"><div class="shell">
+  <div class="section-head"><div><div class="eyebrow">REKABET</div><h2>Oyuncu Sıralamaları</h2></div><a href="#">TÜM RANKING →</a></div>
+  <div class="ranking">
+    <div class="rank-table"><div class="rank-head"><span>#</span><span>OYUNCU</span><span>NATION</span><span>LEVEL</span><span>NP</span></div><div class="rank-row"><span class="pos">—</span><span>Ranking verisi bekleniyor</span><span>—</span><span>—</span><span>—</span></div><div class="rank-row"><span class="pos">—</span><span>Sunucu API bağlantısı sonrası dolacak</span><span>—</span><span>—</span><span>—</span></div></div>
+    <aside class="nation-panel"><div class="nation k"><small>KARUS</small><b>0</b><span>Toplam NP</span></div><div class="vs">VS</div><div class="nation e"><small>EL MORAD</small><b>0</b><span>Toplam NP</span></div></aside>
+  </div>
+</div></section>
+
+<section id="status" class="status-section"><div class="shell">
+  <div class="section-head"><div><div class="eyebrow">DÜNYA ŞU ANDA</div><h2>Canlı Sunucu Durumu</h2></div></div>
+  <div class="status-grid"><div class="status-card"><small>TOPLAM ONLINE</small><b>—</b><span><i class="dot"></i>API bağlantısı bekleniyor</span></div><div class="status-card"><small>MORADON</small><b>—</b><span>oyuncu</span></div><div class="status-card"><small>COLONY ZONE</small><b>—</b><span>oyuncu</span></div><div class="status-card"><small>WEB CLIENT</small><b>1298</b><span><i class="dot"></i>Preview çevrimiçi</span></div></div>
+</div></section>
+</main>
+
+<footer class="footer"><div class="shell"><div class="footer-grid"><div><a class="brand" href="#top"><span class="brand-badge"><b>OE</b></span><span class="brand-copy"><strong>OldERA</strong><small>1298 CLASSIC</small></span></a><p>Klasik MMORPG ruhunu web üzerinde yeniden yaşatmayı hedefleyen bağımsız topluluk projesi.</p></div><div class="footer-links"><a href="#news">Haberler</a><a href="#ranking">Ranking</a><a href="#status">Durum</a><a href="play.html">Oyna</a></div></div><div class="copyright"><span>© 2026 OldERA. Tüm hakları saklıdır.</span><span>1298 CLASSIC • WEB EXPERIENCE</span></div></div></footer>
+
+<script>
+(() => {
+  const target = new Date('2026-11-01T00:00:00+03:00').getTime();
+  const $ = id => document.getElementById(id);
+  const pad = n => String(Math.max(0,n)).padStart(2,'0');
+  function tick(){
+    let diff = Math.max(0,target-Date.now());
+    const d=Math.floor(diff/86400000); diff%=86400000;
+    const h=Math.floor(diff/3600000); diff%=3600000;
+    const m=Math.floor(diff/60000); diff%=60000;
+    const s=Math.floor(diff/1000);
+    $('days').textContent=pad(d);$('hours').textContent=pad(h);$('minutes').textContent=pad(m);$('seconds').textContent=pad(s);
+    if(target-Date.now()<=0){document.querySelector('.count-intro h2').textContent='OldERA açıldı.';document.querySelector('.count-intro p').textContent='Official sunucu yayında.'}
+  }
+  tick();setInterval(tick,1000);
+})();
+</script>
+</body>
+</html>
