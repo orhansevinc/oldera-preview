@@ -21,11 +21,16 @@ const serverList = frame(Buffer.concat([
   Buffer.from([0xf5, 0x01]), s2('127.0.0.1'), s2('OldERA'), u16(7)
 ]));
 const authOK = frame(Buffer.from([0xf3, 0x01, 0xff, 0xff]));
+const newsEmpty = frame(Buffer.concat([
+  Buffer.from([0xf6]), s2('Login Notice'), s2(' ')
+]));
 
 let sawServerList = false;
 let sawAuth = false;
 let authMatched = false;
 let authResponseSent = false;
+let sawNewsRequest = false;
+let newsResponseSent = false;
 
 function parseLogin(payload) {
   let off = 1;
@@ -40,7 +45,7 @@ function parseLogin(payload) {
 }
 
 function mark() {
-  const line = `AUTH_CHAIN request=${sawAuth?1:0} matched=${authMatched?1:0} response=${authResponseSent?1:0} id=${expectedID}`;
+  const line = `AUTH_CHAIN request=${sawAuth?1:0} matched=${authMatched?1:0} response=${authResponseSent?1:0} news=${newsResponseSent?1:0} id=${expectedID}`;
   fs.writeFileSync(resultPath, line + '\n');
   console.log(`[auth-stub] ${line}`);
 }
@@ -80,6 +85,14 @@ const server = net.createServer((socket) => {
           console.log(`[auth-stub] sent AUTH_OK ${authOK.toString('hex')}`);
         }
         mark();
+      } else if (opcode === 0xf6) {
+        sawNewsRequest = true;
+        if (authMatched) {
+          socket.write(newsEmpty);
+          newsResponseSent = true;
+          console.log(`[auth-stub] sent empty Login Notice ${newsEmpty.toString('hex')}`);
+        }
+        mark();
       }
     }
   });
@@ -88,6 +101,7 @@ const server = net.createServer((socket) => {
 server.on('error', (e) => { console.error(`[auth-stub] server error ${e.message}`); process.exit(1); });
 server.listen(port, host, () => console.log(`[auth-stub] listening tcp://${host}:${port}`));
 
-const stop = () => server.close(() => process.exit(sawServerList && sawAuth && authMatched && authResponseSent ? 0 : 1));
+const stop = () => server.close(() => process.exit(
+  sawServerList && sawAuth && authMatched && authResponseSent && sawNewsRequest && newsResponseSent ? 0 : 1));
 process.on('SIGTERM', stop);
 process.on('SIGINT', stop);
