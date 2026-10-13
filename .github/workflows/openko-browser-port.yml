@@ -56,10 +56,11 @@ jobs:
           echo "UI_US files: $(find ko-assets/UI_US -type f | wc -l)"
           du -sh ko-assets/Data ko-assets/UI_US ko-assets/Snd/Intro_Sound.mp3
 
-      - name: Patch OpenKO for WebGL2 browser runtime
+      - name: Patch OpenKO for WebGL2 browser runtime and real login transport
         shell: bash
         run: |
           python3 tools/patch_openko_browser.py
+          python3 tools/enable_openko_browser_network.py
           # The patcher intentionally stores C++ replacement text as Python
           # strings. Correct the one GLSL escape that must become an actual
           # source newline before compiling the browser target.
@@ -79,7 +80,9 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build cmake python3 git
+          sudo apt-get install -y ninja-build cmake python3 python3-venv git
+          python3 -m venv /tmp/oldera-websockify
+          /tmp/oldera-websockify/bin/pip install --disable-pip-version-check websockify
 
       - name: Setup Emscripten
         uses: mymindstorm/setup-emsdk@v14
@@ -97,7 +100,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_C_FLAGS='-DBOOST_HAS_PTHREADS=1' \
             -DCMAKE_CXX_FLAGS='-DBOOST_HAS_PTHREADS=1 -DASIO_DISABLE_THREADS=1 -fexceptions' \
-            -DCMAKE_EXE_LINKER_FLAGS='-fexceptions' \
+            -DCMAKE_EXE_LINKER_FLAGS='-fexceptions -sSOCKET_DEBUG=1' \
             -DOPENKO_BUILD_CLIENT=ON \
             -DOPENKO_CLIENT_POSIX_EXPERIMENTAL=ON \
             -DOPENKO_BUILD_CLIENT_TOOLS=OFF \
@@ -130,7 +133,7 @@ jobs:
           echo "Browser package sizes:"
           du -h build-web/bin/Release/KnightOnLine.{js,wasm,data}
 
-      - name: Runtime smoke test in real headless Chrome
+      - name: Runtime smoke test in real headless Chrome with WebSocket login bridge
         shell: bash
         run: |
           set -euo pipefail
@@ -159,6 +162,7 @@ jobs:
             };
             window.Module = {
               canvas,
+              websocket: { url: 'ws://127.0.0.1:15100', subprotocol: 'binary' },
               arguments: ['--renderer','gl','--data','/data'],
               print: (...a) => write('OUT', a),
               printErr: (...a) => write('ERR', a),
@@ -170,9 +174,13 @@ jobs:
           </body></html>
           EOF
 
+          python3 tools/browser_login_probe_server.py --port 15101 --marker browser-network.txt >browser-network-backend.log 2>&1 &
+          PROBE_PID=$!
+          /tmp/oldera-websockify/bin/websockify --verbose 127.0.0.1:15100 127.0.0.1:15101 >browser-websockify.log 2>&1 &
+          WS_PID=$!
           python3 -m http.server 8000 --bind 127.0.0.1 --directory "$OUT" >browser-http.log 2>&1 &
           SERVER_PID=$!
-          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          trap 'kill $SERVER_PID $WS_PID $PROBE_PID 2>/dev/null || true' EXIT
           sleep 2
 
           mkdir -p /tmp/oldera-playwright
@@ -210,15 +218,17 @@ jobs:
               });
               await page.waitForFunction(() => {
                 const text = document.getElementById('status')?.textContent || '';
-                return text.includes('browser login scene ready; network deferred to WebSocket gateway')
+                return text.includes('browser login transport connected; requesting genuine LS_SERVERLIST')
                   && text.includes('login scene: CGameProcedure brought up');
               }, null, { timeout: 90000 });
+              await page.waitForTimeout(1500);
               ok = true;
             } catch (err) {
               push('[runner-error] ' + err.stack);
             } finally {
               const status = await page.locator('#status').textContent().catch(() => '');
               push('--- DOM STATUS ---\n' + status + '\n--- END DOM STATUS ---');
+              await page.locator('#canvas').screenshot({ path: 'browser-canvas.png' }).catch(err => push('[canvas-screenshot-error] ' + err));
               await page.screenshot({ path: 'browser-runtime.png', fullPage: false }).catch(err => push('[screenshot-error] ' + err));
               fs.writeFileSync('browser-status.txt', status || '');
               await browser.close();
@@ -236,14 +246,15 @@ jobs:
           set -e
 
           echo "--- browser runtime tail ---"
-          tail -n 120 browser-runtime.log || true
+          tail -n 140 browser-runtime.log || true
+          echo "--- websocket bridge tail ---"
+          tail -n 80 browser-websockify.log || true
+          echo "--- KO TCP probe tail ---"
+          tail -n 80 browser-network-backend.log || true
           echo "--- http server tail ---"
           tail -n 30 browser-http.log || true
 
           test "$NODE_RC" -eq 0
-          # Reaching CGameProcedure is necessary, but a blank/broken framebuffer
-          # is not a successful login milestone. Chrome reports invalid WebGL
-          # draws as console warnings, which previously passed this gate.
           if grep -Eq '\[pageerror\]|GL_INVALID_(ENUM|VALUE|OPERATION)|WebGL: INVALID_|WebGL: too many errors' browser-runtime.log; then
             echo "Browser runtime or WebGL draw errors detected; publication blocked" >&2
             exit 1
@@ -251,7 +262,10 @@ jobs:
           grep -q "WASM_RUNTIME_READY" browser-status.txt
           grep -q "render backend: OpenGL" browser-status.txt
           grep -q "login scene: CGameProcedure brought up" browser-status.txt
-          grep -q "browser login scene ready; network deferred to WebSocket gateway" browser-status.txt
+          grep -q "browser login transport connected; requesting genuine LS_SERVERLIST" browser-status.txt
+          test -s browser-network.txt
+          grep -q "NETWORK_OK" browser-network.txt
+          grep -q "opcode=0xF5" browser-network.txt
           if grep -q "render backend: Null" browser-status.txt; then
             echo "Browser fell back to Null renderer" >&2
             exit 1
@@ -260,7 +274,7 @@ jobs:
             echo "Browser could not see preloaded 1298 data" >&2
             exit 1
           fi
-          echo "Headless Chrome proved genuine 1298 login scene + WebGL2 runtime."
+          echo "Headless Chrome proved genuine 1298 login scene + browser WebSocket -> TCP -> LS_SERVERLIST chain."
 
       - name: Publish browser login build into branch
         shell: bash
@@ -312,6 +326,7 @@ jobs:
                 addEventListener('resize',fit); fit(); canvas.focus();
                 window.Module={
                   canvas,
+                  websocket:{ subprotocol:'binary' },
                   arguments:['--renderer','gl','--data','/data'],
                   print:(...a)=>log('OUT',a.join(' ')),
                   printErr:(...a)=>log('ERR',a.join(' ')),
@@ -325,11 +340,12 @@ jobs:
           EOF
 
           cat > openko-web/README.txt <<'EOF'
-          OldERA OpenKO browser-port — genuine 1298 login milestone.
+          OldERA OpenKO browser-port — genuine 1298 login + transport milestone.
           Real OpenKO WarFare C++ client compiled to WASM, RHIDeviceGL adapted to WebGL2.
           Logical framebuffer: fixed 1024x768. Presentation scaling: CSS only.
           Preloaded from ko4life-net/ko-assets branch 1298: Data, UI_US, Intro_Sound.mp3 and Server.ini.
-          Browser boots the real GameProc login path with --data /data; no Three.js/DOM game UI recreation.
+          Browser runs the original CAPISocket packet path; TCP is translated to WebSocket and bridged to the KO server side.
+          No Three.js/DOM game UI recreation.
           EOF
 
           git config user.name "OldERA Build Bot"
@@ -338,7 +354,7 @@ jobs:
           if git diff --cached --quiet; then
             echo 'Published files unchanged.'
           else
-            git commit -m 'Publish genuine 1298 OpenKO browser login [skip ci]'
+            git commit -m 'Publish genuine 1298 OpenKO browser login transport [skip ci]'
             git push origin HEAD:openko-browser-port
           fi
 
@@ -353,6 +369,10 @@ jobs:
             browser-runtime.log
             browser-status.txt
             browser-runtime.png
+            browser-canvas.png
+            browser-network.txt
+            browser-network-backend.log
+            browser-websockify.log
             browser-http.log
             build-web/bin/Release/KnightOnLine.html
             build-web/bin/Release/KnightOnLine.js
