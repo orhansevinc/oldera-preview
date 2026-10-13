@@ -22,6 +22,18 @@ jobs:
           submodules: false
           fetch-depth: 1
 
+      - name: Patch OpenKO browser platform adapters
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('openko/cmake/FindOpenALSoft.cmake')
+          s = p.read_text()
+          browser = '''if(EMSCRIPTEN)\n  # Browser builds use Emscripten's OpenAL/WebAudio implementation instead of\n  # desktop openal-soft (which pulls native pthread/scheduler symbols).\n  add_library(OpenAL INTERFACE)\n  target_link_libraries(OpenAL INTERFACE "-lopenal")\n  set(openalsoft_FOUND TRUE)\n  return()\nendif()\n\n'''
+          if not s.startswith('if(EMSCRIPTEN)'):
+              p.write_text(browser + s)
+          PY
+
       - name: Install build tools
         run: |
           sudo apt-get update
@@ -79,7 +91,7 @@ jobs:
           mkdir -p browser-probe-artifact
           cp configure-web.log browser-probe-artifact/ 2>/dev/null || true
           cp build-web.log browser-probe-artifact/ 2>/dev/null || true
-          find build-web -type f \( -name '*.html' -o -name '*.js' -o -name '*.wasm' -o -name 'KnightOnLine*' \) -exec cp -f {} browser-probe-artifact/ \; 2>/dev/null || true
+          find build-web/bin/Release -maxdepth 1 -type f -exec cp -f {} browser-probe-artifact/ \; 2>/dev/null || true
 
       - name: Upload browser-port probe
         if: always()
