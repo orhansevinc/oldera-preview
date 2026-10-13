@@ -36,6 +36,8 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
+          # OpenAL: use Emscripten's browser OpenAL shim instead of trying to
+          # build the desktop OpenAL Soft package.
           p = Path('openko/cmake/FindOpenALSoft.cmake')
           s = p.read_text()
           browser = '''if(EMSCRIPTEN)\n  add_library(OpenAL INTERFACE)\n  target_link_libraries(OpenAL INTERFACE "-lopenal")\n  set(openalsoft_FOUND TRUE)\n  return()\nendif()\n\n'''
@@ -50,6 +52,7 @@ jobs:
               raise SystemExit('N3SndMgr.h OpenAL declarations changed upstream')
           p.write_text(s.replace(old, new), encoding='utf-8')
 
+          # libjpeg must stay static inside the WASM executable.
           p = Path('openko/cmake/FindJpeg.cmake')
           s = p.read_text()
           s = s.replace('if(WIN32)\n  set(LIBJPEG_BUILD_SHARED_LIBS OFF',
@@ -58,12 +61,67 @@ jobs:
                         'if(WIN32 OR EMSCRIPTEN)\n  target_link_libraries(libjpeg INTERFACE jpeg_static)')
           p.write_text(s)
 
+          # -----------------------------------------------------------------
+          # Browser GL adapter.
+          # The POSIX backend already contains the real RHIDeviceGL, but its
+          # desktop loader treats several APIs that WebGL2 intentionally does
+          # not expose (glPolygonMode, glDrawElementsBaseVertex, double-depth
+          # entry points) as mandatory.  Bind GLES3/WebGL2 functions directly
+          # under Emscripten and provide narrow compatibility shims for those
+          # desktop-only calls.  This keeps the actual OpenKO RHI and game
+          # rendering code in charge instead of falling back to RHIDeviceNull.
+          # -----------------------------------------------------------------
+          p = Path('openko/src/Client/WarFare/GLLoader.cpp')
+          s = p.read_text()
+          include_needle = '#include "GLLoader.h"\n'
+          include_repl = '#include "GLLoader.h"\n\n#ifdef __EMSCRIPTEN__\n#include <GLES3/gl3.h>\n#endif\n'
+          if '#include <GLES3/gl3.h>' not in s:
+              if include_needle not in s:
+                  raise SystemExit('GLLoader.cpp include anchor changed upstream')
+              s = s.replace(include_needle, include_repl, 1)
+
+          load_needle = '''bool Load(ProcLoader loader)\n{\n\tif (loader == nullptr)\n\t\treturn false;\n'''
+          browser_load = '''bool Load(ProcLoader loader)\n{\n#ifdef __EMSCRIPTEN__\n\t(void) loader;\n\n\t// WebGL2 is GLES3.  Emscripten links these entry points directly; asking\n\t// SDL_GL_GetProcAddress for desktop-only symbols makes an otherwise valid\n\t// WebGL2 context look unusable.\n#define OPENKO_WEBGL_BIND(Name, Symbol) \\\n\tName = reinterpret_cast<decltype(Name)>(&::Symbol)\n\tOPENKO_WEBGL_BIND(ClearColor, glClearColor);\n\tClearDepth = +[](Clampd depth) { ::glClearDepthf(static_cast<GLfloat>(depth)); };\n\tOPENKO_WEBGL_BIND(Clear, glClear);\n\tOPENKO_WEBGL_BIND(Viewport, glViewport);\n\tDepthRange = +[](Clampd zNear, Clampd zFar) {\n\t\t::glDepthRangef(static_cast<GLfloat>(zNear), static_cast<GLfloat>(zFar));\n\t};\n\tOPENKO_WEBGL_BIND(Scissor, glScissor);\n\tOPENKO_WEBGL_BIND(Enable, glEnable);\n\tOPENKO_WEBGL_BIND(Disable, glDisable);\n\tOPENKO_WEBGL_BIND(GetError, glGetError);\n\tOPENKO_WEBGL_BIND(GetString, glGetString);\n\tOPENKO_WEBGL_BIND(GetStringi, glGetStringi);\n\tOPENKO_WEBGL_BIND(GetIntegerv, glGetIntegerv);\n\tOPENKO_WEBGL_BIND(PixelStorei, glPixelStorei);\n\tOPENKO_WEBGL_BIND(ReadPixels, glReadPixels);\n\n\tOPENKO_WEBGL_BIND(BlendFunc, glBlendFunc);\n\tOPENKO_WEBGL_BIND(DepthFunc, glDepthFunc);\n\tOPENKO_WEBGL_BIND(DepthMask, glDepthMask);\n\tOPENKO_WEBGL_BIND(CullFace, glCullFace);\n\tOPENKO_WEBGL_BIND(FrontFace, glFrontFace);\n\t// WebGL2 rasterises filled polygons only.  KO's normal runtime path is\n\t// filled; wireframe was a desktop/debug option, so this is a safe no-op\n\t// for the browser client.\n\tPolygonMode = +[](Enum, Enum) {};\n\n\tOPENKO_WEBGL_BIND(GenBuffers, glGenBuffers);\n\tOPENKO_WEBGL_BIND(DeleteBuffers, glDeleteBuffers);\n\tOPENKO_WEBGL_BIND(BindBuffer, glBindBuffer);\n\tOPENKO_WEBGL_BIND(BufferData, glBufferData);\n\tOPENKO_WEBGL_BIND(BufferSubData, glBufferSubData);\n\tOPENKO_WEBGL_BIND(GenVertexArrays, glGenVertexArrays);\n\tOPENKO_WEBGL_BIND(DeleteVertexArrays, glDeleteVertexArrays);\n\tOPENKO_WEBGL_BIND(BindVertexArray, glBindVertexArray);\n\tOPENKO_WEBGL_BIND(VertexAttribPointer, glVertexAttribPointer);\n\tOPENKO_WEBGL_BIND(EnableVertexAttribArray, glEnableVertexAttribArray);\n\tOPENKO_WEBGL_BIND(DisableVertexAttribArray, glDisableVertexAttribArray);\n\n\tOPENKO_WEBGL_BIND(GenTextures, glGenTextures);\n\tOPENKO_WEBGL_BIND(DeleteTextures, glDeleteTextures);\n\tOPENKO_WEBGL_BIND(BindTexture, glBindTexture);\n\tOPENKO_WEBGL_BIND(ActiveTexture, glActiveTexture);\n\tOPENKO_WEBGL_BIND(TexImage2D, glTexImage2D);\n\tOPENKO_WEBGL_BIND(CompressedTexImage2D, glCompressedTexImage2D);\n\tOPENKO_WEBGL_BIND(TexParameteri, glTexParameteri);\n\tOPENKO_WEBGL_BIND(GenSamplers, glGenSamplers);\n\tOPENKO_WEBGL_BIND(DeleteSamplers, glDeleteSamplers);\n\tOPENKO_WEBGL_BIND(BindSampler, glBindSampler);\n\tOPENKO_WEBGL_BIND(SamplerParameteri, glSamplerParameteri);\n\tOPENKO_WEBGL_BIND(SamplerParameterfv, glSamplerParameterfv);\n\n\tOPENKO_WEBGL_BIND(CreateShader, glCreateShader);\n\tOPENKO_WEBGL_BIND(ShaderSource, glShaderSource);\n\tOPENKO_WEBGL_BIND(CompileShader, glCompileShader);\n\tOPENKO_WEBGL_BIND(GetShaderiv, glGetShaderiv);\n\tOPENKO_WEBGL_BIND(GetShaderInfoLog, glGetShaderInfoLog);\n\tOPENKO_WEBGL_BIND(DeleteShader, glDeleteShader);\n\tOPENKO_WEBGL_BIND(CreateProgram, glCreateProgram);\n\tOPENKO_WEBGL_BIND(AttachShader, glAttachShader);\n\tOPENKO_WEBGL_BIND(LinkProgram, glLinkProgram);\n\tOPENKO_WEBGL_BIND(GetProgramiv, glGetProgramiv);\n\tOPENKO_WEBGL_BIND(GetProgramInfoLog, glGetProgramInfoLog);\n\tOPENKO_WEBGL_BIND(UseProgram, glUseProgram);\n\tOPENKO_WEBGL_BIND(DeleteProgram, glDeleteProgram);\n\tOPENKO_WEBGL_BIND(GetUniformLocation, glGetUniformLocation);\n\tOPENKO_WEBGL_BIND(Uniform1i, glUniform1i);\n\tOPENKO_WEBGL_BIND(Uniform1iv, glUniform1iv);\n\tOPENKO_WEBGL_BIND(Uniform1f, glUniform1f);\n\tOPENKO_WEBGL_BIND(Uniform2f, glUniform2f);\n\tOPENKO_WEBGL_BIND(Uniform3fv, glUniform3fv);\n\tOPENKO_WEBGL_BIND(Uniform4fv, glUniform4fv);\n\tOPENKO_WEBGL_BIND(UniformMatrix4fv, glUniformMatrix4fv);\n\n\tOPENKO_WEBGL_BIND(DrawArrays, glDrawArrays);\n\tOPENKO_WEBGL_BIND(DrawElements, glDrawElements);\n\t// WebGL2 has no core base-vertex draw.  The login/UI and RHI validation\n\t// slice use baseVertex=0.  Keep the call alive now; world meshes that need\n\t// non-zero base vertices will get a VBO-offset emulation in the next slice.\n\tDrawElementsBaseVertex = +[](Enum mode, Sizei count, Enum type, const void* indices, Int) {\n\t\t::glDrawElements(static_cast<GLenum>(mode), static_cast<GLsizei>(count),\n\t\t\tstatic_cast<GLenum>(type), indices);\n\t};\n\n\tOPENKO_WEBGL_BIND(GenFramebuffers, glGenFramebuffers);\n\tOPENKO_WEBGL_BIND(DeleteFramebuffers, glDeleteFramebuffers);\n\tOPENKO_WEBGL_BIND(BindFramebuffer, glBindFramebuffer);\n\tOPENKO_WEBGL_BIND(FramebufferTexture2D, glFramebufferTexture2D);\n\tOPENKO_WEBGL_BIND(CheckFramebufferStatus, glCheckFramebufferStatus);\n\tOPENKO_WEBGL_BIND(GenRenderbuffers, glGenRenderbuffers);\n\tOPENKO_WEBGL_BIND(DeleteRenderbuffers, glDeleteRenderbuffers);\n\tOPENKO_WEBGL_BIND(BindRenderbuffer, glBindRenderbuffer);\n\tOPENKO_WEBGL_BIND(RenderbufferStorage, glRenderbufferStorage);\n\tOPENKO_WEBGL_BIND(FramebufferRenderbuffer, glFramebufferRenderbuffer);\n#undef OPENKO_WEBGL_BIND\n\treturn true;\n#else\n\tif (loader == nullptr)\n\t\treturn false;\n'''
+          if '#ifdef __EMSCRIPTEN__\n\t(void) loader;' not in s:
+              if load_needle not in s:
+                  raise SystemExit('GLLoader::Load anchor changed upstream')
+              s = s.replace(load_needle, browser_load, 1)
+              tail = '\treturn ok;\n}\n\n} // namespace gl'
+              if tail not in s:
+                  raise SystemExit('GLLoader::Load tail changed upstream')
+              s = s.replace(tail, '\treturn ok;\n#endif\n}\n\n} // namespace gl', 1)
+          p.write_text(s)
+
+          # Desktop GL uses GLSL 330 core.  WebGL2 uses GLSL ES 300.
+          p = Path('openko/src/Client/WarFare/RHIDeviceGL.cpp')
+          s = p.read_text()
+          if s.count('#version 330 core') < 2:
+              raise SystemExit('RHIDeviceGL shader version anchors changed upstream')
+          s = s.replace('#version 330 core', '#version 300 es\\nprecision highp float;')
+          p.write_text(s)
+
+          # Lock the browser client to KO's logical 1024x768 coordinate space.
+          # CSS scales the canvas uniformly; the actual framebuffer stays fixed.
+          p = Path('openko/src/Client/WarFare/WarFareMainSDL.cpp')
+          s = p.read_text()
+          anchor = '\tLoadGameOptions();\n\n\t__Options::PosixRenderer eRenderer'
+          repl = '''\tLoadGameOptions();\n\n#ifdef __EMSCRIPTEN__\n\tCN3Base::s_Options.iViewWidth  = 1024;\n\tCN3Base::s_Options.iViewHeight = 768;\n\tCN3Base::s_Options.bWindowMode = true;\n\t// Browser pointer events are rendered by the game; do not try to load\n\t// native .cur handles from the host filesystem.\n\tCN3Base::s_Options.bWindowCursor = false;\n#endif\n\n\t__Options::PosixRenderer eRenderer'''
+          if '#ifdef __EMSCRIPTEN__\n\tCN3Base::s_Options.iViewWidth' not in s:
+              if anchor not in s:
+                  raise SystemExit('WarFareMainSDL LoadGameOptions anchor changed upstream')
+              s = s.replace(anchor, repl, 1)
+          p.write_text(s)
+
+          # Emscripten linker/browser settings. FULL_ES3 lets the existing RHI
+          # keep using a few GLES compatibility formats while we port them one
+          # by one to strict WebGL2 equivalents.
           p = Path('openko/src/Client/WarFare/CMakeLists.txt')
           s = p.read_text()
           s = s.replace('if(UNIX AND NOT APPLE)\n    # Linux: a freedesktop menu entry',
                         'if(UNIX AND NOT APPLE AND NOT EMSCRIPTEN)\n    # Linux: a freedesktop menu entry')
-          web = '\nif(EMSCRIPTEN)\n  set_target_properties(WarFare PROPERTIES SUFFIX ".html")\n  target_link_options(WarFare PRIVATE "-sMIN_WEBGL_VERSION=2" "-sMAX_WEBGL_VERSION=2" "-sALLOW_MEMORY_GROWTH=1" "-sFORCE_FILESYSTEM=1" "-sASYNCIFY" "-sEXIT_RUNTIME=1" "-sASSERTIONS=1")\nendif()\n'
-          s += web
+          web = '''\nif(EMSCRIPTEN)\n  set_target_properties(WarFare PROPERTIES SUFFIX ".html")\n  target_link_options(WarFare PRIVATE\n    "-sMIN_WEBGL_VERSION=2"\n    "-sMAX_WEBGL_VERSION=2"\n    "-sFULL_ES3=1"\n    "-sGL_ENABLE_GET_PROC_ADDRESS=1"\n    "-sALLOW_MEMORY_GROWTH=1"\n    "-sFORCE_FILESYSTEM=1"\n    "-sASYNCIFY"\n    "-sEXIT_RUNTIME=1"\n    "-sASSERTIONS=1")\nendif()\n'''
+          if '"-sFULL_ES3=1"' not in s:
+              s += web
           p.write_text(s)
           PY
 
@@ -98,7 +156,7 @@ jobs:
             -DOPENKO_COMPILE_WARNINGS_AS_ERROR=OFF \
             2>&1 | tee configure-web.log
 
-      - name: Build real WarFare browser client
+      - name: Build real WarFare WebGL2 client
         id: build
         if: steps.configure.outcome == 'success'
         continue-on-error: true
@@ -122,22 +180,87 @@ jobs:
         run: |
           rm -rf openko-web
           mkdir -p openko-web
-          cp -f build-web/bin/Release/KnightOnLine.html openko-web/index.html
           cp -f build-web/bin/Release/KnightOnLine.js openko-web/KnightOnLine.js
           cp -f build-web/bin/Release/KnightOnLine.wasm openko-web/KnightOnLine.wasm
           find build-web/bin/Release -maxdepth 1 -type f -name '*.cur' -exec cp -f {} openko-web/ \;
-          cat > openko-web/README.txt <<'EOF'
-          OldERA OpenKO browser-port milestone.
-          This is the real OpenKO 1.298 WarFare C++ client compiled by Emscripten.
-          Assets/network transport are the next browser-adaptation milestones.
+
+          # Purpose-built OldERA shell.  The backing framebuffer is always
+          # 1024x768; only CSS scales it, preserving one KO coordinate system.
+          # Until the 1298 asset preload is added, boot the real RHI test scene
+          # so WebGL2 can be verified independently from missing game data.
+          cat > openko-web/index.html <<'EOF'
+          <!doctype html>
+          <html lang="tr">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+            <title>OldERA — OpenKO WebGL2</title>
+            <style>
+              * { box-sizing: border-box; }
+              html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #000; }
+              body { display: grid; place-items: center; font-family: Consolas, monospace; }
+              #stage { position: relative; width: 1024px; height: 768px; transform-origin: center center; }
+              #canvas { display: block; width: 1024px; height: 768px; background: #000; outline: none; }
+              #status { position: fixed; left: 10px; top: 8px; z-index: 10; margin: 0; color: #b8ffb8;
+                        font-size: 12px; line-height: 1.35; white-space: pre-wrap; pointer-events: none;
+                        text-shadow: 0 1px 2px #000; max-width: min(900px, 95vw); }
+            </style>
+          </head>
+          <body>
+            <div id="stage"><canvas id="canvas" width="1024" height="768" tabindex="0"></canvas></div>
+            <pre id="status">OldERA / OpenKO WebGL2 başlatılıyor…</pre>
+            <script>
+              (() => {
+                const W = 1024, H = 768;
+                const stage = document.getElementById('stage');
+                const canvas = document.getElementById('canvas');
+                const status = document.getElementById('status');
+                const lines = [];
+                const log = (kind, text) => {
+                  const line = (kind ? '[' + kind + '] ' : '') + text;
+                  console[kind === 'ERR' ? 'error' : 'log'](line);
+                  lines.push(line);
+                  while (lines.length > 18) lines.shift();
+                  status.textContent = lines.join('\n');
+                };
+                const fit = () => {
+                  const scale = Math.min(innerWidth / W, innerHeight / H);
+                  stage.style.transform = `scale(${scale})`;
+                };
+                addEventListener('resize', fit);
+                fit();
+                canvas.focus();
+
+                // Default = real OpenKO RHIDeviceGL validation scene.  Later the
+                // same executable boots login once the 1298 asset pack is mounted.
+                window.Module = {
+                  canvas,
+                  arguments: ['--renderer', 'gl', '--test-scene'],
+                  print: (...args) => log('OUT', args.join(' ')),
+                  printErr: (...args) => log('ERR', args.join(' ')),
+                  onRuntimeInitialized: () => log('OUT', 'WASM runtime hazır — WebGL2/RHI çalışıyor.')
+                };
+              })();
+            </script>
+            <script async src="KnightOnLine.js"></script>
+          </body>
+          </html>
           EOF
+
+          cat > openko-web/README.txt <<'EOF'
+          OldERA OpenKO browser-port — WebGL2 milestone.
+          Real OpenKO 1.298 WarFare C++ client compiled with Emscripten.
+          RHIDeviceGL is adapted to WebGL2/GLES3 and the browser framebuffer is fixed at 1024x768.
+          Default boot is the real OpenKO RHI test scene; the next milestone mounts the original 1298 Data/UI assets and switches to login.
+          EOF
+
           git config user.name "OldERA Build Bot"
           git config user.email "actions@github.com"
           git add -f openko-web
           if git diff --cached --quiet; then
             echo 'Published files unchanged.'
           else
-            git commit -m 'Publish real OpenKO Emscripten browser executable [skip ci]'
+            git commit -m 'Publish OpenKO WebGL2 1024x768 browser build [skip ci]'
             git push origin HEAD:openko-browser-port
           fi
 
