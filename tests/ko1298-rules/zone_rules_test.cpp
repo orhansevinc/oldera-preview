@@ -78,6 +78,10 @@ int main() {
            "El Morad cannot enter Karus home normally");
     expect(rules.CanEnterZone(Nation::ElMorad, ZoneId::Karus, invasion_open).allowed,
            "El Morad can enter Karus home during invasion");
+    expect(!rules.CanEnterZone(Nation::ElMorad, ZoneId::KarusEslant, invasion_open).allowed,
+           "enemy Eslant remains nation-locked during invasion");
+    expect(!rules.AreHostile(Nation::ElMorad, Nation::Karus, ZoneId::KarusEslant, invasion_open),
+           "Eslant does not inherit home-map invasion hostility");
     expect(rules.CanEnterZone(Nation::Karus, ZoneId::Moradon, closed).allowed,
            "Karus can enter Moradon");
     expect(rules.CanEnterZone(Nation::ElMorad, ZoneId::Moradon, closed).allowed,
