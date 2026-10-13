@@ -1,0 +1,33 @@
+name: WS26 Loot Domain
+
+on:
+  push:
+    branches: [ws26-drop-loot]
+    paths:
+      - 'services/ko1298-loot/**'
+      - 'tests/ko1298-loot/**'
+      - 'world-data/drops/**'
+      - 'workstreams/ws26/**'
+      - '.github/workflows/ws26-loot.yml'
+  pull_request:
+    paths:
+      - 'services/ko1298-loot/**'
+      - 'tests/ko1298-loot/**'
+      - 'world-data/drops/**'
+      - 'workstreams/ws26/**'
+      - '.github/workflows/ws26-loot.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run WS26 loot tests
+        run: npm test --prefix services/ko1298-loot

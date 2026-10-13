@@ -1,0 +1,11 @@
+{
+  "name": "@oldko/ko1298-loot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "exports": "./src/index.js",
+  "scripts": {
+    "test": "node --test ../../tests/ko1298-loot/*.test.mjs"
+  }
+}

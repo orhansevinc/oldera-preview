@@ -1,0 +1,17 @@
+{
+  "fixture": true,
+  "authoritative1298Data": false,
+  "note": "WS26 synthetic fixture only. Values are invented for deterministic tests and MUST NOT be treated as real Knight Online 1298 drop data.",
+  "tables": [
+    {
+      "id": "fixture.mob.1001",
+      "mobTemplateId": 1001,
+      "rolls": 2,
+      "entries": [
+        { "kind": "none", "weight": 50 },
+        { "kind": "item", "itemId": 900001, "weight": 30, "minQuantity": 1, "maxQuantity": 1 },
+        { "kind": "coin", "weight": 20, "minQuantity": 10, "maxQuantity": 25 }
+      ]
+    }
+  ]
+}
