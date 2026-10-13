@@ -24,6 +24,27 @@ if old in s:
 elif "#include <AL/alc.h>" not in s:
     raise SystemExit("N3SndMgr.h: OpenAL declarations changed upstream")
 
+# The first browser milestone is a single-threaded build. OpenAL itself has
+# an Emscripten shim, but OpenKO's AudioThread starts std::thread (and then a
+# decoder thread), which throws before the login scene is constructed. Use
+# the engine's existing sound-unavailable path until a browser audio pump is
+# implemented. Do not pretend audio is working or alter native audio builds.
+p = Path("openko/src/N3Base/N3SndMgr.cpp")
+s = p.read_text(encoding="utf-8-sig")
+audio_anchor = "bool CN3SndMgr::InitOpenAL()\n{\n"
+audio_browser = '''bool CN3SndMgr::InitOpenAL()
+{
+#if defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN_PTHREADS__)
+\tCLogWriter::Write("browser audio unavailable: native audio workers require pthreads; login continues without sound");
+\treturn false;
+#else
+'''
+if "browser audio unavailable: native audio workers require pthreads" not in s:
+    s = replace_once(s, audio_anchor, audio_browser, "single-thread browser audio")
+    audio_tail = "\t_thread->start();\n\treturn true;\n}"
+    s = replace_once(s, audio_tail, "\t_thread->start();\n\treturn true;\n#endif\n}", "browser audio guard end")
+p.write_text(s, encoding="utf-8")
+
 # Keep jpeg static in the WASM executable.
 p = Path("openko/cmake/FindJpeg.cmake")
 s = p.read_text()
