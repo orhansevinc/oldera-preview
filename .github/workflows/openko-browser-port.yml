@@ -48,6 +48,8 @@ jobs:
           set -o pipefail
           emcmake cmake -S openko -B build-web -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_FLAGS='-DBOOST_HAS_PTHREADS=1' \
+            -DCMAKE_CXX_FLAGS='-DBOOST_HAS_PTHREADS=1' \
             -DOPENKO_BUILD_CLIENT=ON \
             -DOPENKO_CLIENT_POSIX_EXPERIMENTAL=ON \
             -DOPENKO_BUILD_CLIENT_TOOLS=OFF \
@@ -73,7 +75,7 @@ jobs:
         run: |
           echo "=== configure outcome: ${{ steps.configure.outcome }} ==="
           echo "=== build outcome: ${{ steps.build.outcome }} ==="
-          find build-web -maxdepth 6 -type f \( -name '*.html' -o -name '*.js' -o -name '*.wasm' -o -name 'KnightOnLine*' \) -print 2>/dev/null | sort || true
+          find build-web -maxdepth 8 -type f \( -name '*.html' -o -name '*.js' -o -name '*.wasm' -o -name 'KnightOnLine*' \) -print 2>/dev/null | sort || true
           mkdir -p browser-probe-artifact
           cp configure-web.log browser-probe-artifact/ 2>/dev/null || true
           cp build-web.log browser-probe-artifact/ 2>/dev/null || true
