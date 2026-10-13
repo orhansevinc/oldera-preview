@@ -1,0 +1,80 @@
+name: ws07-database
+
+on:
+  push:
+    branches: [ws07-database]
+    paths:
+      - 'services/oldko-data/**'
+      - 'database/**'
+      - 'workstreams/ws07/**'
+      - '.github/workflows/ws07-database.yml'
+  pull_request:
+    paths:
+      - 'services/oldko-data/**'
+      - 'database/**'
+      - 'workstreams/ws07/**'
+      - '.github/workflows/ws07-database.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: oldko_test
+          POSTGRES_USER: oldko
+          POSTGRES_PASSWORD: oldko_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U oldko -d oldko_test"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://oldko:oldko_test_password@127.0.0.1:5432/oldko_test
+    defaults:
+      run:
+        working-directory: services/oldko-data
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --ignore-scripts
+      - run: npm run check
+      - run: npm test
+      - run: npm run migrate
+      - run: npm run migrate
+      - name: Seed development fixture
+        env:
+          OLDKO_ENV: development
+          OLDKO_DEV_SEED_PASSWORD: ci-development-password
+        run: npm run seed:dev
+      - name: Verify schema and seed safety
+        run: |
+          node --input-type=module <<'NODE'
+          import pg from 'pg';
+          const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+          const required = ['accounts','account_sessions','characters','character_stats','character_items','inventory','inn_storage','clans','bans','ip_bans','audit_log','server_state'];
+          const { rows } = await pool.query(`SELECT table_name FROM information_schema.tables WHERE table_schema='oldko'`);
+          const names = new Set(rows.map(r => r.table_name));
+          for (const table of required) if (!names.has(table)) throw new Error(`missing table: ${table}`);
+          const seed = await pool.query(`SELECT username, password_hash FROM oldko.accounts WHERE username_key='osevinc'`);
+          if (seed.rowCount !== 1 || !seed.rows[0].password_hash.startsWith('scrypt$')) throw new Error('unsafe/missing dev seed');
+
+          const account = await pool.query(`INSERT INTO oldko.accounts (username, username_key, password_hash) VALUES ('ciuser','ciuser','scrypt$ci') RETURNING id`);
+          const character = await pool.query(`INSERT INTO oldko.characters (account_id,slot,name,name_key,nation,race,class_id) VALUES ($1,0,'CiHero','cihero',1,1,101) RETURNING id`, [account.rows[0].id]);
+          await pool.query(`INSERT INTO oldko.character_stats (character_id) VALUES ($1)`, [character.rows[0].id]);
+          const item = await pool.query(`INSERT INTO oldko.item_instances (serial,item_template_id) VALUES (900000000001,1001) RETURNING id`);
+          await pool.query(`INSERT INTO oldko.inventory (character_id,slot,item_instance_id) VALUES ($1,0,$2)`, [character.rows[0].id, item.rows[0].id]);
+          await assertSqlState('23505', () => pool.query(`INSERT INTO oldko.character_items (character_id,slot,item_instance_id) VALUES ($1,0,$2)`, [character.rows[0].id, item.rows[0].id]));
+          await assertSqlState('23505', () => pool.query(`INSERT INTO oldko.item_instances (serial,item_template_id) VALUES (900000000001,1002)`));
+          await pool.end();
+
+          async function assertSqlState(code, operation) {
+            try { await operation(); } catch (error) { if (error.code === code) return; throw error; }
+            throw new Error(`expected PostgreSQL SQLSTATE ${code}`);
+          }
+          NODE
