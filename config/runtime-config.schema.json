@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oldkoweb.com/schemas/runtime-config-env-v1.json",
+  "title": "OldKOWeb Runtime Environment Contract",
+  "description": "Machine-readable environment contract. Runtime cross-field validation is implemented by @oldko/config.",
+  "type": "object",
+  "required": ["OLDKO_ENV", "OLDKO_SERVICE_NAME"],
+  "properties": {
+    "OLDKO_ENV": { "type": "string", "enum": ["development", "test", "production"] },
+    "OLDKO_SERVICE_NAME": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,62}$" },
+    "OLDKO_SERVICE_HOST": { "type": "string", "minLength": 1 },
+    "OLDKO_SERVICE_PORT": { "$ref": "#/$defs/portString" },
+    "OLDKO_DB_ENABLED": { "$ref": "#/$defs/booleanString" },
+    "OLDKO_DB_DRIVER": { "type": "string", "enum": ["postgres", "mssql"] },
+    "OLDKO_DB_HOST": { "type": "string", "minLength": 1 },
+    "OLDKO_DB_PORT": { "$ref": "#/$defs/portString" },
+    "OLDKO_DB_NAME": { "type": "string", "minLength": 1 },
+    "OLDKO_DB_USER": { "type": "string", "minLength": 1 },
+    "OLDKO_DB_PASSWORD_REF": { "$ref": "#/$defs/secretReference" },
+    "OLDKO_DB_PASSWORD": { "type": "string", "minLength": 1 },
+    "OLDKO_GATEWAY_ENABLED": { "$ref": "#/$defs/booleanString" },
+    "OLDKO_GATEWAY_AUTH_TARGET_URL": { "$ref": "#/$defs/httpUrl" },
+    "OLDKO_GATEWAY_GAME_TARGET_URL": { "$ref": "#/$defs/httpUrl" },
+    "OLDKO_AUTH_HOST": { "type": "string", "minLength": 1 },
+    "OLDKO_AUTH_PORT": { "$ref": "#/$defs/portString" },
+    "OLDKO_GAME_HOST": { "type": "string", "minLength": 1 },
+    "OLDKO_GAME_PORT": { "$ref": "#/$defs/portString" },
+    "OLDKO_ADMIN_API_ENABLED": { "$ref": "#/$defs/booleanString" },
+    "OLDKO_ADMIN_API_HOST": { "type": "string", "minLength": 1 },
+    "OLDKO_ADMIN_API_PORT": { "$ref": "#/$defs/portString" },
+    "OLDKO_ADMIN_API_BASE_URL": { "$ref": "#/$defs/httpUrl" },
+    "OLDKO_ADMIN_SESSION_SECRET_REF": { "$ref": "#/$defs/secretReference" },
+    "OLDKO_ADMIN_SESSION_SECRET": { "type": "string", "minLength": 1 },
+    "OLDKO_GAME_COMMAND_TOKEN_REF": { "$ref": "#/$defs/secretReference" },
+    "OLDKO_GAME_COMMAND_TOKEN": { "type": "string", "minLength": 1 },
+    "OLDKO_LOG_LEVEL": { "type": "string", "enum": ["trace", "debug", "info", "warn", "error", "fatal"] },
+    "OLDKO_LOG_JSON": { "$ref": "#/$defs/booleanString" },
+    "OLDKO_METRICS_ENABLED": { "$ref": "#/$defs/booleanString" },
+    "OLDKO_METRICS_HOST": { "type": "string", "minLength": 1 },
+    "OLDKO_METRICS_PORT": { "$ref": "#/$defs/portString" },
+    "OLDKO_HEALTH_PATH": { "type": "string", "pattern": "^/\\S*$" },
+    "OLDKO_TRUSTED_ORIGINS": { "type": "string" },
+    "OLDKO_CORS_CREDENTIALS": { "$ref": "#/$defs/booleanString" },
+    "OLDKO_STARTUP_TIMEOUT_MS": { "$ref": "#/$defs/integerString" },
+    "OLDKO_REQUEST_TIMEOUT_MS": { "$ref": "#/$defs/integerString" },
+    "OLDKO_DB_TIMEOUT_MS": { "$ref": "#/$defs/integerString" },
+    "OLDKO_GATEWAY_TIMEOUT_MS": { "$ref": "#/$defs/integerString" }
+  },
+  "patternProperties": {
+    "^OLDKO_FF_[A-Z][A-Z0-9_]*$": { "$ref": "#/$defs/booleanString" }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "booleanString": { "type": "string", "enum": ["true", "false", "1", "0"] },
+    "integerString": { "type": "string", "pattern": "^-?[0-9]+$" },
+    "portString": { "type": "string", "pattern": "^[0-9]+$" },
+    "httpUrl": { "type": "string", "pattern": "^https?://" },
+    "secretReference": {
+      "type": "string",
+      "pattern": "^(?:env://[A-Z][A-Z0-9_]*|file:///\\S+|secret://[A-Za-z0-9._-]+/\\S+)$"
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@oldko/config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Typed runtime configuration contract for OldKOWeb services.",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./schema": "./src/schema.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,66 @@
+export const ENVIRONMENTS = Object.freeze(["development", "test", "production"]);
+
+export const SECRET_REFERENCE_PATTERN =
+  /^(?:env:\/\/[A-Z][A-Z0-9_]*|file:\/\/\/\S+|secret:\/\/[A-Za-z0-9._-]+\/\S+)$/;
+
+export const RESERVED_LITERAL_SECRET_KEYS = Object.freeze([
+  "OLDKO_DB_PASSWORD",
+  "OLDKO_ADMIN_SESSION_SECRET",
+  "OLDKO_GAME_COMMAND_TOKEN"
+]);
+
+export const KNOWN_ENV_KEYS = Object.freeze([
+  "OLDKO_ENV",
+  "OLDKO_SERVICE_NAME",
+  "OLDKO_SERVICE_HOST",
+  "OLDKO_SERVICE_PORT",
+  "OLDKO_DB_ENABLED",
+  "OLDKO_DB_DRIVER",
+  "OLDKO_DB_HOST",
+  "OLDKO_DB_PORT",
+  "OLDKO_DB_NAME",
+  "OLDKO_DB_USER",
+  "OLDKO_DB_PASSWORD_REF",
+  "OLDKO_DB_PASSWORD",
+  "OLDKO_GATEWAY_ENABLED",
+  "OLDKO_GATEWAY_AUTH_TARGET_URL",
+  "OLDKO_GATEWAY_GAME_TARGET_URL",
+  "OLDKO_AUTH_HOST",
+  "OLDKO_AUTH_PORT",
+  "OLDKO_GAME_HOST",
+  "OLDKO_GAME_PORT",
+  "OLDKO_ADMIN_API_ENABLED",
+  "OLDKO_ADMIN_API_HOST",
+  "OLDKO_ADMIN_API_PORT",
+  "OLDKO_ADMIN_API_BASE_URL",
+  "OLDKO_ADMIN_SESSION_SECRET_REF",
+  "OLDKO_ADMIN_SESSION_SECRET",
+  "OLDKO_GAME_COMMAND_TOKEN_REF",
+  "OLDKO_GAME_COMMAND_TOKEN",
+  "OLDKO_LOG_LEVEL",
+  "OLDKO_LOG_JSON",
+  "OLDKO_METRICS_ENABLED",
+  "OLDKO_METRICS_HOST",
+  "OLDKO_METRICS_PORT",
+  "OLDKO_HEALTH_PATH",
+  "OLDKO_TRUSTED_ORIGINS",
+  "OLDKO_CORS_CREDENTIALS",
+  "OLDKO_STARTUP_TIMEOUT_MS",
+  "OLDKO_REQUEST_TIMEOUT_MS",
+  "OLDKO_DB_TIMEOUT_MS",
+  "OLDKO_GATEWAY_TIMEOUT_MS"
+]);
+
+export const DEFAULTS = Object.freeze({
+  serviceHost: "127.0.0.1",
+  logLevel: "info",
+  logJson: true,
+  metricsEnabled: false,
+  metricsHost: "127.0.0.1",
+  healthPath: "/health",
+  corsCredentials: false,
+  startupTimeoutMs: 30000,
+  requestTimeoutMs: 15000,
+  dbTimeoutMs: 10000,
+  gatewayTimeoutMs: 10000
+});

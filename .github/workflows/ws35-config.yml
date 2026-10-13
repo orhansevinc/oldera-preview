@@ -1,0 +1,36 @@
+name: WS35 Runtime Config
+
+on:
+  push:
+    branches:
+      - ws35-runtime-config
+    paths:
+      - "packages/oldko-config/**"
+      - "config/**"
+      - "tests/config/**"
+      - "workstreams/ws35/**"
+      - ".github/workflows/ws35-config.yml"
+  pull_request:
+    paths:
+      - "packages/oldko-config/**"
+      - "config/**"
+      - "tests/config/**"
+      - "workstreams/ws35/**"
+      - ".github/workflows/ws35-config.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Validate JSON schema syntax
+        run: node -e "JSON.parse(require('node:fs').readFileSync('config/runtime-config.schema.json','utf8'))"
+      - name: Run WS35 tests
+        run: node --test tests/config/*.test.mjs
