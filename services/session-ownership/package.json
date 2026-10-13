@@ -1,0 +1,14 @@
+{
+  "name": "@oldko/session-ownership",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Atomic account/character session lease domain for OldKO.",
+  "main": "index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test ../../tests/session-ownership/*.test.js"
+  }
+}
