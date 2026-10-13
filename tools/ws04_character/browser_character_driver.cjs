@@ -14,6 +14,7 @@ const { PNG } = require('pngjs');
 
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   const runtimeLines = [];
+  let captureSequence = 0;
   page.on('console', m => {
     const text = m.text();
     runtimeLines.push(text);
@@ -57,44 +58,83 @@ const { PNG } = require('pngjs');
     return { nonBlack, total, ratio: total ? nonBlack / total : 0 };
   };
 
-  // Character Select/Create render correctly in Chromium's compositor while the
-  // default WebGL backbuffer can already be discarded by the time readPixels()
-  // runs. The canonical base gate proved that behavior. Therefore WS04 uses the
-  // actual composited browser frame as its visual source instead of blocking the
-  // game main loop with a known-black gl.readPixels call.
-  const capture = async (name, attempts = 2) => {
-    let lastError = null;
-    for (let attempt = 1; attempt <= attempts; attempt++) {
-      if (attempt > 1) await page.waitForTimeout(1500);
-      const cdp = await page.context().newCDPSession(page);
-      try {
-        const shot = await Promise.race([
-          cdp.send('Page.captureScreenshot', {
-            format: 'png', fromSurface: true, captureBeyondViewport: false,
-            clip: { x: 0, y: 0, width: 1024, height: 768, scale: 1 }
-          }),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('CDP screenshot timed out')), 20000))
-        ]);
-        const buffer = Buffer.from(shot.data, 'base64');
-        fs.writeFileSync(`ws04-${name}.png`, buffer);
-        console.log(`[ws04-driver] screenshot ${name} captured attempt=${attempt}`);
-        cdp.detach().catch(() => {});
-        return PNG.sync.read(buffer);
-      } catch (err) {
-        lastError = err;
-        console.log(`[ws04-driver] screenshot ${name} attempt=${attempt} failed: ${err.message}`);
-        cdp.detach().catch(() => {});
+  const ppmToPng = buffer => {
+    let newlineCount = 0;
+    let dataStart = -1;
+    for (let i = 0; i < Math.min(buffer.length, 256); i++) {
+      if (buffer[i] === 10 && ++newlineCount === 3) {
+        dataStart = i + 1;
+        break;
       }
     }
-    throw lastError || new Error(`screenshot ${name} failed`);
+    if (dataStart < 0) throw new Error('invalid PPM header');
+    const header = buffer.subarray(0, dataStart).toString('ascii').trim().split(/\s+/);
+    if (header.length !== 4 || header[0] !== 'P6' || header[3] !== '255') {
+      throw new Error(`unexpected PPM header: ${header.join(' ')}`);
+    }
+    const width = Number(header[1]);
+    const height = Number(header[2]);
+    const rgb = buffer.subarray(dataStart);
+    if (!Number.isInteger(width) || !Number.isInteger(height) || rgb.length !== width * height * 3) {
+      throw new Error(`invalid PPM payload: ${width}x${height}, rgb=${rgb.length}`);
+    }
+    const png = new PNG({ width, height });
+    for (let src = 0, dst = 0; src < rgb.length; src += 3, dst += 4) {
+      png.data[dst] = rgb[src];
+      png.data[dst + 1] = rgb[src + 1];
+      png.data[dst + 2] = rgb[src + 2];
+      png.data[dst + 3] = 255;
+    }
+    return png;
+  };
+
+  // Request capture from RHIDeviceGL::Present().  The hook reads the real KO
+  // backbuffer immediately before SDL_GL_SwapWindow and writes a PPM into
+  // Emscripten MEMFS.  This is deterministic and does not depend on Chrome's
+  // compositor or on a post-present WebGL buffer that may already be discarded.
+  const capture = async name => {
+    const id = ++captureSequence;
+    const path = `/ws04-frame-${id}.ppm`;
+    const fsReady = await page.evaluate(() => Boolean(window.Module && Module.FS));
+    if (!fsReady) throw new Error('Emscripten Module.FS is not exported');
+
+    await page.evaluate(requestId => {
+      globalThis.WS04_CAPTURE_READY = 0;
+      globalThis.WS04_CAPTURE_REQUEST = requestId;
+    }, id);
+
+    await page.waitForFunction(requestId => {
+      return globalThis.WS04_CAPTURE_READY === requestId
+        || globalThis.WS04_CAPTURE_READY === -requestId;
+    }, id, { timeout: 12000 });
+
+    const ready = await page.evaluate(() => globalThis.WS04_CAPTURE_READY || 0);
+    if (ready !== id) throw new Error(`native GL capture failed id=${id} ready=${ready}`);
+    await waitForRuntime(`WS04_GL_CAPTURE id=${id} ok=1`, 5000);
+
+    const b64 = await page.evaluate(memfsPath => {
+      const bytes = Module.FS.readFile(memfsPath);
+      let binary = '';
+      const chunk = 0x8000;
+      for (let offset = 0; offset < bytes.length; offset += chunk) {
+        binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + chunk, bytes.length)));
+      }
+      return btoa(binary);
+    }, path);
+
+    const ppm = Buffer.from(b64, 'base64');
+    const png = ppmToPng(ppm);
+    fs.writeFileSync(`ws04-${name}.png`, PNG.sync.write(png));
+    console.log(`[ws04-driver] native GL screenshot ${name} id=${id} size=${png.width}x${png.height}`);
+    return png;
   };
 
   const assertVisual = async (label, fileName) => {
     const png = await capture(fileName);
-    const compositor = pixelStats(png);
-    console.log(`[ws04-driver] ${label} compositor nonBlack=${compositor.nonBlack}/${compositor.total} ratio=${compositor.ratio.toFixed(4)}`);
-    if (compositor.ratio < 0.01) throw new Error(`${label} compositor is effectively black`);
-    console.log(`[ws04-driver] ${label}_VISUAL_OK source=compositor ratio=${compositor.ratio.toFixed(4)}`);
+    const frame = pixelStats(png);
+    console.log(`[ws04-driver] ${label} GL-frame nonBlack=${frame.nonBlack}/${frame.total} ratio=${frame.ratio.toFixed(4)}`);
+    if (frame.ratio < 0.01) throw new Error(`${label} real GL frame is effectively black`);
+    console.log(`[ws04-driver] ${label}_VISUAL_OK source=pre-swap-gl ratio=${frame.ratio.toFixed(4)}`);
     return png;
   };
 
@@ -142,24 +182,22 @@ const { PNG } = require('pngjs');
     await page.mouse.click(258, 495, { delay: 100 }); // real El Morad button
     await waitForRuntime('scene change: nation-select -> character-select', 20000);
     await waitForRuntime('WS04_CHAR_LIST parsed result=1 slots=3 occupied=0', 20000);
-    await page.waitForTimeout(1800);
+    await page.waitForTimeout(1000);
     await assertVisual('CHARACTER_SELECT', 'character-select');
     console.log('[ws04-driver] NATION_TO_CHAR_SELECT_OK');
     console.log('[ws04-driver] CHAR_LIST_PARSE_OK slots=3 occupied=0');
 
-    // The canonical 1298 client gate already proves Enter selects the focused
-    // empty center slot. Keep the exact native control path instead of guessing a
-    // screen hitbox.
+    // The canonical base gate proves Enter activates the focused empty slot.
     await page.locator('#canvas').focus();
     await pressHeld('Enter', 100);
     await waitForRuntime('WS04_SLOT_ACTION index=0 occupied=0', 10000);
     await waitForRuntime('scene change: character-select -> character-create', 20000);
     await waitForRuntime('WS04_CHAR_CREATE_UI', 10000);
-    await page.waitForTimeout(1800);
+    await page.waitForTimeout(1000);
     await assertVisual('CHARACTER_CREATE', 'character-create');
     console.log('[ws04-driver] EMPTY_SLOT_TO_CREATE_OK');
 
-    // Drive only real 1298 UIF controls: El Moradian Male -> Warrior.
+    // Drive only genuine 1298 UIF controls: El Moradian Male -> Warrior.
     await page.mouse.click(170, 145, { delay: 100 });
     await page.waitForTimeout(500);
     await page.mouse.click(170, 325, { delay: 100 });
@@ -167,9 +205,7 @@ const { PNG } = require('pngjs');
 
     // Allocate every available bonus point to STR. Extra clicks are harmless:
     // the real UI ignores them after m_iBonusPoint reaches zero.
-    for (let i = 0; i < 50; i++) {
-      await page.mouse.click(925, 114);
-    }
+    for (let i = 0; i < 50; i++) await page.mouse.click(925, 114);
 
     const characterName = process.env.CHAR_NAME || `Ws04${Date.now().toString().slice(-8)}`;
     await page.mouse.click(510, 678, { delay: 80 });
@@ -199,7 +235,7 @@ const { PNG } = require('pngjs');
       console.log('[ws04-driver] CHAR_CREATE_RESPONSE_OK');
       await waitForRuntime('scene change: character-create -> character-select', 20000);
       await waitForRuntime('WS04_CHAR_LIST parsed result=1 slots=3 occupied=1', 20000);
-      await page.waitForTimeout(1800);
+      await page.waitForTimeout(1000);
       await assertVisual('CHARACTER_SLOT_REFRESH', 'character-slot-refresh');
       console.log('[ws04-driver] CHAR_CREATE_SLOT_REFRESH_OK');
 
