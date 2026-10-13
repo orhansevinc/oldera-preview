@@ -35,12 +35,12 @@ node --test tests/session-ownership/*.test.js
 Result at implementation time:
 
 ```text
-14 tests
-14 pass
+16 tests
+16 pass
 0 fail
 ```
 
-Concurrency coverage includes an adversarial two-party CAS gate forcing two login attempts to observe the same empty account slot before either write completes. Exactly one session wins.
+Concurrency coverage includes an adversarial two-party CAS gate forcing two login attempts to observe the same empty account slot before either write completes; exactly one session wins. A second gated race forces account takeover to occur between character authorization and character CAS, verifying that the displaced session cannot leave an orphan character lease behind.
 
 ## Boundaries respected
 
