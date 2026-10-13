@@ -97,6 +97,68 @@ context_attrs = '''\tSDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);\n\tSD
 context_attrs_web = '''#ifdef __EMSCRIPTEN__\n\tSDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);\n\tSDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);\n\tSDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);\n\tSDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);\n#else\n\tSDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);\n\tSDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);\n\tSDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);\n\tSDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);\n#endif'''
 if "SDL_GL_CONTEXT_PROFILE_ES" not in s:
     s = replace_once(s, context_attrs, context_attrs_web, "RHIDeviceGL WebGL2 context")
+
+# Desktop GL accepts BGRA vertex attributes and texture uploads; WebGL2
+# accepts neither. Keep D3D data unchanged and convert at the RHI boundary.
+if "OldERA WebGL2 pixel conversion" not in s:
+    texture_anchor = "\t\telse\n\t\t{\n\t\t\tgl::TexImage2D(gl::TEXTURE_2D, static_cast<gl::Int>(i),"
+    texture_browser = '''\t\telse
+\t\t{
+#ifdef __EMSCRIPTEN__
+\t\t\t// OldERA WebGL2 pixel conversion: preserve row pitch and alpha.
+\t\t\tstd::vector<uint8_t> rgba(static_cast<size_t>(level.width) * level.height * 4);
+\t\t\tfor (UINT y = 0; y < level.height; ++y)
+\t\t\t{
+\t\t\t\tconst uint8_t* row = level.storage.data() + static_cast<size_t>(y) * level.pitch;
+\t\t\t\tfor (UINT x = 0; x < level.width; ++x)
+\t\t\t\t{
+\t\t\t\t\tuint8_t* dst = rgba.data() + (static_cast<size_t>(y) * level.width + x) * 4;
+\t\t\t\t\tif (m_eFormat == D3DFMT_A8R8G8B8 || m_eFormat == D3DFMT_X8R8G8B8)
+\t\t\t\t\t{
+\t\t\t\t\t\tconst uint8_t* src = row + x * 4;
+\t\t\t\t\t\tdst[0] = src[2]; dst[1] = src[1]; dst[2] = src[0];
+\t\t\t\t\t\tdst[3] = m_eFormat == D3DFMT_X8R8G8B8 ? 255 : src[3];
+\t\t\t\t\t}
+\t\t\t\t\telse if (m_eFormat == D3DFMT_R8G8B8)
+\t\t\t\t\t{
+\t\t\t\t\t\tconst uint8_t* src = row + x * 3;
+\t\t\t\t\t\tdst[0] = src[2]; dst[1] = src[1]; dst[2] = src[0]; dst[3] = 255;
+\t\t\t\t\t}
+\t\t\t\t\telse
+\t\t\t\t\t{
+\t\t\t\t\t\tconst uint16_t v = static_cast<uint16_t>(row[x * 2])
+\t\t\t\t\t\t\t| (static_cast<uint16_t>(row[x * 2 + 1]) << 8);
+\t\t\t\t\t\tif (m_eFormat == D3DFMT_A1R5G5B5)
+\t\t\t\t\t\t{
+\t\t\t\t\t\t\tconst auto expand = [](uint16_t c) { return static_cast<uint8_t>((c << 3) | (c >> 2)); };
+\t\t\t\t\t\t\tdst[0] = expand((v >> 10) & 31); dst[1] = expand((v >> 5) & 31);
+\t\t\t\t\t\t\tdst[2] = expand(v & 31); dst[3] = (v & 0x8000) ? 255 : 0;
+\t\t\t\t\t\t}
+\t\t\t\t\t\telse // D3DFMT_A4R4G4B4; all other formats are rejected above.
+\t\t\t\t\t\t{
+\t\t\t\t\t\t\tdst[0] = ((v >> 8) & 15) * 17; dst[1] = ((v >> 4) & 15) * 17;
+\t\t\t\t\t\t\tdst[2] = (v & 15) * 17; dst[3] = ((v >> 12) & 15) * 17;
+\t\t\t\t\t\t}
+\t\t\t\t\t}
+\t\t\t\t}
+\t\t\t}
+\t\t\tgl::TexImage2D(gl::TEXTURE_2D, static_cast<gl::Int>(i), gl::RGBA8,
+\t\t\t\tstatic_cast<gl::Sizei>(level.width), static_cast<gl::Sizei>(level.height),
+\t\t\t\t0, gl::RGBA, gl::UNSIGNED_BYTE, rgba.data());
+#else
+\t\t\tgl::TexImage2D(gl::TEXTURE_2D, static_cast<gl::Int>(i),'''
+    s = replace_once(s, texture_anchor, texture_browser, "WebGL2 texture upload")
+    s = replace_once(s, "\t\t\t\tlevel.storage.data());\n\t\t}\n", "\t\t\t\tlevel.storage.data());\n#endif\n\t\t}\n", "WebGL2 texture upload end")
+    color_anchor = "\t\tgl::VertexAttribPointer(2, static_cast<gl::Int>(gl::BGRA), gl::UNSIGNED_BYTE, 1,\n\t\t\tlayout.stride, Offset(layout.colorOffset));"
+    s = replace_once(s, color_anchor, '''#ifdef __EMSCRIPTEN__
+\t\tgl::VertexAttribPointer(2, 4, gl::UNSIGNED_BYTE, 1,
+\t\t\tlayout.stride, Offset(layout.colorOffset));
+#else
+''' + color_anchor + "\n#endif", "WebGL2 vertex color")
+    base = "\tvec4 base = (uHasColor != 0) ? aColor : vec4(1.0);"
+    s = replace_once(s, base, "#ifdef GL_ES\n\tvec4 base = (uHasColor != 0) ? aColor.bgra : vec4(1.0);\n#else\n" + base + "\n#endif", "WebGL2 vertex swizzle")
+    border = "\t\tgl::SamplerParameterfv(sampler, gl::TEXTURE_BORDER_COLOR, borderRgba);"
+    s = replace_once(s, border, "#ifndef __EMSCRIPTEN__\n" + border + "\n#endif", "WebGL2 sampler border")
 p.write_text(s)
 
 # Fixed KO logical viewport. CSS does presentation scaling only.
