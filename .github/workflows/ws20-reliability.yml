@@ -1,0 +1,108 @@
+name: WS20 Reliability Security
+
+on:
+  push:
+    branches: [ws20-reliability-security]
+    paths:
+      - 'reliability/**'
+      - 'security-tests/**'
+      - 'tests/load/**'
+      - 'workstreams/ws20/**'
+      - '.github/workflows/ws20-reliability.yml'
+  pull_request:
+    paths:
+      - 'reliability/**'
+      - 'security-tests/**'
+      - 'tests/load/**'
+      - 'workstreams/ws20/**'
+      - 'server/**'
+      - '.github/workflows/ws20-reliability.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reliability-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Static security audit
+        id: static_audit
+        continue-on-error: true
+        run: node security-tests/static-source-audit.mjs
+
+      - name: Install legacy admin API dependencies
+        working-directory: server
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Service lifecycle and restart
+        id: lifecycle
+        continue-on-error: true
+        run: node reliability/service-lifecycle-probe.mjs
+
+      - name: Database unavailable survival
+        run: node reliability/db-unavailable-probe.mjs
+
+      - name: WebSocket harness self-test
+        run: node tests/load/ws-harness-selftest.mjs
+
+      - name: Start local admin API target
+        env:
+          PORT: '8787'
+          NODE_ENV: test
+          KO_DB_ENABLED: 'false'
+          ROOT_OWNER_USER: WS20_OWNER
+          ROOT_OWNER_PASSWORD: ws20-test-only-password
+          SESSION_SECRET: ws20-test-only-session-secret-32-bytes-minimum
+        run: |
+          node server/src/index.js > /tmp/ws20-admin.log 2>&1 &
+          echo $! > /tmp/ws20-admin.pid
+
+      - name: Unauthorized admin and oversized HTTP probes
+        run: node security-tests/admin-http-probe.mjs
+
+      - name: Invalid auth spam and rate-limit load
+        run: node tests/load/http-auth-storm.mjs
+
+      - name: Stop local admin API target
+        if: always()
+        run: |
+          if [ -f /tmp/ws20-admin.pid ]; then kill "$(cat /tmp/ws20-admin.pid)" 2>/dev/null || true; fi
+          cat /tmp/ws20-admin.log 2>/dev/null || true
+
+      - name: Resource leak indicator soak
+        run: node reliability/resource-leak-probe.mjs
+
+      - name: Product WebSocket probe when integration target is provided
+        env:
+          WS20_WS_TARGET: ${{ vars.WS20_WS_TARGET }}
+          WS20_WS_HEALTH_URL: ${{ vars.WS20_WS_HEALTH_URL }}
+        run: node tests/load/ws-target-probe.mjs
+
+      - name: Container recovery when WS09 test compose is provided
+        env:
+          WS20_COMPOSE_FILE: ${{ vars.WS20_COMPOSE_FILE }}
+          WS20_COMPOSE_SERVICE: ${{ vars.WS20_COMPOSE_SERVICE }}
+          WS20_CONTAINER_HEALTH_URL: ${{ vars.WS20_CONTAINER_HEALTH_URL }}
+        run: node reliability/container-recovery.mjs
+
+      - name: Security/reliability gate
+        if: always()
+        run: |
+          failed=0
+          if [ "${{ steps.static_audit.outcome }}" != "success" ]; then
+            echo 'Blocking HIGH/CRITICAL static security finding remains.'
+            failed=1
+          fi
+          if [ "${{ steps.lifecycle.outcome }}" != "success" ]; then
+            echo 'Graceful shutdown lifecycle requirement is not met.'
+            failed=1
+          fi
+          exit "$failed"
