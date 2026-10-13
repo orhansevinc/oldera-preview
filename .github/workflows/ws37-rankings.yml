@@ -1,0 +1,31 @@
+name: WS37 Rankings
+
+on:
+  push:
+    branches: [ws37-rankings]
+    paths:
+      - 'services/ranking-api/**'
+      - 'tests/ranking-api/**'
+      - 'workstreams/ws37/**'
+      - '.github/workflows/ws37-rankings.yml'
+  pull_request:
+    paths:
+      - 'services/ranking-api/**'
+      - 'tests/ranking-api/**'
+      - 'workstreams/ws37/**'
+      - '.github/workflows/ws37-rankings.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test ranking API
+        run: node --test tests/ranking-api/*.test.mjs

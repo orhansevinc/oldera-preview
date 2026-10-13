@@ -1,0 +1,49 @@
+openapi: 3.1.0
+info:
+  title: OldKOWeb Public Ranking API
+  version: 0.1.0
+paths:
+  /healthz:
+    get:
+      summary: Service health
+      responses:
+        '200': { description: Healthy }
+  /openapi.json:
+    get:
+      summary: Machine-readable OpenAPI document
+      responses:
+        '200': { description: OpenAPI document }
+  /v1/rankings/characters:
+    get:
+      summary: Character ranking by selected metric
+      parameters:
+        - { name: metric, in: query, schema: { type: string, enum: [level, national_points], default: level } }
+        - { name: nation, in: query, schema: { type: string, enum: [karus, el_morad] } }
+        - { name: class, in: query, schema: { type: string, maxLength: 32 } }
+        - { name: q, in: query, schema: { type: string, maxLength: 64 } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        '200': { description: Ranking snapshot }
+        '400': { description: Invalid query }
+  /v1/rankings/levels:
+    get:
+      summary: Level ranking
+      responses:
+        '200': { description: Ranking snapshot }
+  /v1/rankings/national-points:
+    get:
+      summary: National point ranking
+      responses:
+        '200': { description: Ranking snapshot }
+  /v1/rankings/clans:
+    get:
+      summary: Clan ranking
+      parameters:
+        - { name: nation, in: query, schema: { type: string, enum: [karus, el_morad] } }
+        - { name: q, in: query, schema: { type: string, maxLength: 64 } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        '200': { description: Ranking snapshot }
+        '400': { description: Invalid query }
