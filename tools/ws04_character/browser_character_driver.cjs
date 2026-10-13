@@ -88,10 +88,11 @@ const { PNG } = require('pngjs');
     return png;
   };
 
-  // Request capture from RHIDeviceGL::Present().  The hook reads the real KO
+  // Request capture from RHIDeviceGL::Present(). The hook reads the real KO
   // backbuffer immediately before SDL_GL_SwapWindow and writes a PPM into
-  // Emscripten MEMFS.  This is deterministic and does not depend on Chrome's
-  // compositor or on a post-present WebGL buffer that may already be discarded.
+  // Emscripten MEMFS. SwiftShader can spend ~20s in the synchronous GL readback,
+  // which starves page polling; use the native console completion marker instead
+  // of a shorter page.waitForFunction timeout that races the render thread.
   const capture = async name => {
     const id = ++captureSequence;
     const path = `/ws04-frame-${id}.ppm`;
@@ -103,14 +104,10 @@ const { PNG } = require('pngjs');
       globalThis.WS04_CAPTURE_REQUEST = requestId;
     }, id);
 
-    await page.waitForFunction(requestId => {
-      return globalThis.WS04_CAPTURE_READY === requestId
-        || globalThis.WS04_CAPTURE_READY === -requestId;
-    }, id, { timeout: 12000 });
+    await waitForRuntime(`WS04_GL_CAPTURE id=${id} ok=1`, 45000);
 
     const ready = await page.evaluate(() => globalThis.WS04_CAPTURE_READY || 0);
     if (ready !== id) throw new Error(`native GL capture failed id=${id} ready=${ready}`);
-    await waitForRuntime(`WS04_GL_CAPTURE id=${id} ok=1`, 5000);
 
     const b64 = await page.evaluate(memfsPath => {
       const bytes = Module.FS.readFile(memfsPath);
@@ -175,11 +172,12 @@ const { PNG } = require('pngjs');
     await waitForRuntime('game server login answered: nation=0', 30000);
     await waitForRuntime('scene change: login -> nation-select', 30000);
 
-    await page.waitForTimeout(1000);
-    await assertVisual('NATION', 'nation');
-
+    // Nation Select visual/runtime behavior is already covered by the canonical
+    // base gate. WS04 starts its own expensive native GL visual proof at the
+    // first scene it owns: Character Select.
+    await page.waitForTimeout(700);
     await page.locator('#canvas').focus();
-    await page.mouse.click(258, 495, { delay: 100 }); // real El Morad button
+    await page.mouse.click(258, 495, { delay: 100 }); // genuine El Morad button
     await waitForRuntime('scene change: nation-select -> character-select', 20000);
     await waitForRuntime('WS04_CHAR_LIST parsed result=1 slots=3 occupied=0', 20000);
     await page.waitForTimeout(1000);
