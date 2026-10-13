@@ -1,0 +1,180 @@
+import { AppError, badRequest, conflict, forbidden, locked, unauthorized } from './errors.js';
+import { normalizeEmail, normalizeUsername, requireToken, validatePassword } from './validation.js';
+import { digestToken, newId, newOpaqueToken, ScryptPasswordHasher } from './security.js';
+import { SecurityGate } from './rate-limit.js';
+
+const RESET_TTL_MS = 30 * 60_000;
+const VERIFY_TTL_MS = 24 * 60 * 60_000;
+
+function activeBan(account, now) {
+  if (!account.ban?.active) return null;
+  if (account.ban.until && account.ban.until <= now) return null;
+  return {
+    code: account.ban.code || 'ACCOUNT_BANNED',
+    until: account.ban.until || null,
+    permanent: !account.ban.until
+  };
+}
+
+export class AccountService {
+  constructor({ repository, delivery, audit, hasher = new ScryptPasswordHasher(), securityGate = new SecurityGate(), clock = () => Date.now() }) {
+    this.repository = repository;
+    this.delivery = delivery;
+    this.audit = audit;
+    this.hasher = hasher;
+    this.securityGate = securityGate;
+    this.clock = clock;
+  }
+
+  async usernameAvailability(rawUsername, context = { ip: 'unknown' }) {
+    const now = this.clock();
+    this.securityGate.assertRate(`username-availability:ip:${context.ip}`, { limit: 30, windowMs: 60_000 }, now);
+    const { username, canonical } = normalizeUsername(rawUsername);
+    const exists = await this.repository.findByUsernameCanonical(canonical);
+    return { username, available: !exists };
+  }
+
+  async register(input, context) {
+    const now = this.clock();
+    const { username, canonical } = normalizeUsername(input.username);
+    const email = normalizeEmail(input.email);
+    validatePassword(input.password, username);
+    this.securityGate.assertRate(`register:ip:${context.ip}`, { limit: 5, windowMs: 60 * 60_000 }, now);
+
+    if (await this.repository.findByUsernameCanonical(canonical)) throw conflict('USERNAME_TAKEN', 'Username is already in use');
+    if (await this.repository.findByEmail(email)) throw conflict('EMAIL_TAKEN', 'Email is already in use');
+
+    const account = {
+      id: newId(),
+      username,
+      usernameCanonical: canonical,
+      email,
+      passwordHash: await this.hasher.hash(input.password),
+      verifiedAt: null,
+      passwordVersion: 1,
+      ban: { active: false, code: null, until: null },
+      createdAt: now,
+      updatedAt: now
+    };
+    await this.repository.createAccount(account);
+    this.audit.emit({ event: 'account_registered', accountId: account.id, requestId: context.requestId, ip: context.ip });
+    await this.#issueVerification(account, context, now);
+    return { id: account.id, username: account.username, verificationRequired: true };
+  }
+
+  async accessCheck(input, context) {
+    const now = this.clock();
+    const { canonical } = normalizeUsername(input.username);
+    this.securityGate.assertCredentialAllowed(context.ip, canonical, now);
+    const account = await this.repository.findByUsernameCanonical(canonical);
+    const valid = account && await this.hasher.verify(input.password ?? '', account.passwordHash);
+    if (!valid) {
+      this.securityGate.recordCredentialFailure(context.ip, canonical, now);
+      this.audit.emit({ event: 'access_check_failed', usernameCanonical: canonical, requestId: context.requestId, ip: context.ip });
+      throw unauthorized();
+    }
+    this.securityGate.clearCredentialFailures(context.ip, canonical);
+    const ban = activeBan(account, now);
+    if (ban) {
+      this.audit.emit({ event: 'access_check_banned', accountId: account.id, requestId: context.requestId, ip: context.ip, banCode: ban.code });
+      throw locked('ACCOUNT_BANNED', 'Account access is suspended', ban);
+    }
+    if (!account.verifiedAt) throw forbidden('ACCOUNT_UNVERIFIED', 'Account verification is required');
+    this.audit.emit({ event: 'access_check_succeeded', accountId: account.id, requestId: context.requestId, ip: context.ip });
+    return { accountId: account.id, username: account.username, access: 'allowed', passwordVersion: account.passwordVersion };
+  }
+
+  async changePassword(input, context) {
+    const now = this.clock();
+    const { canonical, username } = normalizeUsername(input.username);
+    this.securityGate.assertCredentialAllowed(context.ip, canonical, now);
+    validatePassword(input.newPassword, username);
+    const account = await this.repository.findByUsernameCanonical(canonical);
+    if (!account || !(await this.hasher.verify(input.currentPassword ?? '', account.passwordHash))) {
+      this.securityGate.recordCredentialFailure(context.ip, canonical, now);
+      this.audit.emit({ event: 'password_change_failed', usernameCanonical: canonical, requestId: context.requestId, ip: context.ip });
+      throw unauthorized();
+    }
+    this.securityGate.clearCredentialFailures(context.ip, canonical);
+    if (await this.hasher.verify(input.newPassword, account.passwordHash)) throw new AppError(400, 'PASSWORD_REUSE', 'New password must be different');
+    const passwordHash = await this.hasher.hash(input.newPassword);
+    await this.repository.updateAccount(account.id, { passwordHash, passwordVersion: account.passwordVersion + 1, updatedAt: now });
+    this.audit.emit({ event: 'password_changed', accountId: account.id, requestId: context.requestId, ip: context.ip });
+    return { changed: true };
+  }
+
+  async requestPasswordReset(input, context) {
+    const now = this.clock();
+    this.securityGate.assertRate(`reset:ip:${context.ip}`, { limit: 5, windowMs: 15 * 60_000 }, now);
+    const account = await this.#findAccountSelector(input);
+    if (account) {
+      const token = newOpaqueToken();
+      await this.repository.createActionToken({ id: newId(), kind: 'password_reset', accountId: account.id, digest: digestToken(token), expiresAt: now + RESET_TTL_MS, consumedAt: null, createdAt: now });
+      try {
+        await this.delivery.sendPasswordReset({ accountId: account.id, email: account.email, token, expiresAt: now + RESET_TTL_MS });
+      } catch (error) {
+        this.audit.emit({ event: 'delivery_failed', kind: 'password_reset', accountId: account.id, requestId: context.requestId, errorClass: error?.name || 'Error' });
+      }
+      this.audit.emit({ event: 'password_reset_requested', accountId: account.id, requestId: context.requestId, ip: context.ip });
+    } else {
+      this.audit.emit({ event: 'password_reset_requested_unknown', requestId: context.requestId, ip: context.ip });
+    }
+    return { accepted: true };
+  }
+
+  async confirmPasswordReset(input, context) {
+    const now = this.clock();
+    this.securityGate.assertRate(`reset-confirm:ip:${context.ip}`, { limit: 10, windowMs: 15 * 60_000 }, now);
+    const token = requireToken(input.token);
+    const record = await this.repository.consumeActionToken('password_reset', digestToken(token), now);
+    if (!record) throw new AppError(400, 'INVALID_OR_EXPIRED_TOKEN', 'Token is invalid or expired');
+    const target = await this.#findById(record.accountId);
+    if (!target) throw new AppError(400, 'INVALID_OR_EXPIRED_TOKEN', 'Token is invalid or expired');
+    validatePassword(input.newPassword, target.username);
+    const passwordHash = await this.hasher.hash(input.newPassword);
+    await this.repository.updateAccount(target.id, { passwordHash, passwordVersion: target.passwordVersion + 1, updatedAt: now });
+    this.audit.emit({ event: 'password_reset_completed', accountId: target.id, requestId: context.requestId, ip: context.ip });
+    return { changed: true };
+  }
+
+  async requestVerification(input, context) {
+    const now = this.clock();
+    this.securityGate.assertRate(`verify:ip:${context.ip}`, { limit: 5, windowMs: 15 * 60_000 }, now);
+    const account = await this.#findAccountSelector(input);
+    if (account && !account.verifiedAt) await this.#issueVerification(account, context, now);
+    return { accepted: true };
+  }
+
+  async confirmVerification(input, context) {
+    const now = this.clock();
+    this.securityGate.assertRate(`verify-confirm:ip:${context.ip}`, { limit: 10, windowMs: 15 * 60_000 }, now);
+    const record = await this.repository.consumeActionToken('account_verification', digestToken(requireToken(input.token)), now);
+    if (!record) throw new AppError(400, 'INVALID_OR_EXPIRED_TOKEN', 'Token is invalid or expired');
+    const account = await this.#findById(record.accountId);
+    if (!account) throw new AppError(400, 'INVALID_OR_EXPIRED_TOKEN', 'Token is invalid or expired');
+    if (!account.verifiedAt) await this.repository.updateAccount(account.id, { verifiedAt: now, updatedAt: now });
+    this.audit.emit({ event: 'account_verified', accountId: account.id, requestId: context.requestId, ip: context.ip });
+    return { verified: true };
+  }
+
+  async #issueVerification(account, context, now) {
+    const token = newOpaqueToken();
+    await this.repository.createActionToken({ id: newId(), kind: 'account_verification', accountId: account.id, digest: digestToken(token), expiresAt: now + VERIFY_TTL_MS, consumedAt: null, createdAt: now });
+    try {
+      await this.delivery.sendVerification({ accountId: account.id, email: account.email, token, expiresAt: now + VERIFY_TTL_MS });
+    } catch (error) {
+      this.audit.emit({ event: 'delivery_failed', kind: 'account_verification', accountId: account.id, requestId: context.requestId, errorClass: error?.name || 'Error' });
+    }
+    this.audit.emit({ event: 'verification_requested', accountId: account.id, requestId: context.requestId, ip: context.ip });
+  }
+
+  async #findAccountSelector(input) {
+    const hasEmail = typeof input?.email === 'string' && input.email.trim().length > 0;
+    const hasUsername = typeof input?.username === 'string' && input.username.trim().length > 0;
+    if (Number(hasEmail) + Number(hasUsername) !== 1) throw badRequest('INVALID_SELECTOR', 'Provide exactly one of username or email');
+    if (hasEmail) return this.repository.findByEmail(normalizeEmail(input.email));
+    return this.repository.findByUsernameCanonical(normalizeUsername(input.username).canonical);
+  }
+
+  async #findById(id) { return this.repository.findById(id); }
+}
