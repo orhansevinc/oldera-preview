@@ -11,13 +11,21 @@
       this.endpoint=options.endpoint||'/api/admin/commands';
       this.authority=options.authority||null;
       this.character=options.character||null;
+      this.account=options.account||null;
+      this.mode=options.mode||'demo';
       this.selectedTarget=null;
       this.enabled=this.authority===ROOT_AUTHORITY;
+    }
+
+    setMode(mode){
+      this.mode=mode==='live'?'live':'demo';
+      return this.mode;
     }
 
     setSession(session){
       this.authority=session?.authority||null;
       this.character=session?.character||null;
+      this.account=session?.account||null;
       this.enabled=this.authority===ROOT_AUTHORITY;
       if(!this.enabled) this.selectedTarget=null;
       return this.enabled;
@@ -44,8 +52,16 @@
         arg,
         reason,
         source:'in-game-owner',
-        actorCharacter:this.character
+        actorCharacter:this.character,
+        actorAccount:this.account,
+        authority:this.authority
       };
+
+      if(this.mode!=='live'){
+        console.info('[OldERA In-Game Owner Demo]',payload);
+        global.dispatchEvent(new CustomEvent('oldera-owner-command',{detail:{ok:true,demo:true,payload}}));
+        return {ok:true,demo:true,payload};
+      }
 
       const response=await fetch(this.endpoint,{
         method:'POST',
@@ -54,7 +70,9 @@
         body:JSON.stringify(payload)
       });
       if(!response.ok) throw new Error(`Owner command failed (${response.status})`);
-      return response.json();
+      const result=await response.json();
+      global.dispatchEvent(new CustomEvent('oldera-owner-command',{detail:result}));
+      return result;
     }
 
     getContextActions(){
