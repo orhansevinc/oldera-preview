@@ -1,0 +1,4 @@
+OldKOWeb real 1298 browser preview
+Source branch: openko-browser-port
+Source commit: 18282d0e70de7ccb30244a9f09e2b3bff3040155
+Published by GitHub Actions from proven OpenKO WASM/WebGL2 package.
