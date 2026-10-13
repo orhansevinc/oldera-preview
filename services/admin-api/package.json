@@ -1,0 +1,11 @@
+{
+  "name": "@oldkoweb/admin-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test ../../tests/admin-api/*.test.js"
+  }
+}
