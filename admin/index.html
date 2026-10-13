@@ -1,172 +1,104 @@
 <!doctype html>
-<html lang="tr">
+<html lang="tr" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="robots" content="noindex,nofollow" />
   <title>OldERA Control Center</title>
   <link rel="stylesheet" href="./admin.css" />
+  <link rel="stylesheet" href="./character-control.css" />
 </head>
 <body>
   <div class="app-shell">
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-mark">OE</div>
-        <div><strong>OldERA</strong><span>CONTROL CENTER</span></div>
-      </div>
-
-      <div class="owner-card">
-        <span class="owner-dot"></span>
-        <div><small>ACTIVE AUTHORITY</small><strong>ROOT OWNER</strong></div>
-      </div>
-
+    <aside class="sidebar" id="sidebar">
+      <div class="brand"><div class="brand-mark">OE</div><div><strong>OldERA</strong><span>CONTROL CENTER</span></div></div>
+      <div class="owner-card"><span class="owner-dot"></span><div><small>AKTİF YETKİ</small><strong>ROOT OWNER</strong></div></div>
       <nav id="sideNav" class="side-nav" aria-label="Admin navigation">
-        <button class="nav-item active" data-view="dashboard"><span>◈</span>Dashboard</button>
-        <button class="nav-item" data-view="players"><span>♟</span>Players</button>
-        <button class="nav-item" data-view="characters"><span>♜</span>Characters</button>
-        <button class="nav-item" data-view="items"><span>◇</span>Items & Economy</button>
-        <button class="nav-item" data-view="world"><span>⌖</span>World & Zones</button>
-        <button class="nav-item" data-view="gm"><span>⚔</span>GM Command Center</button>
-        <button class="nav-item" data-view="server"><span>▣</span>Server Control</button>
-        <button class="nav-item" data-view="logs"><span>≡</span>Audit & Logs</button>
+        <button class="nav-item active" data-view="dashboard"><span>◈</span><b>Dashboard</b><small>Genel durum</small></button>
+        <button class="nav-item" data-view="online"><span>●</span><b>Online Players</b><small>Çevrimiçi oyuncular</small></button>
+        <button class="nav-item" data-view="players"><span>♟</span><b>Players</b><small>Oyuncu arama ve sıralama</small></button>
+        <button class="nav-item" data-view="characters"><span>♜</span><b>Characters</b><small>Karakter kontrolü</small></button>
+        <button class="nav-item" data-view="items"><span>◇</span><b>Items & Economy</b><small>Item ve ekonomi</small></button>
+        <button class="nav-item" data-view="world"><span>⌖</span><b>World & Zones</b><small>Dünya ve bölgeler</small></button>
+        <button class="nav-item" data-view="gm"><span>⚔</span><b>GM Command Center</b><small>1298 GM komutları</small></button>
+        <button class="nav-item" data-view="server"><span>▣</span><b>Server Control</b><small>Sunucu yönetimi</small></button>
+        <button class="nav-item" data-view="logs"><span>≡</span><b>Audit & Logs</b><small>İşlem kayıtları</small></button>
       </nav>
-
-      <div class="sidebar-foot">
-        <div class="env"><i></i><span>OldERA I</span><b>ONLINE</b></div>
-        <small>1298 CONTROL PROFILE</small>
-      </div>
+      <div class="sidebar-foot"><div class="env"><i></i><span>OldERA I</span><b>ONLINE</b></div><small>1298 CONTROL PROFILE</small></div>
     </aside>
 
     <main class="main">
       <header class="topbar">
-        <div>
-          <div class="crumb">ADMINISTRATION / <span id="crumbTitle">DASHBOARD</span></div>
-          <h1 id="pageTitle">Control Center</h1>
-        </div>
+        <button id="menuToggle" class="icon-btn mobile-menu" aria-label="Menü">☰</button>
+        <div class="page-heading"><div class="crumb">ADMINISTRATION / <span id="crumbTitle">DASHBOARD</span></div><h1 id="pageTitle">Control Center</h1></div>
         <div class="top-actions">
-          <label class="global-search"><span>⌕</span><input id="globalSearch" placeholder="Account, character, clan, item serial..." /></label>
-          <button class="icon-btn" id="refreshBtn" title="Refresh">↻</button>
+          <label class="global-search"><span>⌕</span><input id="globalSearch" placeholder="Hesap, karakter, clan, item serial..." /></label>
+          <button class="icon-btn" id="themeBtn" title="Tema değiştir">☀</button>
+          <button class="icon-btn" id="refreshBtn" title="Yenile">↻</button>
           <div class="owner-pill"><span>ORHAN</span><small>ROOT OWNER</small></div>
         </div>
       </header>
 
       <section id="dashboard" class="view active">
-        <div class="alert-bar"><strong>OWNER MODE</strong><span>Web panel and in-game admin character will use the same authoritative command service.</span><b>SECURE SESSION</b></div>
-
+        <div class="alert-bar"><strong>OWNER MODE</strong><span>Web paneli ve oyun içi admin karakteri aynı yetkili komut katmanını kullanacak.</span><b>GÜVENLİ OTURUM</b></div>
         <div class="metrics">
-          <article><small>ONLINE PLAYERS</small><strong id="mOnline">247</strong><span class="up">+18 last hour</span></article>
-          <article><small>ACCOUNTS</small><strong id="mAccounts">1,842</strong><span>32 registered today</span></article>
-          <article><small>CHARACTERS</small><strong id="mChars">3,991</strong><span>2.17 / account</span></article>
-          <article><small>SERVER UPTIME</small><strong>19h 42m</strong><span class="ok">Healthy</span></article>
+          <button class="metric-card" data-view-target="online"><small>ONLINE OYUNCU</small><strong>247</strong><span class="up">+18 son 1 saat</span></button>
+          <button class="metric-card" data-view-target="players"><small>HESAPLAR</small><strong>1,842</strong><span>Bugün +32</span></button>
+          <button class="metric-card" data-view-target="players"><small>KARAKTERLER</small><strong>3,991</strong><span>Hesap başına 2.17</span></button>
+          <button class="metric-card" data-view-target="server"><small>SERVER UPTIME</small><strong>19s 42d</strong><span class="ok">Sağlıklı</span></button>
         </div>
-
         <div class="grid-2">
           <article class="panel">
-            <div class="panel-head"><div><small>LIVE OPERATIONS</small><h2>Server Overview</h2></div><span class="live">● LIVE</span></div>
-            <div class="server-overview">
-              <div class="server-ring"><strong>247</strong><span>ONLINE</span></div>
-              <div class="server-bars">
-                <div><label>El Morad <b>131</b></label><span><i style="width:53%"></i></span></div>
-                <div><label>Karus <b>116</b></label><span><i style="width:47%"></i></span></div>
-                <div><label>Moradon <b>92</b></label><span><i style="width:37%"></i></span></div>
-                <div><label>Colony Zone <b>68</b></label><span><i style="width:28%"></i></span></div>
-              </div>
-            </div>
-            <div class="service-row">
-              <div><i class="dot okdot"></i><span>Login</span><b>ONLINE</b></div>
-              <div><i class="dot okdot"></i><span>Game</span><b>ONLINE</b></div>
-              <div><i class="dot okdot"></i><span>Database</span><b>ONLINE</b></div>
-            </div>
+            <div class="panel-head"><div><small>CANLI OPERASYON</small><h2>Sunucu Özeti</h2></div><span class="live">● LIVE</span></div>
+            <div class="server-overview"><button class="server-ring" data-view-target="online"><strong>247</strong><span>ONLINE</span></button><div class="server-bars"><div><label>El Morad <b>131</b></label><span><i style="width:53%"></i></span></div><div><label>Karus <b>116</b></label><span><i style="width:47%"></i></span></div><div><label>Moradon <b>92</b></label><span><i style="width:37%"></i></span></div><div><label>Colony Zone <b>68</b></label><span><i style="width:28%"></i></span></div></div></div>
+            <div class="service-row"><button data-view-target="server"><i class="dot okdot"></i><span>Login Server</span><b>ONLINE</b></button><button data-view-target="server"><i class="dot okdot"></i><span>Game Server</span><b>ONLINE</b></button><button data-view-target="server"><i class="dot okdot"></i><span>Database</span><b>ONLINE</b></button></div>
           </article>
-
           <article class="panel">
-            <div class="panel-head"><div><small>FAST ACCESS</small><h2>Owner Actions</h2></div><span class="muted">1298 GM core</span></div>
-            <div class="action-grid">
-              <button data-command="NOTICEALL"><b>NOTICE ALL</b><span>Global announcement</span></button>
-              <button data-command="SUMMONUSER"><b>SUMMON USER</b><span>Bring player to owner</span></button>
-              <button data-command="INVISIBLE"><b>INVISIBLE</b><span>Toggle GM visibility</span></button>
-              <button data-command="ARREST"><b>ARREST</b><span>GM enforcement action</span></button>
-              <button data-command="FORBIDCHAT"><b>FORBID CHAT</b><span>Mute selected player</span></button>
-              <button data-command="CUTOFF"><b>CUTOFF</b><span>Disconnect selected player</span></button>
-            </div>
+            <div class="panel-head"><div><small>HIZLI ERİŞİM</small><h2>Owner İşlemleri</h2></div><span class="muted">1298 GM Core</span></div>
+            <div class="action-grid"><button data-command="NOTICEALL"><b>NOTICE ALL</b><span>Tüm oyunculara duyuru gönder</span></button><button data-command="SUMMONUSER"><b>SUMMON USER</b><span>Oyuncuyu yanına çağır</span></button><button data-command="INVISIBLE"><b>INVISIBLE</b><span>GM görünmezliğini aç / kapat</span></button><button data-command="ARREST"><b>ARREST</b><span>Oyuncunun bulunduğu yere git / takip et</span></button><button data-command="FORBIDCHAT"><b>FORBID CHAT</b><span>Oyuncunun sohbetini yasakla</span></button><button data-command="CUTOFF"><b>CUTOFF</b><span>Oyuncunun bağlantısını kes</span></button></div>
           </article>
         </div>
+      </section>
 
-        <div class="grid-2 lower">
-          <article class="panel">
-            <div class="panel-head"><div><small>PLAYER FINDER</small><h2>Direct Character Control</h2></div></div>
-            <form class="player-find" id="playerFindForm">
-              <input id="playerFindInput" value="osevinc" placeholder="Character name" />
-              <button>SEARCH</button>
-            </form>
-            <div class="player-card" id="playerCard">
-              <div class="portrait">O</div>
-              <div class="player-main"><small>ONLINE · MORADON</small><strong>osevinc</strong><span>Level 70 · Warrior · El Morad</span></div>
-              <div class="player-numbers"><div><small>NP</small><b>48,920</b></div><div><small>COIN</small><b>37.4M</b></div></div>
-              <button class="open-btn" data-view-target="characters">OPEN CONTROL</button>
-            </div>
-          </article>
-
-          <article class="panel">
-            <div class="panel-head"><div><small>SECURITY</small><h2>Recent Admin Activity</h2></div><button class="text-btn" data-view-target="logs">VIEW ALL</button></div>
-            <div class="timeline" id="timeline">
-              <div><time>21:17:42</time><i></i><p><b>ORHAN</b> opened Control Center <span>OWNER_LOGIN</span></p></div>
-              <div><time>21:13:08</time><i></i><p><b>SYSTEM</b> server health check passed <span>HEALTH_OK</span></p></div>
-              <div><time>20:58:31</time><i></i><p><b>SYSTEM</b> economy snapshot generated <span>ECONOMY_SCAN</span></p></div>
-            </div>
-          </article>
-        </div>
+      <section id="online" class="view">
+        <article class="panel full">
+          <div class="panel-head"><div><small>CANLI OYUNCULAR</small><h2>Online Players</h2></div><span class="live">● 247 ONLINE</span></div>
+          <div class="player-tools"><label class="field grow"><span>İsme göre ara</span><input id="onlineSearch" placeholder="Karakter adı yaz..." /></label><label class="field"><span>Sırala</span><select id="onlineSort"><option value="np-desc">NP ↓</option><option value="level-desc">Level ↓</option><option value="name-asc">İsim A-Z</option><option value="zone-asc">Zone A-Z</option></select></label><label class="field"><span>Nation</span><select id="onlineNation"><option value="all">Tümü</option><option value="El Morad">El Morad</option><option value="Karus">Karus</option></select></label></div>
+          <div class="player-grid" id="onlinePlayerGrid"></div>
+        </article>
       </section>
 
       <section id="players" class="view">
         <article class="panel full">
-          <div class="panel-head"><div><small>ACCOUNT / CHARACTER LOOKUP</small><h2>Player Search</h2></div><span class="muted">Account · Character · Clan · IP · Serial</span></div>
-          <div class="search-builder">
-            <select><option>Character</option><option>Account</option><option>Clan</option><option>Item Serial</option><option>IP</option></select>
-            <input value="osevinc" />
-            <button>SEARCH DATABASE</button>
-          </div>
-          <div class="table-wrap"><table><thead><tr><th>Status</th><th>Character</th><th>Account</th><th>Nation</th><th>Class</th><th>Level</th><th>Zone</th><th>Last Activity</th><th></th></tr></thead><tbody><tr><td><span class="badge green">ONLINE</span></td><td><b>osevinc</b></td><td>osevinc</td><td>El Morad</td><td>Warrior</td><td>70</td><td>Moradon</td><td>Now</td><td><button class="mini" data-view-target="characters">CONTROL</button></td></tr></tbody></table></div>
+          <div class="panel-head"><div><small>OYUNCU VERİTABANI</small><h2>Players & Rankings</h2></div><span class="muted">Karaktere tıklayarak tam kontrol ekranını aç</span></div>
+          <div class="player-tools"><label class="field grow"><span>Oyuncu ara</span><input id="playerSearch" placeholder="Karakter / hesap / clan..." /></label><label class="field"><span>Sırala</span><select id="playerSort"><option value="np-desc">NP yüksekten düşüğe</option><option value="level-desc">Level yüksekten düşüğe</option><option value="coin-desc">Coin yüksekten düşüğe</option><option value="name-asc">İsim A-Z</option></select></label><label class="field"><span>Durum</span><select id="playerStatus"><option value="all">Tümü</option><option value="online">Online</option><option value="offline">Offline</option><option value="banned">Banned</option></select></label></div>
+          <div class="table-wrap"><table class="players-table"><thead><tr><th>Görünüm</th><th>Durum</th><th>Karakter</th><th>Nation</th><th>Class</th><th>Level</th><th>NP</th><th>Coin</th><th>Zone</th><th>Son Aktivite</th></tr></thead><tbody id="playersBody"></tbody></table></div>
         </article>
       </section>
 
-      <section id="characters" class="view">
-        <div class="character-head panel">
-          <div class="portrait big">O</div>
-          <div class="char-title"><small>ONLINE · SESSION #A17F</small><h2>osevinc</h2><span>Level 70 Warrior · El Morad · Moradon</span></div>
-          <div class="char-actions"><button data-command="SUMMONUSER">SUMMON</button><button data-command="VIEW">VIEW</button><button class="danger" data-command="CUTOFF">DISCONNECT</button></div>
-        </div>
-        <div class="tabs" id="charTabs"><button class="active" data-tab="overview">Overview</button><button data-tab="inventory">Inventory</button><button data-tab="inn">Inn Hostess</button><button data-tab="stats">Stats & Skills</button><button data-tab="history">Transactions</button><button data-tab="sanctions">Sanctions</button></div>
-        <div class="grid-3">
-          <article class="panel"><small>POSITION</small><h3>Moradon</h3><div class="kv"><span>Zone ID</span><b>21</b><span>X / Z</span><b>815 / 430</b><span>Bind</span><b>Moradon</b></div><button class="wide">TELEPORT / REPOSITION</button></article>
-          <article class="panel"><small>CHARACTER CORE</small><h3>Combat State</h3><div class="kv"><span>HP</span><b>3,842 / 3,842</b><span>MP</span><b>1,204 / 1,204</b><span>EXP</span><b>62.4%</b></div><button class="wide">EDIT CHARACTER</button></article>
-          <article class="panel"><small>AUTHORITY</small><h3>Account State</h3><div class="kv"><span>Login</span><b class="ok">Allowed</b><span>Chat</span><b class="ok">Allowed</b><span>Trade</span><b class="ok">Allowed</b></div><button class="wide danger" data-command="FORBIDUSER">SANCTION</button></article>
-        </div>
-      </section>
+      <section id="characters" class="view"><div class="loading-card">Karakter kontrol modülü yükleniyor...</div></section>
 
-      <section id="items" class="view"><article class="panel full"><div class="panel-head"><div><small>ITEM DATABASE & ECONOMY</small><h2>Item Control</h2></div></div><p class="placeholder">Item search, unique serial tracing, inventory/bank ownership history, creation source, upgrade history and economy counters will live here. The action layer is reserved for server-authoritative operations only.</p></article></section>
-      <section id="world" class="view"><article class="panel full"><div class="panel-head"><div><small>1298 WORLD CONTROL</small><h2>Zones · NPC · Monsters · Weather</h2></div></div><div class="action-grid large"><button data-command="RAINING"><b>RAINING</b><span>Original GM command</span></button><button data-command="SNOWING"><b>SNOWING</b><span>Original GM command</span></button><button data-command="TIME"><b>TIME</b><span>World time control</span></button><button data-command="CLEAN"><b>CLEAN</b><span>World cleanup command</span></button></div></article></section>
+      <section id="items" class="view"><article class="panel full"><div class="panel-head"><div><small>ITEM DATABASE & ECONOMY</small><h2>Item Control</h2></div></div><div class="empty-state"><b>Item veritabanı kontrolü</b><span>Serial arama, sahiplik geçmişi, upgrade geçmişi ve ekonomi görünümü bu servise bağlanacak.</span><button data-demo-action="Item arama konsolu">ITEM SEARCH</button></div></article></section>
+
+      <section id="world" class="view"><article class="panel full"><div class="panel-head"><div><small>1298 WORLD CONTROL</small><h2>World · Zones · Weather</h2></div></div><div class="action-grid large"><button data-command="RAINING"><b>RAINING</b><span>Yağmuru aç / kapat</span></button><button data-command="SNOWING"><b>SNOWING</b><span>Karı aç / kapat</span></button><button data-command="TIME"><b>TIME</b><span>Dünya saatini kontrol et</span></button><button data-command="CLEAN"><b>CLEAN</b><span>Dünya temizleme komutu</span></button></div></article></section>
 
       <section id="gm" class="view">
-        <article class="panel full">
-          <div class="panel-head"><div><small>ORIGINAL 1298 ADMIN COMMAND SURFACE</small><h2>GM Command Center</h2></div><span class="badge gold">ROOT OWNER</span></div>
-          <div class="command-toolbar"><input id="gmTarget" placeholder="Target character (optional)" value="osevinc"/><input id="gmArg" placeholder="Command argument / message"/><button id="dryRunBtn">EXECUTE SELECTED</button></div>
-          <div class="command-list" id="commandList"></div>
-        </article>
+        <article class="panel full"><div class="panel-head"><div><small>ORIGINAL 1298 ADMIN COMMAND SURFACE</small><h2>GM Command Center</h2></div><span class="badge gold">ROOT OWNER</span></div><div class="command-toolbar"><label class="field grow"><span>Hedef karakter</span><input id="gmTarget" value="osevinc" /></label><label class="field grow"><span>Komut argümanı / mesaj</span><input id="gmArg" placeholder="Mesaj veya ek değer" /></label><button id="dryRunBtn">SEÇİLİ KOMUTU ÇALIŞTIR</button></div><div class="command-list" id="commandList"></div></article>
       </section>
 
       <section id="server" class="view">
-        <div class="grid-2">
-          <article class="panel"><div class="panel-head"><div><small>RUNTIME</small><h2>Server Services</h2></div></div><div class="service-list"><div><span><i class="dot okdot"></i>Login Server</span><b>ONLINE</b></div><div><span><i class="dot okdot"></i>Game Server</span><b>ONLINE</b></div><div><span><i class="dot okdot"></i>Database</span><b>ONLINE</b></div><div><span><i class="dot okdot"></i>Admin Command Bus</span><b>READY</b></div></div></article>
-          <article class="panel danger-panel"><div class="panel-head"><div><small>CRITICAL OPERATIONS</small><h2>Owner Only</h2></div></div><p>Restart, maintenance and shutdown controls require re-authentication and an audit reason before execution.</p><div class="critical-actions"><button>MAINTENANCE MODE</button><button>RESTART GAME SERVICE</button><button class="danger">SHUTDOWN</button></div></article>
+        <div class="server-stack">
+          <article class="panel"><div class="panel-head"><div><small>RUNTIME</small><h2>Server Services</h2></div><span class="live">● SYSTEM LIVE</span></div><div class="service-list large-services"><button data-demo-action="Login Server detayları"><span><i class="dot okdot"></i><strong>Login Server</strong><small>Hesap giriş servisi</small></span><b>ONLINE</b></button><button data-demo-action="Game Server detayları"><span><i class="dot okdot"></i><strong>Game Server</strong><small>Dünya ve oyuncu oturumları</small></span><b>ONLINE</b></button><button data-demo-action="Database detayları"><span><i class="dot okdot"></i><strong>Database</strong><small>Karakter / item / hesap verisi</small></span><b>ONLINE</b></button><button data-demo-action="Admin Command Bus detayları"><span><i class="dot okdot"></i><strong>Admin Command Bus</strong><small>Panel ve oyun içi Owner komut köprüsü</small></span><b>READY</b></button></div></article>
+          <article class="panel danger-panel"><div class="panel-head"><div><small>KRİTİK OPERASYONLAR</small><h2>Owner Only</h2></div><span class="badge gold">ROOT ONLY</span></div><p>Restart, bakım ve shutdown işlemlerinde işlem nedeni + ikinci onay alınacak ve audit log tutulacak.</p><div class="critical-actions"><button data-critical="MAINTENANCE">BAKIM MODU <span>Oyuncu girişlerini kontrollü kapat / aç</span></button><button data-critical="RESTART_GAME">GAME SERVICE RESTART <span>Oyun servisini güvenli şekilde yeniden başlat</span></button><button class="danger" data-critical="SHUTDOWN">SERVER SHUTDOWN <span>Tüm sistemi kapat — ikinci onay gerekir</span></button></div></article>
         </div>
       </section>
 
-      <section id="logs" class="view"><article class="panel full"><div class="panel-head"><div><small>IMMUTABLE OWNER AUDIT</small><h2>Audit & Game Logs</h2></div></div><div class="table-wrap"><table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th><th>Result</th><th>Trace</th></tr></thead><tbody id="auditRows"><tr><td>21:17:42</td><td>ORHAN</td><td>OWNER_LOGIN</td><td>Control Center</td><td><span class="badge green">SUCCESS</span></td><td>A17F-001</td></tr></tbody></table></div></article></section>
+      <section id="logs" class="view"><article class="panel full"><div class="panel-head"><div><small>IMMUTABLE OWNER AUDIT</small><h2>Audit & Game Logs</h2></div></div><div class="table-wrap"><table><thead><tr><th>Saat</th><th>Yetkili</th><th>İşlem</th><th>Hedef</th><th>Sonuç</th><th>Trace</th></tr></thead><tbody id="auditRows"><tr><td>21:17:42</td><td>ORHAN</td><td>OWNER_LOGIN</td><td>Control Center</td><td><span class="badge green">SUCCESS</span></td><td>A17F-001</td></tr></tbody></table></div></article></section>
     </main>
   </div>
-
-  <div class="toast" id="toast"><strong id="toastTitle">Command queued</strong><span id="toastText"></span></div>
+  <div class="toast" id="toast"><strong id="toastTitle">Hazır</strong><span id="toastText"></span></div>
+  <div class="modal-backdrop" id="modalBackdrop" hidden><div class="modal"><small id="modalEyebrow">ROOT OWNER ACTION</small><h2 id="modalTitle">İşlemi onayla</h2><p id="modalText"></p><label class="field"><span>Audit nedeni</span><input id="modalReason" value="ROOT OWNER manual action" /></label><div class="modal-actions"><button id="modalCancel">VAZGEÇ</button><button class="danger" id="modalConfirm">ONAYLA</button></div></div></div>
   <script src="./admin.js"></script>
+  <script src="./character-control.js"></script>
 </body>
 </html>
