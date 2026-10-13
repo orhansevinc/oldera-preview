@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WS42 Browser Audio Probe</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    fieldset { margin: 1rem 0; } input[type=url] { width: 70%; } pre { white-space: pre-wrap; background: #f3f3f3; padding: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>WS42 Browser Audio Probe</h1>
+  <p>This page does not autoplay and does not substitute audio. Test only original KO assets when validating 1298 compatibility.</p>
+
+  <fieldset>
+    <legend>Runtime</legend>
+    <button id="inspect">Inspect existing Emscripten/OpenAL/SDL context</button>
+    <button id="unlock">Unlock / resume (user gesture)</button>
+    <button id="codecs">Codec report</button>
+  </fieldset>
+
+  <fieldset>
+    <legend>Original asset probe</legend>
+    <input id="asset-url" type="url" placeholder="/path/to/original/BGM_Karustown.mp3">
+    <button id="probe">Fetch + decode original asset</button>
+  </fieldset>
+
+  <fieldset>
+    <legend>Compatibility controls</legend>
+    <label>Volume <input id="volume" type="range" min="0" max="1" step="0.01" value="1"></label>
+    <label><input id="mute" type="checkbox"> Mute</label>
+    <p>These controls report the desired master gain. They affect game audio only after the shared client integration patch wires the callback to the engine master route.</p>
+  </fieldset>
+
+  <pre id="output">Ready. No autoplay attempted.</pre>
+  <script type="module" src="./probe.mjs"></script>
+</body>
+</html>
