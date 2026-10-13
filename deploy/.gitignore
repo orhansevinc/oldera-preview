@@ -1,0 +1,15 @@
+# Runtime secrets and certificates
+secrets/*.txt
+tls/*
+
+# Generated backups
+backups/*
+
+# Staged release artifacts (built by release pipeline)
+artifacts/site/*
+artifacts/play/*
+artifacts/admin/*
+
+# Keep documentation tracked
+!artifacts/README.md
+!secrets/README.md

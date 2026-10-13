@@ -1,0 +1,79 @@
+name: WS09 deployment config
+
+on:
+  push:
+    branches: [ws09-production-infra]
+    paths:
+      - 'infra/**'
+      - 'deploy/**'
+      - 'workstreams/ws09/**'
+      - 'docker-compose.ws09.yml'
+      - '.github/workflows/ws09-deploy.yml'
+  pull_request:
+    paths:
+      - 'infra/**'
+      - 'deploy/**'
+      - 'workstreams/ws09/**'
+      - 'docker-compose.ws09.yml'
+      - '.github/workflows/ws09-deploy.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare non-secret CI fixtures
+        run: |
+          mkdir -p deploy/secrets deploy/tls deploy/artifacts/{site,play,admin}
+          printf 'ci-only-not-a-secret\n' > deploy/secrets/postgres_password.txt
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -subj '/CN=oldkoweb.local' \
+            -keyout deploy/tls/privkey.pem \
+            -out deploy/tls/fullchain.pem >/dev/null 2>&1
+
+      - name: Static validation
+        run: sh deploy/verify-config.sh
+
+      - name: Docker Compose validation
+        run: docker compose --env-file deploy/.env.example -f docker-compose.ws09.yml config --quiet
+
+      - name: Nginx local template syntax
+        run: |
+          docker run --rm \
+            --add-host gateway:127.0.0.1 \
+            --add-host admin-api:127.0.0.1 \
+            -e OFFICIAL_HOST=oldkoweb.local \
+            -e PLAY_HOST=play.oldkoweb.local \
+            -e ADMIN_HOST=admin.oldkoweb.local \
+            -e API_HOST=api.oldkoweb.local \
+            -e GATEWAY_HOST=gateway.oldkoweb.local \
+            -e ADMIN_API_PORT=8080 \
+            -e GATEWAY_PORT=8080 \
+            -e 'NGINX_ENVSUBST_FILTER=^(OFFICIAL_HOST|PLAY_HOST|ADMIN_HOST|API_HOST|GATEWAY_HOST|ADMIN_API_PORT|GATEWAY_PORT)$' \
+            -v "$PWD/infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" \
+            -v "$PWD/infra/nginx/mime.types:/etc/nginx/oldkoweb-mime.types:ro" \
+            -v "$PWD/infra/nginx/templates/local.conf.template:/etc/nginx/templates/default.conf.template:ro" \
+            nginx:stable-alpine nginx -t
+
+      - name: Nginx production template syntax
+        run: |
+          docker run --rm \
+            --add-host gateway:127.0.0.1 \
+            --add-host admin-api:127.0.0.1 \
+            -e OFFICIAL_HOST=oldkoweb.com \
+            -e PLAY_HOST=play.oldkoweb.com \
+            -e ADMIN_HOST=admin.oldkoweb.com \
+            -e API_HOST=api.oldkoweb.com \
+            -e GATEWAY_HOST=gateway.oldkoweb.com \
+            -e ADMIN_API_PORT=8080 \
+            -e GATEWAY_PORT=8080 \
+            -e 'NGINX_ENVSUBST_FILTER=^(OFFICIAL_HOST|PLAY_HOST|ADMIN_HOST|API_HOST|GATEWAY_HOST|ADMIN_API_PORT|GATEWAY_PORT)$' \
+            -v "$PWD/infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" \
+            -v "$PWD/infra/nginx/mime.types:/etc/nginx/oldkoweb-mime.types:ro" \
+            -v "$PWD/infra/nginx/templates/production.conf.template:/etc/nginx/templates/default.conf.template:ro" \
+            -v "$PWD/deploy/tls:/etc/nginx/tls:ro" \
+            nginx:stable-alpine nginx -t

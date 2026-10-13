@@ -1,0 +1,24 @@
+types {
+    text/html                             html htm;
+    text/css                              css;
+    text/plain                            txt;
+    application/javascript               js mjs;
+    application/json                     json map;
+    application/wasm                     wasm;
+    application/octet-stream             data bin dxt tbl uif chr n3c n3p n3pm n3shape n3fxpart n3fxbundle opd gtd tct;
+    image/png                             png;
+    image/jpeg                            jpeg jpg;
+    image/gif                             gif;
+    image/webp                            webp;
+    image/svg+xml                         svg svgz;
+    image/x-icon                          ico;
+    font/woff                             woff;
+    font/woff2                            woff2;
+    font/ttf                              ttf;
+    font/otf                              otf;
+    audio/mpeg                            mp3;
+    audio/ogg                             ogg;
+    audio/wav                             wav;
+    video/mp4                             mp4;
+    video/webm                            webm;
+}

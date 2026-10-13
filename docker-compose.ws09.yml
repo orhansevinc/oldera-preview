@@ -1,0 +1,167 @@
+name: oldkoweb
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  logging: *default-logging
+  stop_grace_period: 20s
+
+services:
+  reverse-proxy:
+    <<: *service-defaults
+    image: ${NGINX_IMAGE:-nginx:stable-alpine}
+    ports:
+      - "${HTTP_BIND:-80}:80"
+      - "${HTTPS_BIND:-443}:443"
+    environment:
+      OFFICIAL_HOST: ${OFFICIAL_HOST:-oldkoweb.local}
+      PLAY_HOST: ${PLAY_HOST:-play.oldkoweb.local}
+      ADMIN_HOST: ${ADMIN_HOST:-admin.oldkoweb.local}
+      API_HOST: ${API_HOST:-api.oldkoweb.local}
+      GATEWAY_HOST: ${GATEWAY_HOST:-gateway.oldkoweb.local}
+      ADMIN_API_PORT: ${ADMIN_API_PORT:-8080}
+      GATEWAY_PORT: ${GATEWAY_PORT:-8080}
+      NGINX_ENVSUBST_FILTER: '^(OFFICIAL_HOST|PLAY_HOST|ADMIN_HOST|API_HOST|GATEWAY_HOST|ADMIN_API_PORT|GATEWAY_PORT)$'
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/nginx/mime.types:/etc/nginx/oldkoweb-mime.types:ro
+      - ./infra/nginx/templates/${NGINX_TEMPLATE:-local.conf.template}:/etc/nginx/templates/default.conf.template:ro
+      - ./deploy/artifacts/site:/srv/oldkoweb/site:ro
+      - ./deploy/artifacts/play:/srv/oldkoweb/play:ro
+      - ./deploy/artifacts/admin:/srv/oldkoweb/admin:ro
+      - ${TLS_CERT_DIR:-./deploy/tls}:/etc/nginx/tls:ro
+    depends_on:
+      admin-api:
+        condition: service_started
+      gateway:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/healthz || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - edge
+      - backend
+
+  admin-api:
+    <<: *service-defaults
+    image: ${ADMIN_API_IMAGE:-ghcr.io/orhansevinc/oldkoweb-admin-api:ws08}
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: ${ADMIN_API_PORT:-8080}
+      DATABASE_HOST: db
+      DATABASE_PORT: 5432
+      DATABASE_NAME: ${POSTGRES_DB:-oldkoweb}
+      DATABASE_USER: ${POSTGRES_USER:-oldkoweb}
+      DATABASE_PASSWORD_FILE: /run/secrets/postgres_password
+      TRUST_PROXY: "1"
+    secrets:
+      - postgres_password
+    expose:
+      - "${ADMIN_API_PORT:-8080}"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:${ADMIN_API_PORT:-8080}/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - backend
+
+  ko-session:
+    <<: *service-defaults
+    image: ${KO_SESSION_IMAGE:-ghcr.io/orhansevinc/oldkoweb-ko1298-session:ws03}
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: ${KO_SESSION_PORT:-15001}
+      DATABASE_HOST: db
+      DATABASE_PORT: 5432
+      DATABASE_NAME: ${POSTGRES_DB:-oldkoweb}
+      DATABASE_USER: ${POSTGRES_USER:-oldkoweb}
+      DATABASE_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    expose:
+      - "${KO_SESSION_PORT:-15001}"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"const n=require('net');const s=n.connect(${KO_SESSION_PORT:-15001},'127.0.0.1');s.setTimeout(2000);s.on('connect',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1));s.on('timeout',()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - backend
+
+  gateway:
+    <<: *service-defaults
+    image: ${GATEWAY_IMAGE:-ghcr.io/orhansevinc/oldkoweb-ko-gateway:ws02}
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: ${GATEWAY_PORT:-8080}
+      UPSTREAM_HOST: ko-session
+      UPSTREAM_PORT: ${KO_SESSION_PORT:-15001}
+    expose:
+      - "${GATEWAY_PORT:-8080}"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:${GATEWAY_PORT:-8080}/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      ko-session:
+        condition: service_healthy
+    networks:
+      - backend
+
+  db:
+    <<: *service-defaults
+    image: ${POSTGRES_IMAGE:-postgres:17-alpine}
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-oldkoweb}
+      POSTGRES_USER: ${POSTGRES_USER:-oldkoweb}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    secrets:
+      - postgres_password
+    volumes:
+      - oldkoweb_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-oldkoweb} -d ${POSTGRES_DB:-oldkoweb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - backend
+
+secrets:
+  postgres_password:
+    file: ${POSTGRES_PASSWORD_FILE:-./deploy/secrets/postgres_password.txt}
+
+volumes:
+  oldkoweb_postgres_data:
+    name: oldkoweb_postgres_data
+
+networks:
+  edge:
+    name: oldkoweb_edge
+  backend:
+    name: oldkoweb_backend
+    internal: true

@@ -1,0 +1,104 @@
+# Local/integration mode. No TLS and no claim that public DNS exists.
+server {
+    listen 80 default_server;
+    server_name _;
+    location = /healthz { access_log off; return 200 'ok\n'; add_header Content-Type text/plain; }
+    location / { return 404; }
+}
+
+server {
+    listen 80;
+    server_name ${OFFICIAL_HOST};
+    root /srv/oldkoweb/site;
+    index index.html;
+    location / { try_files $uri $uri/ /index.html; }
+}
+
+server {
+    listen 80;
+    server_name ${PLAY_HOST};
+    root /srv/oldkoweb/play;
+    index index.html;
+
+    location = /index.html {
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+        try_files $uri =404;
+    }
+    location ~* \.wasm$ {
+        add_header Cache-Control "public, max-age=604800, must-revalidate" always;
+        try_files $uri =404;
+    }
+    location ~* \.data$ {
+        add_header Cache-Control "public, max-age=604800, must-revalidate" always;
+        try_files $uri =404;
+    }
+    location ~* ^/releases/[^/]+/.*\.(wasm|data|js)$ {
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        try_files $uri =404;
+    }
+    location /ws {
+        proxy_pass http://gateway:${GATEWAY_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_buffering off;
+    }
+    location / { try_files $uri $uri/ /index.html; }
+}
+
+server {
+    listen 80;
+    server_name ${ADMIN_HOST};
+    root /srv/oldkoweb/admin;
+    index index.html;
+
+    location /api/admin/ {
+        proxy_pass http://admin-api:${ADMIN_API_PORT}/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Request-ID $request_id;
+        proxy_buffering off;
+    }
+    location / { try_files $uri $uri/ /index.html; }
+}
+
+server {
+    listen 80;
+    server_name ${API_HOST};
+    location / {
+        proxy_pass http://admin-api:${ADMIN_API_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Request-ID $request_id;
+    }
+}
+
+server {
+    listen 80;
+    server_name ${GATEWAY_HOST};
+    location / {
+        proxy_pass http://gateway:${GATEWAY_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_buffering off;
+    }
+}
