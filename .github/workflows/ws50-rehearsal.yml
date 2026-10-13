@@ -1,0 +1,81 @@
+name: WS50 Integration Rehearsal
+
+on:
+  push:
+    branches:
+      - ws50-integration-rehearsal
+    paths:
+      - 'tools/ws50_integration/**'
+      - 'integration-rehearsal/**'
+      - 'workstreams/ws50/**'
+      - '.github/workflows/ws50-rehearsal.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rehearsal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout WS50
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch all workstream refs read-only
+        run: |
+          git fetch origin '+refs/heads/*:refs/remotes/origin/*' --prune
+          git rev-parse HEAD
+          git rev-parse origin/main
+
+      - name: Rehearsal unit tests
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          cd tools/ws50_integration
+          python3 -m unittest -v test_rehearse.py
+
+      - name: Assert checkout clean before rehearsal
+        run: |
+          test -z "$(git status --porcelain)"
+          git rev-parse HEAD > "$RUNNER_TEMP/ws50-head-before"
+
+      - name: Run disposable integration rehearsal
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          rm -rf "$RUNNER_TEMP/ws50-output"
+          python3 tools/ws50_integration/rehearse.py \
+            --repo "$GITHUB_WORKSPACE" \
+            --output-root "$RUNNER_TEMP/ws50-output" \
+            | tee "$RUNNER_TEMP/ws50-summary.txt"
+
+      - name: Assert source checkout unchanged
+        run: |
+          test "$(git rev-parse HEAD)" = "$(cat "$RUNNER_TEMP/ws50-head-before")"
+          test -z "$(git status --porcelain)"
+
+      - name: Publish rehearsal summary
+        if: always()
+        run: |
+          if test -f "$RUNNER_TEMP/ws50-output/integration-rehearsal/REHEARSAL_REPORT.md"; then
+            cat "$RUNNER_TEMP/ws50-output/integration-rehearsal/REHEARSAL_REPORT.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test -f "$RUNNER_TEMP/ws50-summary.txt"; then
+            echo '' >> "$GITHUB_STEP_SUMMARY"
+            echo '```text' >> "$GITHUB_STEP_SUMMARY"
+            cat "$RUNNER_TEMP/ws50-summary.txt" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload rehearsal outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ws50-rehearsal-output
+          path: |
+            ${{ runner.temp }}/ws50-output/**
+            ${{ runner.temp }}/ws50-summary.txt
+          if-no-files-found: error
