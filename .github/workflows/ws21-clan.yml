@@ -1,0 +1,30 @@
+name: WS21 Clan Core
+
+on:
+  push:
+    branches:
+      - ws21-clan-core
+    paths:
+      - 'services/ko1298-clan/**'
+      - 'tests/ko1298-clan/**'
+      - 'workstreams/ws21/**'
+      - '.github/workflows/ws21-clan.yml'
+  pull_request:
+    paths:
+      - 'services/ko1298-clan/**'
+      - 'tests/ko1298-clan/**'
+      - 'workstreams/ws21/**'
+      - '.github/workflows/ws21-clan.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check
+        run: node --check services/ko1298-clan/src/*.js
+      - name: Clan domain tests
+        run: node --test tests/ko1298-clan/*.test.cjs

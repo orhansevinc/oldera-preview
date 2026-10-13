@@ -1,0 +1,14 @@
+{
+  "name": "@oldko/ko1298-clan",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OldKO 1298 clan/guild domain core",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "node --test ../../tests/ko1298-clan/*.test.cjs",
+    "check": "node --check src/*.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
