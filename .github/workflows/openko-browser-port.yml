@@ -27,11 +27,24 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+
+          # Emscripten already supplies an OpenAL implementation backed by browser audio.
+          # Do not build/link the desktop openal-soft library, which requires native
+          # pthread scheduler symbols that don't exist in our single-thread web build.
           p = Path('openko/cmake/FindOpenALSoft.cmake')
           s = p.read_text()
-          browser = '''if(EMSCRIPTEN)\n  # Browser builds use Emscripten's OpenAL/WebAudio implementation instead of\n  # desktop openal-soft (which pulls native pthread/scheduler symbols).\n  add_library(OpenAL INTERFACE)\n  target_link_libraries(OpenAL INTERFACE "-lopenal")\n  set(openalsoft_FOUND TRUE)\n  return()\nendif()\n\n'''
+          browser = '''if(EMSCRIPTEN)\n  add_library(OpenAL INTERFACE)\n  target_link_libraries(OpenAL INTERFACE "-lopenal")\n  set(openalsoft_FOUND TRUE)\n  return()\nendif()\n\n'''
           if not s.startswith('if(EMSCRIPTEN)'):
               p.write_text(browser + s)
+
+          # The native Linux package installs the real OpenAL .so using TARGET_FILE.
+          # Our browser OpenAL target is intentionally INTERFACE-only, so omit that
+          # desktop packaging block under Emscripten.
+          p = Path('openko/src/Client/WarFare/CMakeLists.txt')
+          s = p.read_text()
+          s = s.replace('if(UNIX AND NOT APPLE)\n    # Linux: a freedesktop menu entry',
+                        'if(UNIX AND NOT APPLE AND NOT EMSCRIPTEN)\n    # Linux: a freedesktop menu entry')
+          p.write_text(s)
           PY
 
       - name: Install build tools
