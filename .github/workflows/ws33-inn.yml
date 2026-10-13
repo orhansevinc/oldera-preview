@@ -1,0 +1,27 @@
+name: WS33 Inn Storage
+
+on:
+  push:
+    branches: [ws33-inn-storage]
+    paths:
+      - 'services/ko1298-inn/**'
+      - 'tests/ko1298-inn/**'
+      - 'workstreams/ws33/**'
+      - '.github/workflows/ws33-inn.yml'
+  pull_request:
+    paths:
+      - 'services/ko1298-inn/**'
+      - 'tests/ko1298-inn/**'
+      - 'workstreams/ws33/**'
+      - '.github/workflows/ws33-inn.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run WS33 tests
+        run: node --test tests/ko1298-inn/*.test.js
