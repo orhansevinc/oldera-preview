@@ -1,0 +1,32 @@
+name: WS18 Social Core
+
+on:
+  push:
+    paths:
+      - 'services/ko1298-social/**'
+      - 'tests/ko1298-social/**'
+      - 'workstreams/ws18/**'
+      - '.github/workflows/ws18-social.yml'
+  pull_request:
+    paths:
+      - 'services/ko1298-social/**'
+      - 'tests/ko1298-social/**'
+      - 'workstreams/ws18/**'
+      - '.github/workflows/ws18-social.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Check WS18 service syntax
+        run: |
+          node --check services/ko1298-social/constants.js
+          node --check services/ko1298-social/protocol.js
+          node --check services/ko1298-social/social-service.js
+          node --check services/ko1298-social/index.js
+      - name: Run WS18 social tests
+        run: node --test tests/ko1298-social/*.test.js
