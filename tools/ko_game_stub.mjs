@@ -8,9 +8,14 @@ const resultPath = process.env.KO_GAME_RESULT || 'ko-game-result.txt';
 const expectedID = process.env.KO_TEST_ID;
 const expectedPW = process.env.KO_TEST_PW;
 const expectedVersion = Number(process.env.KO_EXPECTED_VERSION || 1298);
+const expectedNation = Number(process.env.KO_SELECTED_NATION || 2); // 2 = El Morad
 
 if (!expectedID || !expectedPW) {
   console.error('[game-stub] KO_TEST_ID and KO_TEST_PW are required at runtime');
+  process.exit(2);
+}
+if (![1, 2].includes(expectedNation)) {
+  console.error(`[game-stub] KO_SELECTED_NATION must be 1 or 2, got ${expectedNation}`);
   process.exit(2);
 }
 
@@ -18,12 +23,29 @@ const u16 = (n) => { const b = Buffer.allocUnsafe(2); b.writeUInt16LE(n & 0xffff
 const frame = (payload) => Buffer.concat([Buffer.from([0xaa, 0x55]), u16(payload.length), payload, Buffer.from([0x55, 0xaa])]);
 const versionOK = frame(Buffer.concat([Buffer.from([0x2b]), u16(expectedVersion)]));
 const gameLoginOKNationUnset = frame(Buffer.from([0x01, 0x00]));
+const nationOK = frame(Buffer.from([0x05, expectedNation]));
+
+// WIZ_ALLCHAR_INFO_REQ response: result=1 and three protocol-valid empty slots.
+// Each record is: uint16 string length + race + int16 class + level + face +
+// hair + zone + 8 * (uint32 item id + uint16 durability) = 57 zero bytes.
+const emptyCharacterRecord = () => Buffer.alloc(57);
+const allCharacterInfoEmpty = frame(Buffer.concat([
+  Buffer.from([0x0c, 0x01]),
+  emptyCharacterRecord(),
+  emptyCharacterRecord(),
+  emptyCharacterRecord(),
+]));
 
 let sawVersionRequest = false;
 let versionResponseSent = false;
 let sawLoginRequest = false;
 let loginMatched = false;
 let loginResponseSent = false;
+let sawNationRequest = false;
+let nationMatched = false;
+let nationResponseSent = false;
+let sawAllCharRequest = false;
+let allCharResponseSent = false;
 
 function parseLogin(payload) {
   let off = 1;
@@ -38,7 +60,9 @@ function parseLogin(payload) {
 }
 
 function mark() {
-  const line = `GAME_CHAIN versionReq=${sawVersionRequest ? 1 : 0} versionResp=${versionResponseSent ? 1 : 0} loginReq=${sawLoginRequest ? 1 : 0} matched=${loginMatched ? 1 : 0} loginResp=${loginResponseSent ? 1 : 0} nation=0 version=${expectedVersion}`;
+  // Keep the original prefix intact so the prior Nation Select proof remains
+  // a regression gate while adding the Character Select chain after it.
+  const line = `GAME_CHAIN versionReq=${sawVersionRequest ? 1 : 0} versionResp=${versionResponseSent ? 1 : 0} loginReq=${sawLoginRequest ? 1 : 0} matched=${loginMatched ? 1 : 0} loginResp=${loginResponseSent ? 1 : 0} nation=0 version=${expectedVersion} nationReq=${sawNationRequest ? 1 : 0} nationMatched=${nationMatched ? 1 : 0} nationResp=${nationResponseSent ? 1 : 0} selectedNation=${expectedNation} allCharReq=${sawAllCharRequest ? 1 : 0} allCharResp=${allCharResponseSent ? 1 : 0} emptySlots=3`;
   fs.writeFileSync(resultPath, line + '\n');
   console.log(`[game-stub] ${line}`);
 }
@@ -88,6 +112,25 @@ const server = net.createServer((socket) => {
           console.log(`[game-stub] sent GAME_LOGIN_OK nation=0 ${gameLoginOKNationUnset.toString('hex')}`);
         }
         mark();
+      } else if (opcode === 0x05) {
+        sawNationRequest = true;
+        const requestedNation = payload.length >= 2 ? payload[1] : 0;
+        nationMatched = requestedNation === expectedNation;
+        console.log(`[game-stub] nation request=${requestedNation} expected=${expectedNation} matched=${nationMatched ? 1 : 0}`);
+        if (nationMatched) {
+          socket.write(nationOK);
+          nationResponseSent = true;
+          console.log(`[game-stub] sent NATION_OK nation=${expectedNation} ${nationOK.toString('hex')}`);
+        }
+        mark();
+      } else if (opcode === 0x0c) {
+        sawAllCharRequest = true;
+        if (nationResponseSent) {
+          socket.write(allCharacterInfoEmpty);
+          allCharResponseSent = true;
+          console.log(`[game-stub] sent ALLCHAR_INFO emptySlots=3 bytes=${allCharacterInfoEmpty.length} hex=${allCharacterInfoEmpty.toString('hex')}`);
+        }
+        mark();
       }
     }
   });
@@ -102,7 +145,12 @@ server.on('error', (e) => {
 
 server.listen(port, host, () => console.log(`[game-stub] listening tcp://${host}:${port}`));
 
-const stop = () => server.close(() => process.exit(
-  sawVersionRequest && versionResponseSent && sawLoginRequest && loginMatched && loginResponseSent ? 0 : 1));
+const complete = () => (
+  sawVersionRequest && versionResponseSent &&
+  sawLoginRequest && loginMatched && loginResponseSent &&
+  sawNationRequest && nationMatched && nationResponseSent &&
+  sawAllCharRequest && allCharResponseSent
+);
+const stop = () => server.close(() => process.exit(complete() ? 0 : 1));
 process.on('SIGTERM', stop);
 process.on('SIGINT', stop);
