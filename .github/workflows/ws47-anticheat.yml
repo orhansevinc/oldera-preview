@@ -1,0 +1,31 @@
+name: WS47 Anti-Cheat Signals
+
+on:
+  push:
+    branches: [ws47-anticheat-signals]
+    paths:
+      - 'services/anticheat-signals/**'
+      - 'tests/anticheat-signals/**'
+      - 'workstreams/ws47/**'
+      - '.github/workflows/ws47-anticheat.yml'
+  pull_request:
+    paths:
+      - 'services/anticheat-signals/**'
+      - 'tests/anticheat-signals/**'
+      - 'workstreams/ws47/**'
+      - '.github/workflows/ws47-anticheat.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test anti-cheat signal framework
+        run: node --test tests/anticheat-signals/*.test.mjs
