@@ -16,26 +16,81 @@ const { PNG } = require('pngjs');
   page.on('console', m => console.log(`[console:${m.type()}] ${m.text()}`));
   page.on('pageerror', e => console.log(`[pageerror] ${e.stack}`));
 
-  const saveEvidence = async () => {
+  const saveStatus = async () => {
     const status = await page.locator('#status').textContent().catch(() => '');
     fs.writeFileSync('browser-nation-status.txt', status || '');
-    await page.locator('#canvas').screenshot({ path: 'browser-nation-canvas.png' }).catch(() => {});
   };
 
-  const assertNationVisual = () => {
-    const png = PNG.sync.read(fs.readFileSync('browser-nation-canvas.png'));
+  const pixelStats = (png) => {
     let nonBlack = 0;
     const total = png.width * png.height;
     for (let i = 0; i < png.data.length; i += 4) {
       const r = png.data[i], g = png.data[i + 1], b = png.data[i + 2], a = png.data[i + 3];
       if (a > 0 && (r > 10 || g > 10 || b > 10)) nonBlack++;
     }
-    const ratio = nonBlack / total;
-    console.log(`[nation-driver] visual nonBlack=${nonBlack}/${total} ratio=${ratio.toFixed(4)}`);
-    if (ratio < 0.01) {
-      throw new Error(`Nation Select canvas is effectively black: ratio=${ratio.toFixed(4)}`);
+    return { nonBlack, total, ratio: nonBlack / total };
+  };
+
+  const captureCompositorEvidence = async () => {
+    const cdp = await page.context().newCDPSession(page);
+    const shot = await Promise.race([
+      cdp.send('Page.captureScreenshot', {
+        format: 'png',
+        fromSurface: true,
+        captureBeyondViewport: false,
+        clip: { x: 0, y: 0, width: 1024, height: 768, scale: 1 }
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('CDP screenshot timed out')), 8000))
+    ]);
+    const buffer = Buffer.from(shot.data, 'base64');
+    fs.writeFileSync('browser-nation-canvas.png', buffer);
+    return pixelStats(PNG.sync.read(buffer));
+  };
+
+  const assertNationVisual = async () => {
+    // Primary gate: inspect the genuine WebGL2 framebuffer directly. This is
+    // independent of Playwright locator screenshot stability/animation rules.
+    const framebuffer = await page.evaluate(() => {
+      const canvas = document.getElementById('canvas');
+      if (!canvas) return { error: 'canvas missing', nonBlack: 0, total: 0, ratio: 0 };
+      const gl = canvas.getContext('webgl2');
+      if (!gl) return { error: 'webgl2 context missing', nonBlack: 0, total: canvas.width * canvas.height, ratio: 0 };
+
+      gl.finish();
+      const pixels = new Uint8Array(canvas.width * canvas.height * 4);
+      gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+      const glError = gl.getError();
+      let nonBlack = 0;
+      for (let i = 0; i < pixels.length; i += 4) {
+        if (pixels[i] > 10 || pixels[i + 1] > 10 || pixels[i + 2] > 10) nonBlack++;
+      }
+      const total = canvas.width * canvas.height;
+      return { glError, nonBlack, total, ratio: total ? nonBlack / total : 0 };
+    });
+
+    console.log(`[nation-driver] framebuffer nonBlack=${framebuffer.nonBlack}/${framebuffer.total} ratio=${Number(framebuffer.ratio || 0).toFixed(4)} glError=${framebuffer.glError ?? 'n/a'}`);
+
+    // Also capture what Chrome actually composites to the viewport. This both
+    // gives us a human-viewable proof PNG and protects against browsers that
+    // discard the default framebuffer immediately after presenting it.
+    let compositor = null;
+    try {
+      compositor = await captureCompositorEvidence();
+      console.log(`[nation-driver] compositor nonBlack=${compositor.nonBlack}/${compositor.total} ratio=${compositor.ratio.toFixed(4)}`);
+    } catch (err) {
+      console.log(`[nation-driver] compositor evidence failed: ${err.message}`);
     }
-    console.log(`[nation-driver] NATION_VISUAL_OK ratio=${ratio.toFixed(4)}`);
+
+    const framebufferRatio = Number(framebuffer.ratio || 0);
+    const compositorRatio = compositor ? compositor.ratio : 0;
+    const ratio = Math.max(framebufferRatio, compositorRatio);
+    const source = compositorRatio >= framebufferRatio ? 'compositor' : 'framebuffer';
+
+    if (ratio < 0.01) {
+      throw new Error(`Nation Select is effectively black: framebuffer=${framebufferRatio.toFixed(4)} compositor=${compositorRatio.toFixed(4)}`);
+    }
+
+    console.log(`[nation-driver] NATION_VISUAL_OK source=${source} ratio=${ratio.toFixed(4)}`);
   };
 
   const pressHeld = async (key, ms = 90) => {
@@ -99,11 +154,12 @@ const { PNG } = require('pngjs');
     }, null, { timeout: 15000 });
 
     await page.waitForTimeout(1000);
-    await saveEvidence();
-    assertNationVisual();
+    await saveStatus();
+    await assertNationVisual();
     console.log('[nation-driver] NATION_UI_OK');
   } catch (err) {
-    await saveEvidence();
+    await saveStatus();
+    console.error(`[nation-driver] failure: ${err.message}`);
     throw err;
   } finally {
     await browser.close();
