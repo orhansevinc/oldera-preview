@@ -1,0 +1,60 @@
+name: WS11 KO1298 Protocol Lab
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ws11-protocol-lab]
+    paths:
+      - 'tools/ws11_protocol/**'
+      - 'protocol-lab/**'
+      - 'tests/protocol-lab/**'
+      - 'workstreams/ws11/**'
+      - '.github/workflows/ws11-protocol.yml'
+  pull_request:
+    paths:
+      - 'tools/ws11_protocol/**'
+      - 'protocol-lab/**'
+      - 'tests/protocol-lab/**'
+      - 'workstreams/ws11/**'
+      - '.github/workflows/ws11-protocol.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  protocol-lab:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Regenerate fixtures and require clean tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/ws11_protocol/generate_fixtures.py
+          git diff --exit-code -- protocol-lab/fixtures protocol-lab/login_to_zone.sequence.json
+
+      - name: Run protocol tests
+        run: python3 -m unittest discover -s tests/protocol-lab -p 'test_*.py' -v
+
+      - name: Decoder smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/ws11_protocol/decode.py \
+            --file protocol-lab/fixtures/login_serverlist_request.bin \
+            --channel login --direction C2S | tee ws11-decode-smoke.json
+          grep -q 'LS_SERVERLIST' ws11-decode-smoke.json
+
+      - name: Replay dry-run smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/ws11_protocol/replay.py \
+            protocol-lab/login_to_zone.sequence.json --channel game --dry-run | tee ws11-replay-smoke.txt
+          grep -q 'game_version_request.bin' ws11-replay-smoke.txt
+          grep -q 'gamestart_phase2_request.bin' ws11-replay-smoke.txt

@@ -1,0 +1,145 @@
+{
+  "format": "ko1298-replay-sequence-v1",
+  "fixture_root": "fixtures",
+  "notes": [
+    "Login and game are separate TCP connections.",
+    "Live replay sends C2S only; S2C steps are documentation/decoder fixtures and are never synthesized onto a live server connection.",
+    "The sequence chooses the nationless branch to demonstrate WIZ_SEL_NATION.",
+    "The empty-character response and later character-select demo are independent source-derived fixtures, not a claim that one real session can select a nonexistent character."
+  ],
+  "steps": [
+    {
+      "order": 1,
+      "channel": "login",
+      "direction": "C2S",
+      "fixture": "login_serverlist_request.bin",
+      "event": "login socket connected"
+    },
+    {
+      "order": 2,
+      "channel": "login",
+      "direction": "S2C",
+      "fixture": "login_serverlist_response_demo.bin",
+      "event": "server list"
+    },
+    {
+      "order": 3,
+      "channel": "login",
+      "direction": "C2S",
+      "fixture": "login_account_request_demo.bin",
+      "event": "credential login"
+    },
+    {
+      "order": 4,
+      "channel": "login",
+      "direction": "S2C",
+      "fixture": "login_account_response_ok.bin",
+      "event": "auth OK"
+    },
+    {
+      "order": 5,
+      "channel": "login",
+      "direction": "C2S",
+      "fixture": "login_news_request.bin",
+      "event": "news request"
+    },
+    {
+      "order": 6,
+      "channel": "login",
+      "direction": "S2C",
+      "fixture": "login_news_response_demo.bin",
+      "event": "news response"
+    },
+    {
+      "order": 7,
+      "channel": "game",
+      "direction": "C2S",
+      "fixture": "game_version_request.bin",
+      "event": "game socket connected"
+    },
+    {
+      "order": 8,
+      "channel": "game",
+      "direction": "S2C",
+      "fixture": "game_version_response_1298_no_crypto.bin",
+      "event": "version 1298; public key 0"
+    },
+    {
+      "order": 9,
+      "channel": "game",
+      "direction": "C2S",
+      "fixture": "game_login_request_demo.bin",
+      "event": "game login"
+    },
+    {
+      "order": 10,
+      "channel": "game",
+      "direction": "S2C",
+      "fixture": "game_login_response_nationless.bin",
+      "event": "nation 0"
+    },
+    {
+      "order": 11,
+      "channel": "game",
+      "direction": "C2S",
+      "fixture": "nation_select_karus_request.bin",
+      "event": "select nation"
+    },
+    {
+      "order": 12,
+      "channel": "game",
+      "direction": "S2C",
+      "fixture": "nation_select_karus_response.bin",
+      "event": "nation selected"
+    },
+    {
+      "order": 13,
+      "channel": "game",
+      "direction": "C2S",
+      "fixture": "allchar_request.bin",
+      "event": "request character slots"
+    },
+    {
+      "order": 14,
+      "channel": "game",
+      "direction": "S2C",
+      "fixture": "allchar_response_empty.bin",
+      "event": "three empty source-layout slots"
+    },
+    {
+      "order": 15,
+      "channel": "game",
+      "direction": "C2S",
+      "fixture": "character_select_request_demo.bin",
+      "event": "independent character-select fixture"
+    },
+    {
+      "order": 16,
+      "channel": "game",
+      "direction": "S2C",
+      "fixture": "character_select_success_demo.bin",
+      "event": "character-select success; client initializes zone"
+    },
+    {
+      "order": 17,
+      "channel": "game",
+      "direction": "C2S",
+      "fixture": "gamestart_phase1_request.bin",
+      "event": "main scene/resource preload complete"
+    },
+    {
+      "order": 18,
+      "channel": "game",
+      "direction": "S2C",
+      "fixture": "gamestart_signal_unknown_body.bin",
+      "event": "server gamestart signal; body UNKNOWN"
+    },
+    {
+      "order": 19,
+      "channel": "game",
+      "direction": "C2S",
+      "fixture": "gamestart_phase2_request.bin",
+      "event": "second gamestart phase"
+    }
+  ]
+}
