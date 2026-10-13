@@ -1,0 +1,31 @@
+name: WS13 Account API
+
+on:
+  push:
+    branches: [ws13-account-api]
+    paths:
+      - 'services/account-api/**'
+      - 'tests/account-api/**'
+      - 'workstreams/ws13/**'
+      - '.github/workflows/ws13-account-api.yml'
+  pull_request:
+    paths:
+      - 'services/account-api/**'
+      - 'tests/account-api/**'
+      - 'workstreams/ws13/**'
+      - '.github/workflows/ws13-account-api.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test WS13 Public Account API
+        run: npm test --prefix services/account-api
