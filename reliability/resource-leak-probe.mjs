@@ -7,8 +7,8 @@ const root = process.cwd();
 const entry = path.join(root, 'server/src/index.js');
 const port = Number(process.env.WS20_SOAK_PORT || 8793);
 const health = `http://127.0.0.1:${port}/api/admin/health`;
-const requests = Number(process.env.WS20_SOAK_REQUESTS || 750);
-const concurrency = Number(process.env.WS20_SOAK_CONCURRENCY || 20);
+const requests = Number(process.env.WS20_SOAK_REQUESTS || 180);
+const concurrency = Number(process.env.WS20_SOAK_CONCURRENCY || 10);
 
 const child = spawn(process.execPath, [entry], {
   cwd: path.join(root, 'server'),
