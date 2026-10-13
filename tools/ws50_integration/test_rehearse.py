@@ -94,6 +94,24 @@ class RehearsalTests(unittest.TestCase):
         finally:
             td.cleanup()
 
+    def test_status_without_sha_uses_branch_head(self):
+        td, repo = self.make_repo()
+        try:
+            cmd(repo, "git", "switch", "-c", "ws04-head-close")
+            (repo / "y.txt").write_text("y\n")
+            commit(repo, "implementation")
+            sp = repo / "workstreams/ws04/STATUS.md"
+            sp.parent.mkdir(parents=True, exist_ok=True)
+            sp.write_text("# WS04 STATUS\n\nCommit: see branch HEAD after commit.\n")
+            commit(repo, "status")
+            cmd(repo, "git", "switch", "main")
+            results, *_ = rehearse.rehearse(repo, Path(td.name) / "output")
+            r = next(x for x in results if x["ws"] == "WS04")
+            self.assertEqual(r["class"], "cleanly integratable")
+            self.assertTrue(any("branch HEAD used" in n for n in r["notes"]))
+        finally:
+            td.cleanup()
+
 
 if __name__ == "__main__":
     unittest.main()

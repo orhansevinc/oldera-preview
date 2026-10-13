@@ -22,11 +22,11 @@ Every discovered WS branch up to WS49 is classified as one of:
 - `missing commit`
 - `test failure`
 
-A branch is not treated as completed merely because it exists. It must be ahead of `main`, contain `workstreams/wsNN/STATUS.md`, and that STATUS must contain a repository commit SHA verifiable as an ancestor of the branch.
+A branch is not treated as completed merely because it exists. It must be ahead of `main` and contain `workstreams/wsNN/STATUS.md`. If STATUS names a commit SHA, that SHA must resolve to a commit that is an ancestor of the branch. If STATUS intentionally omits an explicit SHA, the current branch HEAD is used as the closure candidate and this fallback is recorded in the report.
 
 ## WS40
 
-If `ws40-release-readiness` contains a parseable `MERGE_ORDER`, that order is consumed read-only. If WS40 is absent, identical to `main`, or has no parseable order, the tool records the condition and uses numeric WS order as a deterministic fallback.
+If `ws40-release-readiness` contains a parseable `MERGE_ORDER`, that order is consumed read-only. If the WS40 branch is absent, identical to `main`, or has no parseable order, the tool records that fact and uses numeric WS order as a deterministic fallback.
 
 ## Usage
 
@@ -50,4 +50,4 @@ Generated output tree:
     └── CONFLICTS.md
 ```
 
-Canonical copies committed on the WS50 branch are snapshots of a completed rehearsal run; runner output itself remains outside the source checkout.
+The canonical copies committed on the WS50 branch are snapshots of a completed rehearsal run; the runner output itself stays outside the source checkout.

@@ -160,8 +160,14 @@ def rehearse(repo: Path,output_root: Path):
             if mb.returncode: x["class"]="stale branch"; x["notes"].append("no merge-base with main"); results.append(x); continue
             x["merge_base"]=mb.stdout.strip(); sp=f"workstreams/ws{num(b):02d}/STATUS.md"; st=show(clone,r,sp)
             if st is None: x["class"]="missing commit"; x["notes"].append(f"missing {sp}"); results.append(x); continue
+            tokens=[]
+            for line in st.splitlines():
+                if "commit" in line.lower(): tokens += SHA.findall(line)
             close=closing_sha(clone,st,r)
-            if not close: x["class"]="missing commit"; x["notes"].append("STATUS has no verifiable repository closing commit SHA"); results.append(x); continue
+            if tokens and not close:
+                x["class"]="missing commit"; x["notes"].append("STATUS references commit SHA but it is not a verifiable ancestor"); results.append(x); continue
+            if not close:
+                close=h; x["notes"].append("STATUS omits explicit commit SHA; branch HEAD used as closure commit")
             x["closing"]=close; x["files"]=files(clone,main,r); x["deps"]=deps(st,x["ws"]); results.append(x)
         byws={x["ws"]:x for x in results}; conflicts=[]; integrated=[]
         git(clone,"checkout","--detach",base); git(clone,"switch","-c","ws50-rehearsal-tmp")
