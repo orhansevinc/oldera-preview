@@ -1,0 +1,54 @@
+[
+  {
+    "id": "fixture.first_steps",
+    "name": "Fixture: First Steps",
+    "repeatable": false,
+    "allowAbandon": true,
+    "requirements": { "minLevel": 1 },
+    "objectives": [
+      { "id": "talk_to_guide", "eventType": "npc_talk", "targetId": "fixture.guide", "requiredCount": 1 }
+    ],
+    "rewards": {
+      "xp": 100,
+      "coins": 50,
+      "items": [{ "itemId": "fixture.token", "count": 1 }]
+    },
+    "dialogue": {
+      "available": "fixture.first_steps.available",
+      "active": "fixture.first_steps.active",
+      "ready": "fixture.first_steps.ready",
+      "completed": "fixture.first_steps.completed",
+      "ineligible": "fixture.first_steps.ineligible"
+    },
+    "metadata": { "syntheticFixture": true }
+  },
+  {
+    "id": "fixture.repeatable_errand",
+    "name": "Fixture: Repeatable Errand",
+    "repeatable": true,
+    "allowAbandon": true,
+    "requirements": { "minLevel": 1, "prerequisites": ["fixture.first_steps"] },
+    "objectives": [
+      { "id": "defeat_targets", "eventType": "npc_defeated", "targetId": "fixture.worm", "requiredCount": 3 }
+    ],
+    "rewards": { "xp": 25, "coins": 10, "items": [] },
+    "dialogue": {
+      "available": "fixture.repeatable.available",
+      "active": "fixture.repeatable.active",
+      "ready": "fixture.repeatable.ready",
+      "ineligible": "fixture.repeatable.ineligible"
+    },
+    "metadata": { "syntheticFixture": true }
+  },
+  {
+    "id": "fixture.restricted_training",
+    "name": "Fixture: Restricted Training",
+    "repeatable": false,
+    "allowAbandon": false,
+    "requirements": { "minLevel": 10, "classes": ["fixture.warrior"], "nations": ["fixture.karus"] },
+    "objectives": [],
+    "rewards": { "xp": 1, "coins": 0, "items": [] },
+    "dialogue": { "available": "fixture.training.available", "ineligible": "fixture.training.ineligible" },
+    "metadata": { "syntheticFixture": true }
+  }
+]
