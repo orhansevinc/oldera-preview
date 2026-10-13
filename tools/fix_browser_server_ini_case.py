@@ -98,6 +98,13 @@ file_reader.write_text(s, encoding="utf-8")
 # probe above tells us which nested asset is still missing.
 char_select = Path("openko/src/Client/WarFare/GameProcCharacterSelect.cpp")
 s = char_select.read_text(encoding="utf-8-sig")
+include_anchor = '#include "NetworkEncoding.h"\n'
+include_probe = '#include "NetworkEncoding.h"\n#ifdef __EMSCRIPTEN__\n#include <spdlog/spdlog.h>\n#endif\n'
+if "#include <spdlog/spdlog.h>" not in s:
+    if include_anchor not in s:
+        raise SystemExit("Character Select include anchor not found")
+    s = s.replace(include_anchor, include_probe, 1)
+
 ui_anchor = '''\tif (pTbl)
 \t\tm_pUICharacterSelect->LoadFromFile(pTbl->szCharacterSelect); // UI Manager 에 넣지 않고 따로 처리한다... 이유가 있다..
 '''
