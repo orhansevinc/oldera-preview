@@ -1,0 +1,29 @@
+[
+  {
+    "id": "fixture.guide.interact",
+    "script": [
+      { "op": "dialogue", "key": "fixture.guide.greeting" },
+      { "op": "quest_view", "questId": "fixture.first_steps" },
+      { "op": "end" }
+    ],
+    "metadata": { "syntheticFixture": true }
+  },
+  {
+    "id": "fixture.guide.accept_first_steps",
+    "script": [
+      { "op": "quest_accept", "questId": "fixture.first_steps" },
+      { "op": "dialogue", "key": "fixture.guide.accepted" },
+      { "op": "end" }
+    ],
+    "metadata": { "syntheticFixture": true }
+  },
+  {
+    "id": "fixture.guide.complete_first_steps",
+    "script": [
+      { "op": "quest_complete", "questId": "fixture.first_steps" },
+      { "op": "dialogue", "key": "fixture.guide.completed" },
+      { "op": "end" }
+    ],
+    "metadata": { "syntheticFixture": true }
+  }
+]
