@@ -45,6 +45,27 @@ class TwoPartyCasGateStore extends InMemoryLeaseStore {
   }
 }
 
+class CharacterCasGateStore extends InMemoryLeaseStore {
+  constructor(characterId) {
+    super();
+    this.characterId = characterId;
+    this.entered = null;
+    this.release = null;
+    this.enteredPromise = new Promise((resolve) => { this.entered = resolve; });
+    this.releasePromise = new Promise((resolve) => { this.release = resolve; });
+    this.used = false;
+  }
+
+  async compareAndSet(scope, key, expectedVersion, nextRecord) {
+    if (!this.used && scope === LEASE_SCOPE.CHARACTER && key === this.characterId && expectedVersion === null && nextRecord) {
+      this.used = true;
+      this.entered();
+      await this.releasePromise;
+    }
+    return super.compareAndSet(scope, key, expectedVersion, nextRecord);
+  }
+}
+
 function makeService(options = {}) {
   const clock = options.clock || new ManualClock();
   const store = options.store || new InMemoryLeaseStore();
@@ -106,6 +127,7 @@ test('same character cannot be owned by two live sessions', async () => {
   });
   assert.equal(first.ok, true);
 
+  // Seed a different account lease for a second authenticated session; character CAS still rejects it.
   await store.compareAndSet(LEASE_SCOPE.ACCOUNT, 'acc-2', null, {
     scope: LEASE_SCOPE.ACCOUNT,
     key: 'acc-2',
@@ -269,4 +291,41 @@ test('simultaneous login race has exactly one winner under reject-new policy', a
   assert.equal(losers[0].code, RESULT.ACCOUNT_IN_USE);
   const owner = await service.getAccountOwner('acc-race');
   assert.equal(owner.sessionId, winners[0].lease.sessionId);
+});
+
+test('replace-old requests disconnect even when displaced session has no character lease', async () => {
+  const { service, disconnects } = makeService({ duplicateLoginPolicy: DUPLICATE_LOGIN_POLICY.REPLACE_OLD });
+  await ownAccount(service, 'acc-only', 's-old', 'gs-1');
+  const replacement = await service.acquireAccount({ accountId: 'acc-only', sessionId: 's-new', serverId: 'gs-2' });
+  assert.equal(replacement.ok, true);
+  assert.equal(replacement.status, 'replaced');
+  assert.deepEqual(disconnects, [{ sessionId: 's-old', reason: 'DUPLICATE_LOGIN_REPLACED' }]);
+});
+
+test('account takeover racing character claim cannot leave orphan character ownership', async () => {
+  const store = new CharacterCasGateStore('char-race');
+  const { service } = makeService({ store, duplicateLoginPolicy: DUPLICATE_LOGIN_POLICY.REPLACE_OLD });
+  await ownAccount(service, 'acc-race-2', 's-old', 'gs-1');
+
+  const characterClaim = service.acquireCharacter({
+    accountId: 'acc-race-2',
+    characterId: 'char-race',
+    sessionId: 's-old',
+    serverId: 'gs-1',
+  });
+  await store.enteredPromise;
+
+  const takeover = await service.acquireAccount({
+    accountId: 'acc-race-2',
+    sessionId: 's-new',
+    serverId: 'gs-2',
+  });
+  assert.equal(takeover.ok, true);
+  store.release();
+
+  const oldClaimResult = await characterClaim;
+  assert.equal(oldClaimResult.ok, false);
+  assert.equal(oldClaimResult.code, RESULT.ACCOUNT_NOT_OWNED);
+  assert.equal(await service.getCharacterOwner('char-race'), null);
+  assert.equal((await service.getAccountOwner('acc-race-2')).sessionId, 's-new');
 });
