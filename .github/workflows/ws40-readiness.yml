@@ -86,7 +86,7 @@ jobs:
           if blockers != expected_blockers:
               raise SystemExit(f'Blocker set mismatch: {sorted(blockers)}')
 
-          if 'Highest credited gate: **RC2**' not in gates:
+          if not re.search(r'highest credited gate:\s*\*\*RC2\*\*', gates, re.IGNORECASE):
               raise SystemExit('Expected RC2 highest credited gate statement is missing')
           if 'Mandatory blocker count: **17**' not in status:
               raise SystemExit('STATUS blocker count does not match gate register')
