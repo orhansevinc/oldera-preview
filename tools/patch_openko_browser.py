@@ -87,15 +87,20 @@ s = s.replace(
     "if(UNIX AND NOT APPLE)\n    # Linux: a freedesktop menu entry",
     "if(UNIX AND NOT APPLE AND NOT EMSCRIPTEN)\n    # Linux: a freedesktop menu entry",
 )
-if '"-sFULL_ES3=1"' not in s:
-    s += '''\nif(EMSCRIPTEN)\n  set_target_properties(WarFare PROPERTIES SUFFIX ".html")\n  target_link_options(WarFare PRIVATE\n    "-sMIN_WEBGL_VERSION=2"\n    "-sMAX_WEBGL_VERSION=2"\n    "-sFULL_ES3=1"\n    "-sGL_ENABLE_GET_PROC_ADDRESS=1"\n    "-sALLOW_MEMORY_GROWTH=1"\n    "-sFORCE_FILESYSTEM=1"\n    "-sASYNCIFY"\n    "-sEXIT_RUNTIME=1"\n    "-sASSERTIONS=1"\n    "--preload-file" "${CMAKE_SOURCE_DIR}/../ko-assets/Data@/data/Data"\n    "--preload-file" "${CMAKE_SOURCE_DIR}/../ko-assets/UI_US@/data/UI_US"\n    "--preload-file" "${CMAKE_SOURCE_DIR}/../ko-assets/Snd/Intro_Sound.mp3@/data/Snd/Intro_Sound.mp3"\n    "--preload-file" "${CMAKE_SOURCE_DIR}/../ko-assets/Server.ini@/data/Server.ini")\nendif()\n'''
+
+# CMake de-duplicates repeated linker options.  A sequence such as
+#   --preload-file path1 --preload-file path2
+# therefore becomes
+#   --preload-file path1 path2
+# and Emscripten interprets path2 as a normal input object.  Keep every
+# preload pair inside its own SHELL: option so each mapping survives intact.
+browser_block = '''\nif(EMSCRIPTEN)\n  set_target_properties(WarFare PROPERTIES SUFFIX ".html")\n  target_link_options(WarFare PRIVATE\n    "-sMIN_WEBGL_VERSION=2"\n    "-sMAX_WEBGL_VERSION=2"\n    "-sFULL_ES3=1"\n    "-sGL_ENABLE_GET_PROC_ADDRESS=1"\n    "-sALLOW_MEMORY_GROWTH=1"\n    "-sFORCE_FILESYSTEM=1"\n    "-sASYNCIFY"\n    "-sEXIT_RUNTIME=1"\n    "-sASSERTIONS=1"\n    "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/../ko-assets/Data@/data/Data"\n    "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/../ko-assets/UI_US@/data/UI_US"\n    "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/../ko-assets/Snd/Intro_Sound.mp3@/data/Snd/Intro_Sound.mp3"\n    "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/../ko-assets/Server.ini@/data/Server.ini")\nendif()\n'''
+if 'if(EMSCRIPTEN)\n  set_target_properties(WarFare PROPERTIES SUFFIX ".html")' not in s:
+    s += browser_block
 else:
-    # The old inline workflow may already have added the browser block while
-    # this new reusable patcher is being adopted. Ensure preload entries exist.
-    marker = '    "-sASSERTIONS=1")\nendif()'
-    if "../ko-assets/Data@/data/Data" not in s:
-        replacement = '''    "-sASSERTIONS=1"\n    "--preload-file" "${CMAKE_SOURCE_DIR}/../ko-assets/Data@/data/Data"\n    "--preload-file" "${CMAKE_SOURCE_DIR}/../ko-assets/UI_US@/data/UI_US"\n    "--preload-file" "${CMAKE_SOURCE_DIR}/../ko-assets/Snd/Intro_Sound.mp3@/data/Snd/Intro_Sound.mp3"\n    "--preload-file" "${CMAKE_SOURCE_DIR}/../ko-assets/Server.ini@/data/Server.ini")\nendif()'''
-        s = replace_once(s, marker, replacement, "WarFare browser preload")
+    start = s.index('if(EMSCRIPTEN)\n  set_target_properties(WarFare PROPERTIES SUFFIX ".html")')
+    end = s.index('\nendif()', start) + len('\nendif()')
+    s = s[:start] + browser_block.strip("\n") + s[end:]
 p.write_text(s)
 
 print("OldERA browser patches applied: WebGL2 + 1024x768 + 1298 login asset preload")
