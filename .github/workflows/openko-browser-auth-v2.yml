@@ -1,0 +1,176 @@
+name: OpenKO Browser Auth Proof V2
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [openko-browser-port]
+    paths:
+      - 'gateway/**'
+      - 'tools/patch_openko_browser_gateway.py'
+      - 'tools/fix_browser_server_ini_case.py'
+      - 'tools/patch_openko_browser_serverlist_probe.py'
+      - 'tools/patch_openko_browser_auth_probe.py'
+      - 'tools/ko_auth_stub.mjs'
+      - 'tools/browser_auth_driver.cjs'
+      - '.github/workflows/openko-browser-auth-v2.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  prove-auth-v2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: openko-browser-port
+
+      - uses: actions/checkout@v4
+        with:
+          repository: luisfelipe18/old-school-openko
+          ref: feature/port-posix
+          path: openko
+          submodules: false
+          fetch-depth: 1
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ko4life-net/ko-assets
+          ref: 1298
+          path: ko-assets
+          fetch-depth: 1
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            Data
+            UI_US
+            Snd/Intro_Sound.mp3
+            Server.ini
+
+      - name: Patch real 1298 browser auth path
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/patch_openko_browser.py
+          python3 tools/patch_openko_browser_gateway.py
+          python3 tools/fix_browser_server_ini_case.py
+          python3 tools/patch_openko_browser_serverlist_probe.py
+          python3 tools/patch_openko_browser_auth_probe.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('openko/src/Client/WarFare/RHIDeviceGL.cpp')
+          s = p.read_text()
+          bad = r'#version 300 es\nprecision highp float;'
+          good = '#version 300 es\nprecision highp float;'
+          if s.count(bad) != 2:
+              raise SystemExit('escaped GLSL browser shader anchors changed')
+          p.write_text(s.replace(bad, good))
+          PY
+
+      - name: Install build and browser tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake python3 git
+          npm install --no-save --no-audit --no-fund ws@8.18.3 playwright-core@1.55.0
+
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest
+          actions-cache-folder: emsdk-cache
+
+      - name: Configure and build WarFare WASM
+        shell: bash
+        run: |
+          set -euo pipefail
+          emcmake cmake -S openko -B build-web -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_FLAGS='-DBOOST_HAS_PTHREADS=1' \
+            -DCMAKE_CXX_FLAGS='-DBOOST_HAS_PTHREADS=1 -DASIO_DISABLE_THREADS=1 -fexceptions' \
+            -DCMAKE_EXE_LINKER_FLAGS='-fexceptions' \
+            -DOPENKO_BUILD_CLIENT=ON \
+            -DOPENKO_CLIENT_POSIX_EXPERIMENTAL=ON \
+            -DOPENKO_BUILD_CLIENT_TOOLS=OFF \
+            -DOPENKO_BUILD_TOOLS=OFF \
+            -DOPENKO_BUILD_SERVERS=OFF \
+            -DOPENKO_BUILD_TESTS=OFF \
+            -DOPENKO_FETCH_CLIENT_ASSETS=OFF \
+            -DOPENKO_COMPILE_WARNINGS_AS_ERROR=OFF \
+            2>&1 | tee configure-auth-v2.log
+          cmake --build build-web --target WarFare -j2 2>&1 | tee build-auth-v2.log
+          test -s build-web/bin/Release/KnightOnLine.js
+          test -s build-web/bin/Release/KnightOnLine.wasm
+          test -s build-web/bin/Release/KnightOnLine.data
+
+      - name: Prove real Edit_ID and Edit_PW auth roundtrip
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=build-web/bin/Release
+          CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          test -n "$CHROME"
+
+          TEST_ID="probe${GITHUB_RUN_NUMBER}"
+          TEST_PW="p${GITHUB_RUN_NUMBER}x7"
+          export TEST_ID TEST_PW
+
+          rm -f ko-auth-result.txt ko-auth-stub.log gateway-auth.log browser-auth.log browser-auth-status.txt browser-auth-canvas.png
+          KO_STUB_PORT=16100 KO_AUTH_RESULT=ko-auth-result.txt KO_TEST_ID="$TEST_ID" KO_TEST_PW="$TEST_PW" \
+            node tools/ko_auth_stub.mjs >ko-auth-stub.log 2>&1 &
+          STUB_PID=$!
+          KO_TARGET_HOST=127.0.0.1 KO_TARGET_PORT=16100 OLDERA_GATEWAY_PORT=15100 \
+            node gateway/oldera-gateway.mjs >gateway-auth.log 2>&1 &
+          GATEWAY_PID=$!
+          python3 -m http.server 8000 --bind 127.0.0.1 --directory "$OUT" >http-auth.log 2>&1 &
+          HTTP_PID=$!
+          trap 'kill $HTTP_PID $GATEWAY_PID $STUB_PID 2>/dev/null || true' EXIT
+          sleep 2
+
+          cat > "$OUT/auth.html" <<'EOF'
+          <!doctype html><html><body style="margin:0;background:#000;overflow:hidden">
+          <canvas id="canvas" width="1024" height="768" tabindex="0"></canvas>
+          <pre id="status" style="display:none"></pre>
+          <script>
+          (()=>{
+            const status=document.getElementById('status');
+            const write=(kind,args)=>{const line='['+kind+'] '+args.join(' ');status.textContent+=line+'\n';console.log(line);};
+            window.Module={canvas:document.getElementById('canvas'),arguments:['--renderer','gl','--data','/data'],
+              print:(...a)=>write('OUT',a),printErr:(...a)=>write('ERR',a),onRuntimeInitialized:()=>write('SMOKE',['WASM_RUNTIME_READY'])};
+          })();
+          </script><script src="KnightOnLine.js"></script></body></html>
+          EOF
+
+          CHROME="$CHROME" TEST_ID="$TEST_ID" TEST_PW="$TEST_PW" timeout 150s \
+            node tools/browser_auth_driver.cjs 2>&1 | tee browser-auth.log
+
+          echo '=== CLIENT ==='; tail -n 120 browser-auth.log || true
+          echo '=== GATEWAY ==='; cat gateway-auth.log || true
+          echo '=== AUTH STUB ==='; cat ko-auth-stub.log || true
+          echo '=== AUTH RESULT ==='; cat ko-auth-result.txt || true
+
+          grep -q "AUTH_CHAIN request=1 matched=1 response=1 id=$TEST_ID news=1" ko-auth-result.txt
+          grep -q "login id='$TEST_ID'" ko-auth-stub.log
+          grep -q 'browser login response: cmd=0xf3 result=1' browser-auth-status.txt
+          grep -q 'server list opened (1 server(s) available)' browser-auth-status.txt
+          grep -q 'AUTH_UI_OK' browser-auth.log
+          if grep -Eq '\[pageerror\]|GL_INVALID_(ENUM|VALUE|OPERATION)|WebGL: INVALID_|WebGL: too many errors' browser-auth.log; then
+            echo 'Browser/WebGL error detected' >&2
+            exit 1
+          fi
+          echo 'AUTH_V2_OK real 1298 UI -> F3 -> gateway -> TCP -> AUTH_OK -> F6 -> real server list UI'
+
+      - name: Upload auth V2 proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openko-browser-auth-proof-v2
+          path: |
+            configure-auth-v2.log
+            build-auth-v2.log
+            browser-auth.log
+            browser-auth-status.txt
+            browser-auth-canvas.png
+            gateway-auth.log
+            ko-auth-stub.log
+            ko-auth-result.txt
+            http-auth.log
+          if-no-files-found: warn
