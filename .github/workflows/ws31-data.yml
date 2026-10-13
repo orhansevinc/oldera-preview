@@ -1,0 +1,36 @@
+name: WS31 Data Validation
+
+on:
+  push:
+    branches: [ws31-data-catalog]
+    paths:
+      - 'data-catalog/**'
+      - 'tools/ws31_data/**'
+      - 'tests/data-catalog/**'
+      - 'workstreams/ws31/**'
+      - '.github/workflows/ws31-data.yml'
+  pull_request:
+    paths:
+      - 'data-catalog/**'
+      - 'tools/ws31_data/**'
+      - 'tests/data-catalog/**'
+      - 'workstreams/ws31/**'
+      - '.github/workflows/ws31-data.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install validator dependency
+        run: python -m pip install 'jsonschema==4.23.0'
+      - name: Validate catalog
+        run: python tools/ws31_data/validate_catalog.py --root .
+      - name: Run WS31 tests
+        run: python -m unittest discover -s tests/data-catalog -p 'test_*.py' -v

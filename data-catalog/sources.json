@@ -1,0 +1,66 @@
+{
+  "target_patch": "1298",
+  "source_policy": "Only source-backed records are promoted. Unsupported facts stay absent/UNKNOWN; modern data is never coerced to 1298.",
+  "sources": [
+    {
+      "id": "openko-source",
+      "patch_scope": "1298/1299-compatible",
+      "ref": "Open-KO/KnightOnline",
+      "evidence": "Project source; client/server enums and table structures."
+    },
+    {
+      "id": "openko-client-assets",
+      "patch_scope": "1298",
+      "ref": "Open-KO/ko-client-assets@openko-1298",
+      "evidence": "KnightOnline submodule pins client assets to openko-1298."
+    },
+    {
+      "id": "openko-db",
+      "patch_scope": "OpenKO official dataset",
+      "ref": "Open-KO/OpenKO-db",
+      "evidence": "Official dataset used for OpenKO development; entity and spawn rows cross-referenced against 1298 source/client IDs."
+    },
+    {
+      "id": "oldera-main",
+      "patch_scope": "project-readonly",
+      "ref": "orhansevinc/oldera-preview@main",
+      "evidence": "Hard-coded ID audit only; never promoted as truth without upstream cross-reference."
+    },
+    {
+      "id": "ws16",
+      "patch_scope": "project-readonly",
+      "ref": "orhansevinc/oldera-preview@ws16-npc-world",
+      "evidence": "Cross-check of provenance-backed Moradon NPC data."
+    },
+    {
+      "id": "ws24",
+      "patch_scope": "project-readonly",
+      "ref": "orhansevinc/oldera-preview@ws24-pvp-zone-rules",
+      "evidence": "Hard-coded nation/zone IDs checked against upstream enums."
+    },
+    {
+      "id": "ws25",
+      "patch_scope": "fixture-only",
+      "ref": "orhansevinc/oldera-preview@ws25-mob-ai",
+      "evidence": "Fixture classification checked; synthetic values excluded from real-data catalog."
+    },
+    {
+      "id": "ws17",
+      "patch_scope": "project-readonly",
+      "ref": "orhansevinc/oldera-preview@ws17-item-inventory",
+      "evidence": "Item table adapter inspected; no source-backed gameplay IDs are promoted from tests/adapters."
+    },
+    {
+      "id": "ws22",
+      "patch_scope": "fixture-only",
+      "ref": "orhansevinc/oldera-preview@ws22-merchant-economy",
+      "evidence": "Economy tests use isolated in-memory fixtures; fixture IDs are not promoted to the real-data catalog."
+    },
+    {
+      "id": "ws23",
+      "patch_scope": "fixture-only",
+      "ref": "orhansevinc/oldera-preview@ws23-quest-events",
+      "evidence": "quest-data/fixtures is explicitly synthetic (fixture.* IDs and syntheticFixture=true) and is excluded from real 1298 records."
+    }
+  ]
+}
