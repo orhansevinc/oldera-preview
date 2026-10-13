@@ -1,0 +1,27 @@
+{
+  "profile": "OldERA-1298",
+  "authority": "ROOT_OWNER",
+  "sourceReference": "Open-KO/KnightOnline 1298 client command surface",
+  "commands": [
+    {"name":"INVISIBLE","scope":"self","targetRequired":false,"risk":"medium"},
+    {"name":"CLEAN","scope":"world","targetRequired":false,"risk":"high"},
+    {"name":"RAINING","scope":"world","targetRequired":false,"risk":"low"},
+    {"name":"SNOWING","scope":"world","targetRequired":false,"risk":"low"},
+    {"name":"TIME","scope":"world","targetRequired":false,"risk":"low"},
+    {"name":"COUNT","scope":"server","targetRequired":false,"risk":"low"},
+    {"name":"NOTICE","scope":"zone","targetRequired":false,"risk":"low"},
+    {"name":"ARREST","scope":"player","targetRequired":true,"risk":"medium"},
+    {"name":"FORBIDCONNECT","scope":"player","targetRequired":true,"risk":"high"},
+    {"name":"FORBIDCHAT","scope":"player","targetRequired":true,"risk":"medium"},
+    {"name":"PERMITCHAT","scope":"player","targetRequired":true,"risk":"medium"},
+    {"name":"NOTICEALL","scope":"global","targetRequired":false,"risk":"low"},
+    {"name":"CUTOFF","scope":"player","targetRequired":true,"risk":"medium"},
+    {"name":"VIEW","scope":"player","targetRequired":true,"risk":"medium"},
+    {"name":"UNVIEW","scope":"player","targetRequired":false,"risk":"low"},
+    {"name":"FORBIDUSER","scope":"player","targetRequired":true,"risk":"high"},
+    {"name":"SUMMONUSER","scope":"player","targetRequired":true,"risk":"medium"},
+    {"name":"ATTACKDISABLE","scope":"world","targetRequired":false,"risk":"critical"},
+    {"name":"ATTACKENABLE","scope":"world","targetRequired":false,"risk":"critical"},
+    {"name":"PROGRAMLISTCHECK","scope":"security","targetRequired":false,"risk":"medium"}
+  ]
+}
