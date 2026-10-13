@@ -16,6 +16,7 @@ Verified 1298-era facts used by the implementation:
 - The historic zone-ability model distinguishes neutral zones from PvP zones.
 - Arena behavior is an explicit exception where same-nation players can be PvP targets.
 - Coordinate/region safety is separate from zone identity. A caller supplies `in_safe_area`; WS24 does not duplicate map geometry.
+- The verified invasion scope is limited to nation home maps `1/2`; Eslant `11/12` remains nation-locked. No custom/common-Eslant behavior is inferred.
 
 Primary references reviewed:
 
@@ -30,8 +31,8 @@ Primary references reviewed:
 |---|---:|---|---|---|---|
 | Karus home | 1 | Karus; enemy only during invasion | Opposite nations only during invasion | No (safety is runtime state) | Eligible during legal invasion |
 | El Morad home | 2 | El Morad; enemy only during invasion | Opposite nations only during invasion | No (safety is runtime state) | Eligible during legal invasion |
-| Karus Eslant | 11 | Karus; enemy only during invasion | Opposite nations only during invasion | No (safety is runtime state) | Eligible during legal invasion |
-| El Morad Eslant | 12 | El Morad; enemy only during invasion | Opposite nations only during invasion | No (safety is runtime state) | Eligible during legal invasion |
+| Karus Eslant | 11 | Karus only | No player-vs-player nation hostility | No (entry is nation-locked, not a safety flag) | No |
+| El Morad Eslant | 12 | El Morad only | No player-vs-player nation hostility | No (entry is nation-locked, not a safety flag) | No |
 | Moradon | 21 | Both nations | Neutral | Yes | No |
 | Arena | 48 | Both nations | All valid players, including same nation | No | No |
 | Battle 1/2/3 | 101/102/103 | Only while battle is open | Opposite nations | No; local safe-area bit still applies | Yes, eligibility only |
