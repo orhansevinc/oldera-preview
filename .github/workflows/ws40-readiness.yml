@@ -1,0 +1,113 @@
+name: WS40 Release Readiness
+
+on:
+  push:
+    branches:
+      - ws40-release-readiness
+    paths:
+      - 'release/**'
+      - 'integration-plans/**'
+      - 'workstreams/ws40/**'
+      - '.github/workflows/ws40-readiness.yml'
+  pull_request:
+    paths:
+      - 'release/**'
+      - 'integration-plans/**'
+      - 'workstreams/ws40/**'
+      - '.github/workflows/ws40-readiness.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  readiness:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate WS40 artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BASE_SHA='a1c1d6b3e9aeb07fd066cee8a41714685557dddf'
+          required=(
+            release/READINESS_MATRIX.md
+            release/RELEASE_GATES.md
+            integration-plans/MERGE_ORDER.md
+            integration-plans/DEPENDENCY_GRAPH.md
+            integration-plans/CONFLICTS.md
+            workstreams/ws40/STATUS.md
+            .github/workflows/ws40-readiness.yml
+          )
+
+          for file in "${required[@]}"; do
+            test -s "$file" || { echo "Missing/empty required file: $file"; exit 1; }
+          done
+
+          python - <<'PY'
+          import pathlib
+          import re
+
+          readiness = pathlib.Path('release/READINESS_MATRIX.md').read_text(encoding='utf-8')
+          gates = pathlib.Path('release/RELEASE_GATES.md').read_text(encoding='utf-8')
+          merge_order = pathlib.Path('integration-plans/MERGE_ORDER.md').read_text(encoding='utf-8')
+          status = pathlib.Path('workstreams/ws40/STATUS.md').read_text(encoding='utf-8')
+
+          for i in range(1, 40):
+              ws = f'WS{i:02d}'
+              if ws not in readiness:
+                  raise SystemExit(f'{ws} missing from READINESS_MATRIX.md')
+              if ws not in merge_order:
+                  raise SystemExit(f'{ws} missing from MERGE_ORDER.md')
+
+          allowed = {'PASS', 'PARTIAL', 'BLOCKED', 'UNKNOWN'}
+          seen = {}
+          for line in gates.splitlines():
+              match = re.match(r'^\|\s*(RC(?:10|[0-9]))\s*\|', line)
+              if not match:
+                  continue
+              gate = match.group(1)
+              states = [state for state in allowed if f'**{state}**' in line]
+              if len(states) != 1:
+                  raise SystemExit(f'{gate} must contain exactly one allowed state: {line}')
+              seen[gate] = states[0]
+
+          expected_gates = {f'RC{i}' for i in range(11)}
+          if set(seen) != expected_gates:
+              raise SystemExit(f'Gate coverage mismatch: seen={sorted(seen)}')
+
+          expected_blockers = {f'BLK-{i:02d}' for i in range(1, 18)}
+          blockers = set(re.findall(r'BLK-\d{2}', gates))
+          if blockers != expected_blockers:
+              raise SystemExit(f'Blocker set mismatch: {sorted(blockers)}')
+
+          if 'Highest credited gate: **RC2**' not in gates:
+              raise SystemExit('Expected RC2 highest credited gate statement is missing')
+          if 'Mandatory blocker count: **17**' not in status:
+              raise SystemExit('STATUS blocker count does not match gate register')
+          if 'State: **TAMAMLANDI**' not in status:
+              raise SystemExit('WS40 STATUS is not marked TAMAMLANDI')
+          PY
+
+          git cat-file -e "${BASE_SHA}^{commit}"
+          mapfile -t changed < <(git diff --name-only "$BASE_SHA"...HEAD)
+          printf 'Changed files against captured main baseline:\n'
+          printf ' - %s\n' "${changed[@]}"
+
+          for file in "${changed[@]}"; do
+            case "$file" in
+              release/*|integration-plans/*|workstreams/ws40/*|.github/workflows/ws40-readiness.yml)
+                ;;
+              *)
+                echo "Forbidden WS40 path changed: $file"
+                exit 1
+                ;;
+            esac
+          done
+
+          echo 'WS40 readiness validation PASS'
