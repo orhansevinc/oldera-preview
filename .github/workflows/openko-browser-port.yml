@@ -44,9 +44,10 @@ jobs:
             Snd/Intro_Sound.mp3
             Server.ini
 
-      - name: Verify 1298 asset slice
+      - name: Verify genuine 1298 asset slice
         shell: bash
         run: |
+          set -euo pipefail
           test -s ko-assets/Data/Texts_us.tbl
           test -s ko-assets/Data/UIs_us.tbl
           test -s ko-assets/UI_US/el_login_intro_us.uif
@@ -54,16 +55,16 @@ jobs:
           test -s ko-assets/Server.ini
           echo "Data files: $(find ko-assets/Data -type f | wc -l)"
           echo "UI_US files: $(find ko-assets/UI_US -type f | wc -l)"
-          du -sh ko-assets/Data ko-assets/UI_US ko-assets/Snd/Intro_Sound.mp3
 
-      - name: Patch OpenKO for WebGL2 browser runtime and real login transport
+      - name: Patch real 1298 WebGL2 client and browser CAPISocket transport
         shell: bash
         run: |
+          set -euo pipefail
           python3 tools/patch_openko_browser.py
-          python3 tools/enable_openko_browser_network.py
-          # The patcher intentionally stores C++ replacement text as Python
-          # strings. Correct the one GLSL escape that must become an actual
-          # source newline before compiling the browser target.
+          python3 tools/patch_openko_browser_gateway.py
+          python3 tools/fix_browser_server_ini_case.py
+          python3 tools/patch_openko_browser_serverlist_probe.py
+          python3 tools/patch_openko_browser_auth_probe.py
           python3 - <<'PY'
           from pathlib import Path
           p = Path('openko/src/Client/WarFare/RHIDeviceGL.cpp')
@@ -72,17 +73,16 @@ jobs:
           good = '#version 300 es\nprecision highp float;'
           count = s.count(bad)
           if count != 2:
-              raise SystemExit(f'expected 2 escaped GLSL headers, found {count}')
+              raise SystemExit(f'escaped GLSL browser shader anchors changed: {count}')
           p.write_text(s.replace(bad, good))
-          print('Corrected both GLSL ES 300 shader headers to real newlines')
+          print('Corrected both GLSL ES 300 shader headers')
           PY
 
-      - name: Install build tools
+      - name: Install build and browser tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build cmake python3 python3-venv git
-          python3 -m venv /tmp/oldera-websockify
-          /tmp/oldera-websockify/bin/pip install --disable-pip-version-check websockify
+          sudo apt-get install -y ninja-build cmake python3 git
+          npm install --no-save --no-audit --no-fund ws@8.18.3 playwright-core@1.55.0
 
       - name: Setup Emscripten
         uses: mymindstorm/setup-emsdk@v14
@@ -90,7 +90,7 @@ jobs:
           version: latest
           actions-cache-folder: emsdk-cache
 
-      - name: Configure OpenKO for WebAssembly
+      - name: Configure real WarFare browser client
         id: configure
         continue-on-error: true
         shell: bash
@@ -100,7 +100,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_C_FLAGS='-DBOOST_HAS_PTHREADS=1' \
             -DCMAKE_CXX_FLAGS='-DBOOST_HAS_PTHREADS=1 -DASIO_DISABLE_THREADS=1 -fexceptions' \
-            -DCMAKE_EXE_LINKER_FLAGS='-fexceptions -sSOCKET_DEBUG=1' \
+            -DCMAKE_EXE_LINKER_FLAGS='-fexceptions' \
             -DOPENKO_BUILD_CLIENT=ON \
             -DOPENKO_CLIENT_POSIX_EXPERIMENTAL=ON \
             -DOPENKO_BUILD_CLIENT_TOOLS=OFF \
@@ -111,7 +111,7 @@ jobs:
             -DOPENKO_COMPILE_WARNINGS_AS_ERROR=OFF \
             2>&1 | tee configure-web.log
 
-      - name: Build real WarFare WebGL2 client with 1298 login data
+      - name: Build real WarFare WASM client
         id: build
         if: steps.configure.outcome == 'success'
         continue-on-error: true
@@ -120,7 +120,7 @@ jobs:
           set -o pipefail
           cmake --build build-web --target WarFare -j2 2>&1 | tee build-web.log
 
-      - name: Verify browser login build
+      - name: Verify browser package
         if: always()
         shell: bash
         run: |
@@ -130,155 +130,77 @@ jobs:
           test -s build-web/bin/Release/KnightOnLine.js
           test -s build-web/bin/Release/KnightOnLine.wasm
           test -s build-web/bin/Release/KnightOnLine.data
-          echo "Browser package sizes:"
           du -h build-web/bin/Release/KnightOnLine.{js,wasm,data}
 
-      - name: Runtime smoke test in real headless Chrome with WebSocket login bridge
+      - name: Canonical real UI auth roundtrip gate
         shell: bash
         run: |
           set -euo pipefail
           OUT=build-web/bin/Release
           CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
-          if [ -z "$CHROME" ]; then
-            echo "No Chrome/Chromium found on GitHub runner" >&2
-            exit 1
-          fi
+          test -n "$CHROME"
           echo "Runtime browser: $($CHROME --version)"
 
-          cat > "$OUT/smoke.html" <<'EOF'
-          <!doctype html>
-          <html><head><meta charset="utf-8"><title>OldERA runtime smoke</title></head>
-          <body style="margin:0;background:#000">
-          <canvas id="canvas" width="1024" height="768"></canvas>
-          <pre id="status" style="color:#fff"></pre>
-          <script>
-          (() => {
-            const status = document.getElementById('status');
-            const canvas = document.getElementById('canvas');
-            const write = (kind, args) => {
-              const line = '[' + kind + '] ' + args.join(' ');
-              status.textContent += line + '\n';
-              console.log(line);
-            };
-            window.Module = {
-              canvas,
-              websocket: { url: 'ws://127.0.0.1:15100', subprotocol: 'binary' },
-              arguments: ['--renderer','gl','--data','/data'],
-              print: (...a) => write('OUT', a),
-              printErr: (...a) => write('ERR', a),
-              onRuntimeInitialized: () => write('SMOKE', ['WASM_RUNTIME_READY'])
-            };
-          })();
-          </script>
-          <script src="KnightOnLine.js"></script>
-          </body></html>
-          EOF
+          TEST_ID="probe${GITHUB_RUN_NUMBER}"
+          TEST_PW="p${GITHUB_RUN_NUMBER}x7"
+          export TEST_ID TEST_PW
 
-          python3 tools/browser_login_probe_server.py --port 15101 --marker browser-network.txt >browser-network-backend.log 2>&1 &
-          PROBE_PID=$!
-          /tmp/oldera-websockify/bin/websockify --verbose 127.0.0.1:15100 127.0.0.1:15101 >browser-websockify.log 2>&1 &
-          WS_PID=$!
-          python3 -m http.server 8000 --bind 127.0.0.1 --directory "$OUT" >browser-http.log 2>&1 &
-          SERVER_PID=$!
-          trap 'kill $SERVER_PID $WS_PID $PROBE_PID 2>/dev/null || true' EXIT
+          rm -f ko-auth-result.txt ko-auth-stub.log gateway-auth.log browser-auth.log browser-auth-status.txt browser-auth-canvas.png http-auth.log
+          KO_STUB_PORT=16100 KO_AUTH_RESULT=ko-auth-result.txt KO_TEST_ID="$TEST_ID" KO_TEST_PW="$TEST_PW" \
+            node tools/ko_auth_stub.mjs >ko-auth-stub.log 2>&1 &
+          STUB_PID=$!
+          KO_TARGET_HOST=127.0.0.1 KO_TARGET_PORT=16100 OLDERA_GATEWAY_PORT=15100 \
+            node gateway/oldera-gateway.mjs >gateway-auth.log 2>&1 &
+          GATEWAY_PID=$!
+          python3 -m http.server 8000 --bind 127.0.0.1 --directory "$OUT" >http-auth.log 2>&1 &
+          HTTP_PID=$!
+          trap 'kill $HTTP_PID $GATEWAY_PID $STUB_PID 2>/dev/null || true' EXIT
           sleep 2
 
-          mkdir -p /tmp/oldera-playwright
-          npm --prefix /tmp/oldera-playwright init -y >/dev/null 2>&1
-          npm --prefix /tmp/oldera-playwright install --no-audit --no-fund playwright-core@1.55.0 >/dev/null
-
-          cat > browser-smoke.cjs <<'EOF'
-          const fs = require('fs');
-          const { chromium } = require('/tmp/oldera-playwright/node_modules/playwright-core');
-
-          (async () => {
-            const browser = await chromium.launch({
-              headless: true,
-              executablePath: process.env.CHROME,
-              args: [
-                '--no-sandbox',
-                '--disable-dev-shm-usage',
-                '--use-angle=swiftshader',
-                '--enable-unsafe-swiftshader',
-                '--enable-webgl',
-                '--ignore-gpu-blocklist',
-                '--autoplay-policy=no-user-gesture-required'
-              ]
-            });
-            const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
-            const push = (line) => console.log(line);
-            page.on('console', msg => push('[console:' + msg.type() + '] ' + msg.text()));
-            page.on('pageerror', err => push('[pageerror] ' + err.stack));
-            page.on('requestfailed', req => push('[requestfailed] ' + req.url() + ' ' + (req.failure()?.errorText || '')));
-
-            let ok = false;
-            try {
-              await page.goto('http://127.0.0.1:8000/smoke.html', {
-                waitUntil: 'domcontentloaded', timeout: 30000
-              });
-              await page.waitForFunction(() => {
-                const text = document.getElementById('status')?.textContent || '';
-                return text.includes('browser login transport connected; requesting genuine LS_SERVERLIST')
-                  && text.includes('login scene: CGameProcedure brought up');
-              }, null, { timeout: 90000 });
-              await page.waitForTimeout(1500);
-              ok = true;
-            } catch (err) {
-              push('[runner-error] ' + err.stack);
-            } finally {
-              const status = await page.locator('#status').textContent().catch(() => '');
-              push('--- DOM STATUS ---\n' + status + '\n--- END DOM STATUS ---');
-              await page.locator('#canvas').screenshot({ path: 'browser-canvas.png' }).catch(err => push('[canvas-screenshot-error] ' + err));
-              await page.screenshot({ path: 'browser-runtime.png', fullPage: false }).catch(err => push('[screenshot-error] ' + err));
-              fs.writeFileSync('browser-status.txt', status || '');
-              await browser.close();
-            }
-            process.exit(ok ? 0 : 1);
-          })().catch(err => {
-            console.error(err);
-            process.exit(1);
-          });
+          cat > "$OUT/auth.html" <<'EOF'
+          <!doctype html><html><body style="margin:0;background:#000;overflow:hidden">
+          <canvas id="canvas" width="1024" height="768" tabindex="0"></canvas>
+          <pre id="status" style="display:none"></pre>
+          <script>
+          (()=>{
+            const status=document.getElementById('status');
+            const write=(kind,args)=>{const line='['+kind+'] '+args.join(' ');status.textContent+=line+'\n';console.log(line);};
+            window.Module={canvas:document.getElementById('canvas'),arguments:['--renderer','gl','--data','/data'],
+              print:(...a)=>write('OUT',a),printErr:(...a)=>write('ERR',a),onRuntimeInitialized:()=>write('SMOKE',['WASM_RUNTIME_READY'])};
+          })();
+          </script><script src="KnightOnLine.js"></script></body></html>
           EOF
 
-          set +e
-          CHROME="$CHROME" timeout 120s node browser-smoke.cjs 2>&1 | tee browser-runtime.log
-          NODE_RC=${PIPESTATUS[0]}
-          set -e
+          CHROME="$CHROME" TEST_ID="$TEST_ID" TEST_PW="$TEST_PW" timeout 150s \
+            node tools/browser_auth_driver.cjs 2>&1 | tee browser-auth.log
 
-          echo "--- browser runtime tail ---"
-          tail -n 140 browser-runtime.log || true
-          echo "--- websocket bridge tail ---"
-          tail -n 80 browser-websockify.log || true
-          echo "--- KO TCP probe tail ---"
-          tail -n 80 browser-network-backend.log || true
-          echo "--- http server tail ---"
-          tail -n 30 browser-http.log || true
+          echo '=== CLIENT ==='; tail -n 140 browser-auth.log || true
+          echo '=== GATEWAY ==='; cat gateway-auth.log || true
+          echo '=== AUTH STUB ==='; cat ko-auth-stub.log || true
+          echo '=== AUTH RESULT ==='; cat ko-auth-result.txt || true
 
-          test "$NODE_RC" -eq 0
-          if grep -Eq '\[pageerror\]|GL_INVALID_(ENUM|VALUE|OPERATION)|WebGL: INVALID_|WebGL: too many errors' browser-runtime.log; then
-            echo "Browser runtime or WebGL draw errors detected; publication blocked" >&2
+          grep -q "AUTH_CHAIN request=1 matched=1 response=1 id=$TEST_ID news=1" ko-auth-result.txt
+          grep -q "login id='$TEST_ID'" ko-auth-stub.log
+          grep -q 'WASM_RUNTIME_READY' browser-auth-status.txt
+          grep -q 'render backend: OpenGL' browser-auth-status.txt
+          grep -q 'login scene: CGameProcedure brought up' browser-auth-status.txt
+          grep -q 'browser login response: cmd=0xf3 result=1' browser-auth-status.txt
+          grep -q 'server list opened (1 server(s) available)' browser-auth-status.txt
+          grep -q 'AUTH_UI_OK' browser-auth.log
+          if grep -Eq '\[pageerror\]|GL_INVALID_(ENUM|VALUE|OPERATION)|WebGL: INVALID_|WebGL: too many errors' browser-auth.log; then
+            echo 'Browser/WebGL error detected; publication blocked' >&2
             exit 1
           fi
-          grep -q "WASM_RUNTIME_READY" browser-status.txt
-          grep -q "render backend: OpenGL" browser-status.txt
-          grep -q "login scene: CGameProcedure brought up" browser-status.txt
-          grep -q "browser login transport connected; requesting genuine LS_SERVERLIST" browser-status.txt
-          test -s browser-network.txt
-          grep -q "NETWORK_OK" browser-network.txt
-          grep -q "opcode=0xF5" browser-network.txt
-          if grep -q "render backend: Null" browser-status.txt; then
-            echo "Browser fell back to Null renderer" >&2
+          if grep -q 'render backend: Null' browser-auth-status.txt; then
+            echo 'Browser fell back to Null renderer; publication blocked' >&2
             exit 1
           fi
-          if grep -q "game data not found" browser-status.txt; then
-            echo "Browser could not see preloaded 1298 data" >&2
-            exit 1
-          fi
-          echo "Headless Chrome proved genuine 1298 login scene + browser WebSocket -> TCP -> LS_SERVERLIST chain."
+          echo 'AUTH_CANONICAL_OK real 1298 Edit_ID/Edit_PW -> F3 -> WebSocket gateway -> TCP -> AUTH_OK -> F6 -> real server list UI'
 
-      - name: Publish browser login build into branch
+      - name: Publish proven browser client into branch
         shell: bash
         run: |
+          set -euo pipefail
           rm -rf openko-web
           mkdir -p openko-web
           cp -f build-web/bin/Release/KnightOnLine.js openko-web/KnightOnLine.js
@@ -293,58 +215,32 @@ jobs:
             <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
             <title>OldERA — Knight Online 1298</title>
             <style>
-              * { box-sizing: border-box; }
-              html, body { width:100%; height:100%; margin:0; overflow:hidden; background:#000; }
-              body { display:grid; place-items:center; font-family:Consolas,monospace; }
-              #stage { position:relative; width:1024px; height:768px; transform-origin:center center; }
-              #canvas { display:block; width:1024px; height:768px; background:#000; outline:none; }
-              #status { position:fixed; left:10px; top:8px; z-index:10; margin:0; color:#b8ffb8;
-                        font-size:12px; line-height:1.35; white-space:pre-wrap; pointer-events:none;
-                        text-shadow:0 1px 2px #000; max-width:min(900px,95vw); }
+              *{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#000}
+              body{display:grid;place-items:center}#stage{position:relative;width:1024px;height:768px;transform-origin:center center}
+              #canvas{display:block;width:1024px;height:768px;background:#000;outline:none}
+              #status{position:fixed;left:10px;top:8px;z-index:10;margin:0;color:#b8ffb8;font:12px/1.35 Consolas,monospace;white-space:pre-wrap;pointer-events:none;text-shadow:0 1px 2px #000;max-width:min(900px,95vw)}
             </style>
           </head>
           <body>
             <div id="stage"><canvas id="canvas" width="1024" height="768" tabindex="0"></canvas></div>
             <pre id="status">OldERA / gerçek KO 1298 client yükleniyor…</pre>
             <script>
-              (() => {
-                const W=1024, H=768;
-                const stage=document.getElementById('stage');
-                const canvas=document.getElementById('canvas');
-                const status=document.getElementById('status');
-                const lines=[];
-                const log=(kind,text)=>{
-                  const line=(kind?'['+kind+'] ':'')+text;
-                  console[kind==='ERR'?'error':'log'](line);
-                  lines.push(line); while(lines.length>20) lines.shift();
-                  status.textContent=lines.join('\n');
-                };
-                const fit=()=>{
-                  const scale=Math.min(innerWidth/W,innerHeight/H);
-                  stage.style.transform=`scale(${scale})`;
-                };
-                addEventListener('resize',fit); fit(); canvas.focus();
-                window.Module={
-                  canvas,
-                  websocket:{ subprotocol:'binary' },
-                  arguments:['--renderer','gl','--data','/data'],
-                  print:(...a)=>log('OUT',a.join(' ')),
-                  printErr:(...a)=>log('ERR',a.join(' ')),
-                  onRuntimeInitialized:()=>log('OUT','WASM hazır; 1298 Data/UI filesystem bağlandı.')
-                };
-              })();
+            (()=>{
+              const W=1024,H=768,stage=document.getElementById('stage'),canvas=document.getElementById('canvas'),status=document.getElementById('status'),lines=[];
+              const log=(kind,text)=>{const line=(kind?'['+kind+'] ':'')+text;console[kind==='ERR'?'error':'log'](line);lines.push(line);while(lines.length>20)lines.shift();status.textContent=lines.join('\n')};
+              const fit=()=>{stage.style.transform=`scale(${Math.min(innerWidth/W,innerHeight/H)})`};addEventListener('resize',fit);fit();canvas.focus();
+              window.Module={canvas,arguments:['--renderer','gl','--data','/data'],print:(...a)=>log('OUT',a.join(' ')),printErr:(...a)=>log('ERR',a.join(' ')),onRuntimeInitialized:()=>log('OUT','WASM hazır; 1298 Data/UI filesystem bağlandı.')};
+            })();
             </script>
             <script async src="KnightOnLine.js"></script>
-          </body>
-          </html>
+          </body></html>
           EOF
 
           cat > openko-web/README.txt <<'EOF'
-          OldERA OpenKO browser-port — genuine 1298 login + transport milestone.
-          Real OpenKO WarFare C++ client compiled to WASM, RHIDeviceGL adapted to WebGL2.
-          Logical framebuffer: fixed 1024x768. Presentation scaling: CSS only.
-          Preloaded from ko4life-net/ko-assets branch 1298: Data, UI_US, Intro_Sound.mp3 and Server.ini.
-          Browser runs the original CAPISocket packet path; TCP is translated to WebSocket and bridged to the KO server side.
+          OldERA OpenKO browser-port — genuine 1298 real UI auth milestone.
+          Real OpenKO WarFare C++ client compiled to WASM/WebGL2 with genuine 1298 Data/UI assets.
+          Browser CAPISocket uses Emscripten WebSocket transport while preserving original KO packet framing/parsing.
+          Canonical CI proves real Edit_ID/Edit_PW input -> F3 login -> WebSocket gateway -> TCP -> auth response -> F6 notice -> real server-list UI.
           No Three.js/DOM game UI recreation.
           EOF
 
@@ -354,26 +250,25 @@ jobs:
           if git diff --cached --quiet; then
             echo 'Published files unchanged.'
           else
-            git commit -m 'Publish genuine 1298 OpenKO browser login transport [skip ci]'
+            git commit -m 'Publish proven 1298 browser auth client [skip ci]'
             git push origin HEAD:openko-browser-port
           fi
 
-      - name: Upload browser-port artifact
+      - name: Upload canonical browser-port proof
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: openko-browser-login
+          name: openko-browser-auth-canonical
           path: |
             configure-web.log
             build-web.log
-            browser-runtime.log
-            browser-status.txt
-            browser-runtime.png
-            browser-canvas.png
-            browser-network.txt
-            browser-network-backend.log
-            browser-websockify.log
-            browser-http.log
+            browser-auth.log
+            browser-auth-status.txt
+            browser-auth-canvas.png
+            gateway-auth.log
+            ko-auth-stub.log
+            ko-auth-result.txt
+            http-auth.log
             build-web/bin/Release/KnightOnLine.html
             build-web/bin/Release/KnightOnLine.js
             build-web/bin/Release/KnightOnLine.wasm
