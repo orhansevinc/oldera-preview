@@ -1,0 +1,15 @@
+{
+  "name": "@oldkoweb/ko-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Packet-agnostic WebSocket <-> TCP transport gateway for OldKO 1298 browser clients.",
+  "type": "commonjs",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test ../../tests/ko-gateway/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
