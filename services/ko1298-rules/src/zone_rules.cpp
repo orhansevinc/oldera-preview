@@ -27,10 +27,12 @@ bool ZoneRules::IsHomeZoneFor(Nation nation, ZoneId zone) noexcept {
 }
 
 bool ZoneRules::IsOpposingHomeZoneFor(Nation nation, ZoneId zone) noexcept {
+    // Verified 1298 invasion scope is the opposing nation home map (1/2).
+    // Eslant remains nation-locked; do not infer a custom/common-Eslant rule.
     if (nation == Nation::Karus)
-        return zone == ZoneId::ElMorad || zone == ZoneId::ElMoradEslant;
+        return zone == ZoneId::ElMorad;
     if (nation == Nation::ElMorad)
-        return zone == ZoneId::Karus || zone == ZoneId::KarusEslant;
+        return zone == ZoneId::Karus;
     return false;
 }
 
@@ -53,9 +55,8 @@ bool ZoneRules::IsSupportedZone(ZoneId zone) noexcept {
 }
 
 bool ZoneRules::IsSafeZone(ZoneId zone) const noexcept {
-    // Zone-wide unconditional safety only. Coordinate/region safe areas are
-    // represented by PlayerLocation::in_safe_area and checked by CanAttack().
-    // Home-zone safety is event-dependent because invasion can enable PvP.
+    // Zone-wide safety only. Coordinate/region safe areas are represented by
+    // PlayerLocation::in_safe_area and checked by CanAttack().
     return zone == ZoneId::Moradon;
 }
 
@@ -77,9 +78,9 @@ bool ZoneRules::AreHostile(
     if (IsBattleZone(zone))
         return state.battle_open && lhs != rhs;
 
-    // Home/Eslant zones are non-PvP in normal operation. Opposing nations are
-    // hostile only while the world layer declares the invasion phase open.
-    if (IsHomeZoneFor(lhs, zone) || IsOpposingHomeZoneFor(lhs, zone))
+    // Nation home maps (1/2) become hostile to the opposing nation only while
+    // the world layer declares the invasion phase open. Eslant stays nation-locked.
+    if (zone == ZoneId::Karus || zone == ZoneId::ElMorad)
         return state.invasion_open && lhs != rhs;
 
     return false;
@@ -145,6 +146,11 @@ RuleDecision ZoneRules::CanEnterZone(
             ? RuleDecision{true, RuleReason::Allowed}
             : RuleDecision{false, RuleReason::WrongNation};
 
+    // Opposing Eslant is always nation-locked in this verified 1298 scope.
+    if ((nation == Nation::Karus && target_zone == ZoneId::ElMoradEslant)
+        || (nation == Nation::ElMorad && target_zone == ZoneId::KarusEslant))
+        return {false, RuleReason::WrongNation};
+
     return {false, RuleReason::UnsupportedZone};
 }
 
@@ -152,13 +158,17 @@ DeathRule ZoneRules::GetDeathRule(
     Nation nation,
     ZoneId zone,
     const ZoneRuntimeState& state) const noexcept {
+    (void)nation;
+
     if (zone == ZoneId::Arena)
         return {RespawnPolicy::ZoneBind, false};
 
     if (IsBattleZone(zone) && state.battle_open)
         return {RespawnPolicy::BattleBind, true};
 
-    if (zone == ZoneId::Moradon || IsHomeZoneFor(nation, zone))
+    if (zone == ZoneId::Moradon
+        || zone == ZoneId::Karus || zone == ZoneId::ElMorad
+        || zone == ZoneId::KarusEslant || zone == ZoneId::ElMoradEslant)
         return {RespawnPolicy::NationHome, false};
 
     return {RespawnPolicy::ZoneBind, false};
@@ -178,8 +188,8 @@ NPContributionRule ZoneRules::GetNPContributionRule(
         return {true, RuleReason::Allowed};
 
     if (state.invasion_open
-        && (IsHomeZoneFor(context.attacker.nation, context.attacker.zone)
-            || IsOpposingHomeZoneFor(context.attacker.nation, context.attacker.zone)))
+        && (context.attacker.zone == ZoneId::Karus
+            || context.attacker.zone == ZoneId::ElMorad))
         return {true, RuleReason::Allowed};
 
     return {false, RuleReason::PvPDisabled};
