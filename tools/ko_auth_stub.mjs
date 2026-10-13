@@ -45,7 +45,7 @@ function parseLogin(payload) {
 }
 
 function mark() {
-  const line = `AUTH_CHAIN request=${sawAuth?1:0} matched=${authMatched?1:0} response=${authResponseSent?1:0} news=${newsResponseSent?1:0} id=${expectedID}`;
+  const line = `AUTH_CHAIN request=${sawAuth?1:0} matched=${authMatched?1:0} response=${authResponseSent?1:0} id=${expectedID} news=${newsResponseSent?1:0}`;
   fs.writeFileSync(resultPath, line + '\n');
   console.log(`[auth-stub] ${line}`);
 }
