@@ -3,7 +3,12 @@ name: OpenKO Browser Port
 on:
   push:
     branches: [openko-browser-port]
+    paths-ignore:
+      - 'openko-web/**'
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   emscripten-probe:
@@ -12,6 +17,9 @@ jobs:
     steps:
       - name: Checkout OldERA control repo
         uses: actions/checkout@v4
+        with:
+          ref: openko-browser-port
+          fetch-depth: 0
 
       - name: Checkout OpenKO POSIX client
         uses: actions/checkout@v4
@@ -70,13 +78,6 @@ jobs:
           version: latest
           actions-cache-folder: emsdk-cache
 
-      - name: Record toolchain versions
-        run: |
-          emcc --version
-          em++ --version
-          cmake --version
-          ninja --version
-
       - name: Configure OpenKO for WebAssembly
         id: configure
         continue-on-error: true
@@ -106,37 +107,50 @@ jobs:
           set -o pipefail
           cmake --build build-web --target WarFare -j2 2>&1 | tee build-web.log
 
-      - name: Inspect generated web outputs
+      - name: Verify browser build
         if: always()
         shell: bash
         run: |
-          echo "=== configure outcome: ${{ steps.configure.outcome }} ==="
-          echo "=== build outcome: ${{ steps.build.outcome }} ==="
-          find build-web/bin/Release -maxdepth 1 -type f -printf '%f %s bytes\n' 2>/dev/null | sort || true
-          mkdir -p browser-probe-artifact
-          cp configure-web.log browser-probe-artifact/ 2>/dev/null || true
-          cp build-web.log browser-probe-artifact/ 2>/dev/null || true
-          find build-web/bin/Release -maxdepth 1 -type f -exec cp -f {} browser-probe-artifact/ \; 2>/dev/null || true
+          if [ "${{ steps.configure.outcome }}" != "success" ]; then exit 1; fi
+          if [ "${{ steps.build.outcome }}" != "success" ]; then exit 1; fi
+          test -s build-web/bin/Release/KnightOnLine.html
+          test -s build-web/bin/Release/KnightOnLine.js
+          test -s build-web/bin/Release/KnightOnLine.wasm
 
-      - name: Upload browser-port probe
+      - name: Publish browser executable into branch
+        shell: bash
+        run: |
+          rm -rf openko-web
+          mkdir -p openko-web
+          cp -f build-web/bin/Release/KnightOnLine.html openko-web/index.html
+          cp -f build-web/bin/Release/KnightOnLine.js openko-web/KnightOnLine.js
+          cp -f build-web/bin/Release/KnightOnLine.wasm openko-web/KnightOnLine.wasm
+          find build-web/bin/Release -maxdepth 1 -type f -name '*.cur' -exec cp -f {} openko-web/ \;
+          cat > openko-web/README.txt <<'EOF'
+          OldERA OpenKO browser-port milestone.
+          This is the real OpenKO 1.298 WarFare C++ client compiled by Emscripten.
+          Assets/network transport are the next browser-adaptation milestones.
+          EOF
+          git config user.name "OldERA Build Bot"
+          git config user.email "actions@github.com"
+          git add -f openko-web
+          if git diff --cached --quiet; then
+            echo 'Published files unchanged.'
+          else
+            git commit -m 'Publish real OpenKO Emscripten browser executable [skip ci]'
+            git push origin HEAD:openko-browser-port
+          fi
+
+      - name: Upload browser-port artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: openko-browser-probe
-          path: browser-probe-artifact
+          path: |
+            configure-web.log
+            build-web.log
+            build-web/bin/Release/KnightOnLine.html
+            build-web/bin/Release/KnightOnLine.js
+            build-web/bin/Release/KnightOnLine.wasm
+            build-web/bin/Release/*.cur
           if-no-files-found: warn
-
-      - name: Fail if browser build did not complete
-        if: always()
-        shell: bash
-        run: |
-          if [ "${{ steps.configure.outcome }}" != "success" ]; then
-            echo "OpenKO Emscripten configure failed; inspect configure-web.log."
-            exit 1
-          fi
-          if [ "${{ steps.build.outcome }}" != "success" ]; then
-            echo "OpenKO WarFare Emscripten build failed; inspect build-web.log."
-            exit 1
-          fi
-          test -s build-web/bin/Release/KnightOnLine.html
-          test -s build-web/bin/Release/KnightOnLine.wasm
