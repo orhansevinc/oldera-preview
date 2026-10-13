@@ -49,7 +49,6 @@ const { PNG } = require('pngjs');
   };
 
   const assertVisual = async (label) => {
-    // Primary gate: inspect the genuine WebGL2 framebuffer directly.
     const framebuffer = await page.evaluate(() => {
       const canvas = document.getElementById('canvas');
       if (!canvas) return { error: 'canvas missing', nonBlack: 0, total: 0, ratio: 0 };
@@ -70,8 +69,6 @@ const { PNG } = require('pngjs');
 
     console.log(`[nation-driver] ${label.toLowerCase()} framebuffer nonBlack=${framebuffer.nonBlack}/${framebuffer.total} ratio=${Number(framebuffer.ratio || 0).toFixed(4)} glError=${framebuffer.glError ?? 'n/a'}`);
 
-    // Capture what Chrome actually composites. The second/final call therefore
-    // leaves browser-nation-canvas.png as the Character Select proof image.
     let compositor = null;
     try {
       compositor = await captureCompositorEvidence();
@@ -157,9 +154,6 @@ const { PNG } = require('pngjs');
     await assertVisual('NATION');
     console.log('[nation-driver] NATION_UI_OK');
 
-    // Run 46 visually fixed the genuine El Morad button around this point in
-    // the native 1024x768 UI. Use a real mouse event so UINationSelectDlg and
-    // GameProcNationSelect send the original WIZ_SEL_NATION packet.
     await page.locator('#canvas').focus();
     console.log('[nation-driver] clicking real 1298 El Morad nation button');
     await page.mouse.click(258, 495, { delay: 120 });
@@ -170,7 +164,7 @@ const { PNG } = require('pngjs');
     }, null, { timeout: 20000 });
 
     await page.waitForTimeout(1500);
-    const finalStatus = await saveStatus();
+    let finalStatus = await saveStatus();
     if (finalStatus.includes('DFont: no usable font found')) {
       throw new Error('Runtime font preload failed: DFont still reports no usable font');
     }
@@ -178,6 +172,28 @@ const { PNG } = require('pngjs');
 
     await assertVisual('CHARACTER');
     console.log('[nation-driver] CHARACTER_UI_OK');
+
+    // The game stub returns three genuinely empty character slots. The original
+    // 1298 Character Select UI routes Enter on the focused center slot through
+    // CharacterSelectOrCreate(), which opens Character Create without a fake DOM UI.
+    await page.locator('#canvas').focus();
+    await page.waitForTimeout(250);
+    console.log('[nation-driver] pressing Enter on empty center slot to open real Character Create');
+    await pressHeld('Enter', 100);
+
+    await page.waitForFunction(() => {
+      const t = document.getElementById('status')?.textContent || '';
+      return t.includes('scene change: character-select -> character-create');
+    }, null, { timeout: 20000 });
+
+    await page.waitForTimeout(1500);
+    finalStatus = await saveStatus();
+    if (finalStatus.includes('DFont: no usable font found')) {
+      throw new Error('Character Create lost the runtime font');
+    }
+
+    await assertVisual('CREATE');
+    console.log('[nation-driver] CHARACTER_CREATE_UI_OK');
   } catch (err) {
     await saveStatus();
     console.error(`[nation-driver] failure: ${err.message}`);
