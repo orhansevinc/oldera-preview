@@ -1,0 +1,12 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import { Reporter, milestoneNames } from './lib/reporter.mjs';
+assert.equal(milestoneNames.length,21);
+const dir=fs.mkdtempSync(path.join(os.tmpdir(),'oldko-ws10-'));
+const r=new Reporter(dir);r.pass(0,'x',{a:1});r.fail(1,'y');
+const parsed=JSON.parse(fs.readFileSync(path.join(dir,'milestones.json'),'utf8'));
+assert.equal(parsed.milestones.M0.status,'PASS');assert.equal(parsed.milestones.M1.status,'FAIL');
+assert.equal(r.summary().length,21);assert.equal(r.summary()[2].status,'FAIL');
+console.log('WS10_HARNESS_SELFTEST_PASS milestones=21 reporter=ok missingEvidenceDefaultsToFail=ok');

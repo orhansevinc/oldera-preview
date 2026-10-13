@@ -1,0 +1,11 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { Reporter } from './lib/reporter.mjs';
+const r=new Reporter(), rows=r.summary();
+let md='# OldKOWeb WS10 Milestone Result\n\n| Milestone | Result | Evidence / reason |\n|---|---|---|\n';
+for(const x of rows)md+=`| ${x.id} ${x.name} | **${x.status}** | ${String(x.detail||'').replace(/\|/g,'\\|')} |\n`;
+const pass=rows.filter(x=>x.status==='PASS').map(x=>Number(x.id.slice(1)));const fail=rows.filter(x=>x.status!=='PASS').map(x=>x.id);
+const furthest=pass.length?Math.max(...pass):-1;
+md+=`\nFurthest passing milestone: ${furthest>=0?`M${furthest} ${rows[furthest].name}`:'none'}\n\nFailing: ${fail.join(', ')||'none'}\n`;
+fs.writeFileSync(path.join(r.dir,'summary.md'),md);console.log(md);
+if(fail.length)process.exitCode=1;

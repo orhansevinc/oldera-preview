@@ -1,0 +1,131 @@
+name: WS10 QA Integration
+
+on:
+  push:
+    branches: [ws10-qa-integration]
+    paths:
+      - 'qa/**'
+      - 'tests/e2e/**'
+      - 'workstreams/ws10/**'
+      - '.github/workflows/ws10-e2e.yml'
+  workflow_dispatch:
+    inputs:
+      client_ref:
+        description: 'Ref containing the browser package under openko-web/'
+        required: true
+        default: 'openko-browser-port'
+      gateway_ref:
+        description: 'Gateway workstream ref (metadata/integration target)'
+        required: false
+        default: 'ws02-websocket-gateway'
+      session_ref:
+        description: 'KO1298 session-server workstream ref'
+        required: false
+        default: 'ws03-ko1298-session'
+      database_ref:
+        description: 'Database workstream ref'
+        required: false
+        default: 'ws07-database'
+      admin_ref:
+        description: 'Admin API workstream ref'
+        required: false
+        default: 'ws08-admin-api'
+      admin_base_url:
+        description: 'Running Admin API base, e.g. http://127.0.0.1:8080/api/admin'
+        required: false
+        default: ''
+      restart_command:
+        description: 'Optional controlled service restart command for M20'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  harness-selftest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: qa/package.json
+      - run: npm install --prefix qa --no-audit --no-fund
+      - run: node qa/selftest.mjs
+
+  milestones:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      QA_ARTIFACT_DIR: artifacts
+      QA_CLIENT_DIR: .qa-target/client
+      QA_ADMIN_BASE_URL: ${{ inputs.admin_base_url || '' }}
+      QA_RESTART_COMMAND: ${{ inputs.restart_command || '' }}
+      CLIENT_REF: ${{ inputs.client_ref || 'openko-browser-port' }}
+      GATEWAY_REF: ${{ inputs.gateway_ref || 'ws02-websocket-gateway' }}
+      SESSION_REF: ${{ inputs.session_ref || 'ws03-ko1298-session' }}
+      DATABASE_REF: ${{ inputs.database_ref || 'ws07-database' }}
+      ADMIN_REF: ${{ inputs.admin_ref || 'ws08-admin-api' }}
+    steps:
+      - name: Checkout WS10 harness only
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Record refs without merging
+        shell: bash
+        run: |
+          set -u
+          mkdir -p artifacts .qa-target/client
+          : > artifacts/refs.txt
+          for pair in "client:$CLIENT_REF" "gateway:$GATEWAY_REF" "session:$SESSION_REF" "database:$DATABASE_REF" "admin:$ADMIN_REF"; do
+            kind=${pair%%:*}; ref=${pair#*:}
+            if git fetch --no-tags origin "$ref"; then
+              sha=$(git rev-parse FETCH_HEAD)
+              echo "$kind $ref $sha" | tee -a artifacts/refs.txt
+            else
+              echo "$kind $ref MISSING" | tee -a artifacts/refs.txt
+            fi
+          done
+      - name: Stage browser package from requested ref
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .qa-target/client && mkdir -p .qa-target/client
+          git fetch --no-tags origin "$CLIENT_REF"
+          git archive FETCH_HEAD openko-web | tar -x --strip-components=1 -C .qa-target/client
+          find .qa-target/client -maxdepth 1 -type f -printf '%f %s bytes\n' | sort | tee artifacts/client-files.txt
+      - name: Install QA dependencies and Chromium
+        run: |
+          npm install --prefix qa --no-audit --no-fund
+          npx --prefix qa playwright install --with-deps chromium
+      - name: M0 package integrity
+        continue-on-error: true
+        run: node qa/check-package.mjs .qa-target/client
+      - name: M1-M16 browser black-box milestones
+        continue-on-error: true
+        run: node qa/run-client.mjs
+      - name: M17-M20 service milestones
+        continue-on-error: true
+        run: node qa/run-api.mjs
+      - name: Fill and print milestone summary
+        if: always()
+        continue-on-error: true
+        run: node qa/finalize.mjs | tee artifacts/finalize.log
+      - name: Upload QA proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ws10-qa-${{ github.run_number }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            artifacts/**
+      - name: Enforce PASS/FAIL gate
+        if: always()
+        run: node qa/finalize.mjs

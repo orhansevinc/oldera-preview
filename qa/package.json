@@ -1,0 +1,17 @@
+{
+  "name": "oldkoweb-ws10-qa",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "selftest": "node selftest.mjs",
+    "check-package": "node check-package.mjs",
+    "client": "node run-client.mjs",
+    "api": "node run-api.mjs",
+    "finalize": "node finalize.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.55.0",
+    "pngjs": "7.0.0",
+    "ws": "8.18.3"
+  }
+}
