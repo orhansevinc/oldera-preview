@@ -39,7 +39,13 @@ class SessionOwnershipService {
     maxCasRetries = 16,
     disconnectArbiter = { requestDisconnect: async () => {} },
   }) {
-    if (!store || typeof store.get !== 'function' || typeof store.compareAndSet !== 'function') {
+    if (
+      !store ||
+      typeof store.get !== 'function' ||
+      typeof store.compareAndSet !== 'function' ||
+      typeof store.listBySession !== 'function' ||
+      typeof store.listAll !== 'function'
+    ) {
       throw new TypeError('store must implement the lease-store interface');
     }
     if (!Object.values(DUPLICATE_LOGIN_POLICY).includes(duplicateLoginPolicy)) {
@@ -157,7 +163,12 @@ class SessionOwnershipService {
         await this._releaseSessionLeases(current.sessionId, 'DUPLICATE_LOGIN_REPLACED', {
           skipScope: scope,
           skipKey: key,
-          notify: true,
+          notify: false,
+        });
+        // The displaced socket must be told to terminate even if it had not selected a character yet.
+        await this.disconnectArbiter.requestDisconnect({
+          sessionId: current.sessionId,
+          reason: 'DUPLICATE_LOGIN_REPLACED',
         });
         return {
           ok: true,
@@ -200,7 +211,7 @@ class SessionOwnershipService {
 
     // Character ownership never silently replaces another live session. Account takeover must
     // displace/clean the old session first, then the new session may claim the character.
-    return this._acquire({
+    const claimed = await this._acquire({
       scope: LEASE_SCOPE.CHARACTER,
       key: characterId,
       accountId,
@@ -209,6 +220,24 @@ class SessionOwnershipService {
       serverId,
       allowReplace: false,
     });
+    if (!claimed.ok) return claimed;
+
+    // Revalidate after the character CAS. Account ownership may have changed between the
+    // initial account read and the character write. Conditional rollback prevents an orphan
+    // character lease from surviving a concurrent duplicate-login takeover/revoke.
+    const accountAfter = await this.store.get(LEASE_SCOPE.ACCOUNT, accountId);
+    const afterNow = this._now();
+    if (
+      !accountAfter ||
+      this._isExpired(accountAfter, afterNow) ||
+      accountAfter.sessionId !== sessionId ||
+      accountAfter.state !== 'active'
+    ) {
+      await this._deleteIfCurrent(claimed.lease);
+      return { ok: false, code: RESULT.ACCOUNT_NOT_OWNED };
+    }
+
+    return claimed;
   }
 
   async heartbeat(sessionId) {
