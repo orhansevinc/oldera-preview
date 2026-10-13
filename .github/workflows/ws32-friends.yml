@@ -1,0 +1,34 @@
+name: WS32 Friends Domain
+
+on:
+  push:
+    branches: [ws32-friends-messenger]
+    paths:
+      - 'services/ko1298-friends/**'
+      - 'tests/ko1298-friends/**'
+      - 'workstreams/ws32/**'
+      - '.github/workflows/ws32-friends.yml'
+  pull_request:
+    paths:
+      - 'services/ko1298-friends/**'
+      - 'tests/ko1298-friends/**'
+      - 'workstreams/ws32/**'
+      - '.github/workflows/ws32-friends.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax check
+        run: |
+          node --check services/ko1298-friends/contracts.js
+          node --check services/ko1298-friends/memory-repository.js
+          node --check services/ko1298-friends/presence.js
+          node --check services/ko1298-friends/friends-service.js
+          node --check services/ko1298-friends/index.js
+      - name: Unit tests
+        run: node --test tests/ko1298-friends/*.test.js
