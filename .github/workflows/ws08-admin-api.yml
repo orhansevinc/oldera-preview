@@ -1,0 +1,32 @@
+name: WS08 Admin API
+
+on:
+  push:
+    branches: [ws08-admin-api]
+    paths:
+      - 'services/admin-api/**'
+      - 'tests/admin-api/**'
+      - 'workstreams/ws08/**'
+      - '.github/workflows/ws08-admin-api.yml'
+  pull_request:
+    paths:
+      - 'services/admin-api/**'
+      - 'tests/admin-api/**'
+      - 'workstreams/ws08/**'
+      - '.github/workflows/ws08-admin-api.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test admin API
+        working-directory: services/admin-api
+        run: npm test
