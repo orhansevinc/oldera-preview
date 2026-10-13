@@ -5,7 +5,10 @@ on:
   push:
     branches: [openko-browser-port]
     paths:
+      - 'gateway/**'
+      - 'tools/patch_openko_browser_gateway.py'
       - 'tools/fix_browser_server_ini_case.py'
+      - 'tools/ko_tcp_probe.mjs'
       - '.github/workflows/openko-browser-network-v2.yml'
 
 permissions:
@@ -150,10 +153,11 @@ jobs:
             await page.waitForFunction(()=>{
               const t=document.getElementById('status')?.textContent||'';
               return t.includes("browser Server.Ini: path='/data/Server.Ini' count=1")
-                && t.includes('browser WebSocket open')
-                && t.includes('browser WebSocket sent queued KO frame (7 bytes)');
+                && t.includes('browser login transport active: direct Emscripten WebSocket gateway');
             },null,{timeout:90000});
-            await page.waitForTimeout(1500);
+            // WebSocket callback logs are written by CLogWriter rather than Module.print,
+            // so gateway/TCP evidence below is the authoritative transport proof.
+            await page.waitForTimeout(2500);
             const t=await page.locator('#status').textContent().catch(()=> '');
             fs.writeFileSync('browser-v2-status.txt',t||'');
             await page.locator('#canvas').screenshot({path:'browser-v2-canvas.png'});
@@ -178,11 +182,10 @@ jobs:
 
           test "$BROWSER_RC" -eq 0
           grep -q "browser Server.Ini: path='/data/Server.Ini' count=1" browser-v2-status.txt
-          grep -q 'browser WebSocket open' browser-v2-status.txt
-          grep -q 'browser WebSocket sent queued KO frame (7 bytes)' browser-v2-status.txt
+          grep -q 'browser login transport active: direct Emscripten WebSocket gateway' browser-v2-status.txt
           grep -q 'browser connected' gateway-v2.log
-          grep -q 'c2s bytes=7 hex=aa550100f555aa' gateway-v2.log
           grep -q 'tcp connected 127.0.0.1:16100' gateway-v2.log
+          grep -q 'c2s bytes=7 hex=aa550100f555aa' gateway-v2.log
           grep -q 'KO_FRAME_OK opcode=0xf5' gateway-probe-result.txt
           if grep -Eq '\[pageerror\]|GL_INVALID_(ENUM|VALUE|OPERATION)|WebGL: INVALID_|WebGL: too many errors' browser-v2.log; then
             echo 'Browser/WebGL error detected' >&2; exit 1
