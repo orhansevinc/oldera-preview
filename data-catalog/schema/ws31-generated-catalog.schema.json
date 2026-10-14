@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oldkoweb.com/schema/ws31-generated-catalog.schema.json",
+  "title": "WS31 generated catalog envelope",
+  "type": "object",
+  "required": ["catalog", "patch", "parser_version", "source_commits", "rows"],
+  "properties": {
+    "catalog": {"type": "string", "minLength": 1},
+    "patch": {"const": "1298"},
+    "parser_version": {"const": "ws31-generator/2.0.0"},
+    "source_commits": {"type": "object"},
+    "rows": {"type": "array"}
+  },
+  "additionalProperties": true
+}

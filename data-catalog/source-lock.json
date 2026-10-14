@@ -1,0 +1,46 @@
+{
+  "catalog_version": "1298-ws31-v2",
+  "parser_version": "ws31-generator/2.0.0",
+  "sources": {
+    "openko-server": {
+      "repo": "Open-KO/KnightOnline",
+      "commit": "7d6cf81093e142c928c2ac9510512b2b182178b5",
+      "role": "loader-semantics"
+    },
+    "openko-client-1298": {
+      "repo": "Open-KO/ko-client-assets",
+      "commit": "b4636332c7cd818b0ce171eccc973dd3d6b2e56d",
+      "role": "1298-client-tables",
+      "files": {
+        "zones": "Data/Zones.tbl.csv",
+        "items": "Data/Item_Org_us.tbl.csv",
+        "skills": "Data/Skill_Magic_Main_us.tbl.csv"
+      }
+    },
+    "openko-db": {
+      "repo": "Open-KO/OpenKO-db",
+      "commit": "bec619466938d278339c30e5b1a4bff3c9413bab",
+      "role": "server-schema-and-seed",
+      "files": {
+        "zones": "ManualSetup/6_InsertData_ZONE_INFO.sql",
+        "npcs": "ManualSetup/6_InsertData_K_NPC.sql",
+        "monsters": "ManualSetup/6_InsertData_K_MONSTER.sql",
+        "spawns": "ManualSetup/6_InsertData_K_NPCPOS.sql",
+        "items": "ManualSetup/6_InsertData_ITEM.sql",
+        "npc_drops": "ManualSetup/6_InsertData_K_NPC_ITEM.sql",
+        "monster_drops": "ManualSetup/6_InsertData_K_MONSTER_ITEM.sql",
+        "skills": "ManualSetup/6_InsertData_MAGIC.sql",
+        "skill_type1": "ManualSetup/6_InsertData_MAGIC_TYPE1.sql",
+        "skill_type2": "ManualSetup/6_InsertData_MAGIC_TYPE2.sql",
+        "skill_type3": "ManualSetup/6_InsertData_MAGIC_TYPE3.sql",
+        "skill_type4": "ManualSetup/6_InsertData_MAGIC_TYPE4.sql",
+        "skill_type5": "ManualSetup/6_InsertData_MAGIC_TYPE5.sql",
+        "skill_type6": "ManualSetup/6_InsertData_MAGIC_TYPE6.sql",
+        "skill_type7": "ManualSetup/6_InsertData_MAGIC_TYPE7.sql",
+        "skill_type8": "ManualSetup/6_InsertData_MAGIC_TYPE8.sql",
+        "skill_type9": "ManualSetup/6_InsertData_MAGIC_TYPE9.sql",
+        "progression": "ManualSetup/6_InsertData_LEVEL_UP.sql"
+      }
+    }
+  }
+}

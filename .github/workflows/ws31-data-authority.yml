@@ -1,0 +1,54 @@
+name: WS31 Verified Data Authority
+
+on:
+  push:
+    branches: [ws31-data-catalog]
+    paths:
+      - "tools/ws31_data/generate_catalog.py"
+      - "tools/ws31_data/validate_generated_catalog.py"
+      - "data-catalog/source-lock.json"
+      - "data-catalog/schema/ws31-*.schema.json"
+      - ".github/workflows/ws31-data-authority.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ws31-data-catalog
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Generate verified 1298 catalog
+        run: python tools/ws31_data/generate_catalog.py
+      - name: Validate schema provenance and cross-references
+        run: |
+          python tools/ws31_data/validate_generated_catalog.py
+          python -m json.tool data-catalog/schema/ws31-provenance.schema.json >/dev/null
+          python -m json.tool data-catalog/schema/ws31-generated-catalog.schema.json >/dev/null
+          python tools/ws31_data/validate_catalog.py
+          python -m unittest discover -s tests/data-catalog -p "test_catalog.py"
+      - name: Verify byte-stable regeneration
+        run: |
+          find data-catalog/generated -type f -name '*.json' -print0 | sort -z | xargs -0 sha256sum > /tmp/ws31-before.sha
+          sha256sum workstreams/ws31/STATUS.md workstreams/ws31/DATA_PROVENANCE.md workstreams/ws31/CATALOG_SUMMARY.md workstreams/ws31/UNRESOLVED.md >> /tmp/ws31-before.sha
+          python tools/ws31_data/generate_catalog.py
+          find data-catalog/generated -type f -name '*.json' -print0 | sort -z | xargs -0 sha256sum > /tmp/ws31-after.sha
+          sha256sum workstreams/ws31/STATUS.md workstreams/ws31/DATA_PROVENANCE.md workstreams/ws31/CATALOG_SUMMARY.md workstreams/ws31/UNRESOLVED.md >> /tmp/ws31-after.sha
+          diff -u /tmp/ws31-before.sha /tmp/ws31-after.sha
+      - name: Commit generated authority
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data-catalog/generated workstreams/ws31/STATUS.md workstreams/ws31/DATA_PROVENANCE.md workstreams/ws31/CATALOG_SUMMARY.md workstreams/ws31/UNRESOLVED.md
+          if ! git diff --cached --quiet; then
+            git commit -m "data(ws31): regenerate verified 1298 catalog"
+            git push origin HEAD:ws31-data-catalog
+          fi

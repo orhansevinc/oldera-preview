@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oldkoweb.com/schema/ws31-provenance.schema.json",
+  "title": "WS31 provenance record",
+  "type": "object",
+  "required": ["source_id", "commit", "path"],
+  "properties": {
+    "source_id": {"type": "string", "minLength": 1},
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "path": {"type": "string", "minLength": 1},
+    "line": {"type": "integer", "minimum": 1},
+    "row_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "additionalProperties": true
+}
