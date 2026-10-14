@@ -2,66 +2,63 @@ WS05
 
 # Selected-character -> Moradon integration contract
 
-WS05 is client/render-side only. It does not implement authentication, session
-routing, world packets, transport, persistence, NPC logic, or movement.
+WS05 is client/render-side only. It does not implement authentication, session routing, world packets, transport, persistence, NPC logic, movement, or server zone semantics.
 
-## Exact handoff required from WS03/WS14
+Implementation commit for this correction: `c72346b84c19db43452e0b1739bd53d2bff4c804`.
 
-For the current Moradon milestone the real 1.298 client must receive:
+## Authoritative zone mapping
 
-1. `WIZ_SEL_CHAR (0x04)` success for the authenticated selected character:
-   - result `1`
-   - zone `21`
-   - X `312.0`, Z `402.0`, Y `0.0`
-   - default bytes: `04 01 15 30 0c b4 0f 00 00 00`
-2. The selected-character success activates the real `CGameProcMain`; the client
-   initializes `InitZone(currentZone, playerPosition)`.
-3. Client -> server: `WIZ_GAMESTART (0x0D) 01`.
-4. Server -> client, in the WS14 1298 bootstrap contract:
-   - `WIZ_MYINFO (0x0E)`
-   - Moradon `WIZ_ZONEABILITY (0x5E)`; default
-     `5e 01 01 00 01 0a 00`
-   - `WIZ_REGIONCHANGE (0x15)` nearby user IDs
-   - `WIZ_NPC_REGION (0x1C)` nearby NPC IDs
-   - `WIZ_GAMESTART (0x0D)` acknowledgement
-5. While loading, the client may request unknown entity records:
-   - `WIZ_REQ_USERIN (0x16)`
-   - `WIZ_REQ_NPCIN (0x1D)`
-   WS14 must answer these according to its 1298 serializers.
-6. Client -> server: `0D 02`; only then may the session become `WORLD_READY`.
+For authentic KO 1.298 Moradon there are two representations in this path:
 
-WS05 does not synthesize any of those packets. A fake/stub world response cannot
-produce `MORADON PASS`.
+1. **Server/wire zone = 21.** WS03/WS14 continue to serialize Moradon as source-verified zone `21` in `WIZ_SEL_CHAR` / world state.
+2. **Pinned native client zone = 210.** In the consumed OpenKO 1.298 client, `CGameProcedure::MsgRecv_CharacterSelect()` reads the selected-character zone and, for this format generation, multiplies it by 10 before assigning `s_pPlayer->m_InfoExt.iZoneCur`. `CGameProcMain::InitZone()` therefore enters Moradon with native zone `210`.
 
-## Client evidence required for MORADON PASS
+WS05 must observe that real client behavior. It must not ask WS03 or WS14 to send `210` over the wire merely to satisfy a browser gate.
 
-The gate requires all of the following from the same browser run:
+## WS05 browser-only instrumentation contract
 
-- `WS04_CHAR_SELECT_RESPONSE success=1`
-- zone-table lookup reaches zone `21` and exposes non-empty terrain/color/object
-  filenames from the genuine client data
-- real `CN3TerrainManager::InitWorld()` executes terrain and object load calls
-- real `CN3TerrainManager::RenderTerrain()` executes in zone 21
-- real `CN3TerrainManager::RenderShape()` executes in zone 21
-- real `CGameProcMain::Render()` executes `s_pPlayer->Render()` in zone 21
-- WS04's pre-swap native GL capture returns a non-black framebuffer
-- no Null renderer, browser page error, or WebGL invalid-operation marker
+The probes now use native `210` for actual C++ state comparisons while preserving wire identity in the marker:
 
-This intentionally requires both engine-path evidence and pixels. A DOM
-reconstruction, 2D background, Three.js scene, arbitrary screenshot, or a log-only
-claim cannot pass.
+```text
+WS05_GATE event=moradon-zone-begin zone=21 native_zone=210 terrain='<real filename>' colormap='<real filename>' objects='<real filename>'
+WS05_GATE event=moradon-assets-loaded zone=21 native_zone=210
+WS05_GATE event=moradon-terrain-rendered zone=21 native_zone=210
+WS05_GATE event=moradon-shapes-rendered zone=21 native_zone=210
+WS05_GATE event=moradon-local-player-rendered zone=21 native_zone=210
+WS05_MORADON_VISUAL_OK source=pre-swap-gl ratio=<non-black ratio>
+```
 
-## Running the native gate
+The run must also include `WS04_CHAR_SELECT_RESPONSE success=1` and must not contain Null-renderer/page/WebGL fatal evidence.
 
-Use `.github/workflows/ws05-moradon-world.yml` manually with
-`run_native_gate=true`, provide a reachable integrated auth/game environment, and
-configure repository secrets `WS05_TEST_ID` / `WS05_TEST_PW` for an account whose
-slot 0 already contains a selectable character.
+The instrumentation remains under `#ifdef __EMSCRIPTEN__`; it records the real loader/render path and does not change packet handling, world placement, render decisions or desktop behavior.
 
-The workflow uses the existing packet-agnostic WebSocket gateways only as
-transport adapters. The TCP endpoints must be the actual integrated WS03/WS14
-session environment; the workflow intentionally starts no fake world server.
+## Backward compatibility with current WS10 harness
 
-## Genuine client asset evidence
+The current WS10 browser E2E waits for the existing `WS05_GATE ... zone=21` strings using substring matching. Appending `native_zone=210` therefore keeps those waits unchanged. Its workflow grep for `moradon-local-player-rendered zone=21` also remains valid.
 
-The pinned `ko4life-net/ko-assets` 1298 tree contains the concrete Moradon client files `Zones/moradon.gtd`, `Zones/moradon.opd`, and `Zones/moradon.tct` (plus the related `.dxt/.ens/.gfo/.glo/.gmd/.opdsub` files). The WS05 build patch fails closed if the three core terrain/object/color-map files are absent; it does not substitute generated geometry or a browser background.
+WS10 then invokes WS05's provider-owned `moradon_gate.py`. That gate has been tightened to require the complete `zone=21 native_zone=210` markers, so an old probe that still compares the native client to 21 cannot pass accidentally.
+
+**Required integration action: rerun WS10 unchanged with `moradon_ref=ws05-moradon-world`. No WS10 protocol/world-boundary edit is required for this fix.**
+
+## Server handoff remains unchanged
+
+The expected authentic sequence remains:
+
+1. Server returns successful `WIZ_SEL_CHAR (0x04)` with wire zone `21` and Moradon placement.
+2. Client performs its native 1.298 zone conversion and enters `CGameProcMain` with native zone `210`.
+3. Client sends `WIZ_GAMESTART (0x0D) 01`.
+4. WS14 returns MYINFO, ZONEABILITY, region/NPC bootstrap and GAMESTART acknowledgement according to its existing contract.
+5. Client completes loading / detail requests and sends GAMESTART loaded phase.
+6. WS05 accepts PASS only after real terrain, real shapes, real local player and a non-black native pre-swap GL framebuffer are all evidenced in that same browser run.
+
+WS10 run #16 (`38490102763`) already proved steps 1-5 far enough to show native main-scene entry, local-player initialization and `InitZone(... zone 210)` loading `Zones\\Moradon_xmas.gtd`; the missing markers were caused by WS05's old native-zone-21 comparisons.
+
+## Verification evidence
+
+At implementation commit `c72346b84c19db43452e0b1739bd53d2bff4c804`, GitHub Actions `WS05 Moradon World` run #2 (`38492131244`) completed `ws05-contract-gate` successfully. The workflow compiled the Python instrumentation/gate and ran the regression suite.
+
+The native-render job was skipped on that push because it is intentionally manual-only. The next authoritative integrated render evidence should come from the unchanged WS10 E2E rerun.
+
+## Non-negotiable PASS rules
+
+No Three.js, DOM reconstruction, Canvas2D fake world, synthetic packet flow, fake markers, arbitrary screenshot, or log-only synthetic PASS is accepted. Server wire zone stays `21`; native WS05 comparisons follow the real 1.298 client zone `210` behavior.

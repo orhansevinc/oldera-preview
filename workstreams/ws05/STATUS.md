@@ -2,85 +2,73 @@ WS05
 
 # STATUS — Moradon world control session
 
-Status: **IMPLEMENTED GATE / MORADON PASS BLOCKED BY LIVE SESSION HANDOFF**
+Status: **READY FOR UNCHANGED WS10 E2E RERUN / MORADON PASS PENDING**
 
-## Branch recovery
+Branch: `ws05-moradon-world`
+Implementation commit: `c72346b84c19db43452e0b1739bd53d2bff4c804`
+Static validation: GitHub Actions `WS05 Moradon World` run **#2**, run id `38492131244`, `ws05-contract-gate` = **SUCCESS**
 
-The existing branch was not a completed Moradon implementation. Its pre-control
-head was `18282d0e70de7ccb30244a9f09e2b3bff3040155`, matching the old WS04 baseline,
-and it contained no `workstreams/ws05` implementation/evidence set.
+## Control evidence consumed
 
-During this control session it was safely fast-forwarded, without force, to the
-verified WS04 client head `fffbd9372b67c2aaef600f7e50595bec7e23fe88`.
-That recovery imports the real character-select/create instrumentation and the
-native pre-swap GL framebuffer capture WS05 needs.
+The resumed WS05 task was driven by the current `main` inbox plus WS10 run #16 evidence. WS10 proved a real C++/Emscripten/WebGL2 session through character create, refreshed occupied slot, genuine `WIZ_SEL_CHAR`, WS03 -> WS14 handoff, GAMESTART/MYINFO/ZONEABILITY/region/NPC bootstrap, native main-scene entry and local-player initialization.
 
-## What WS05 adds
+The first true blocker in that run was WS05's browser-only zone predicate: server/wire Moradon remained authentic zone `21`, while the pinned OpenKO 1.298 client converted the selected-character zone to native client zone `210` before `CGameProcMain::InitZone()`. The same run loaded `Zones\\Moradon_xmas.gtd` at native zone 210.
 
-- `tools/ws05_moradon/patch_moradon_client.py`
-  - adds the genuine 1298 world asset roots to the WASM preload
-  - instruments the real `CN3TerrainManager::InitWorld()` zone-table/load path
-  - instruments real terrain and shape render calls
-  - instruments the real local-player render call
-  - all probes are browser-only and do not alter packet/world/render decisions
-- `tools/ws05_moradon/browser_moradon_driver.cjs`
-  - drives an existing-character selection through the genuine canvas UI
-  - waits for the real selected-character response and native Moradon markers
-  - captures the native pre-swap GL framebuffer; no DOM/2D reconstruction
-- `tools/ws05_moradon/moradon_gate.py`
-  - fails closed unless selection, zone 21, terrain, shapes, local player and
-    non-black native GL evidence all occur in one run
-  - rejects Null-renderer/page/WebGL error evidence
-- `.github/workflows/ws05-moradon-world.yml`
-  - runs static gate tests on the WS05 branch
-  - exposes a manual native gate that connects only to a real integrated TCP
-    environment; it starts no fake world server
-- `DEPENDENCY_SNAPSHOT.md` and `INTEGRATION_PATCH.md`
-  - pin the recovery/dependency evidence and exact WS03/WS14 contract
+Canonical upstream evidence:
 
-## Revalidated real client path
+- WS10 Actions run #16: `38490102763`
+- WS10 tested harness commit: `3c22e0e6907b74651589a18818bbcc7e930698b2`
+- WS10 current branch evidence head: `34c551518aad87a9fd03d392f193d354483c95a0`
+- WS03 current branch head checked: `d634870bbcd2c541695516643d34e0ac119354d7`
+- WS14 current branch head checked: `82cdcef40bed265ff4c4ce0fb7c8f6ad8cf2f52b`
 
-Canonical 1.298 behavior and the browser-port source agree on the transition:
+## Fix implemented
 
-`WIZ_SEL_CHAR success`
--> Character Select activates `CGameProcMain`
--> `CGameProcMain::Init()`
--> `InitZone(s_pPlayer->m_InfoExt.iZoneCur, s_pPlayer->Position())`
--> active world `InitWorld(21)`
--> zone table supplies genuine terrain/color/object paths
--> terrain/object loaders
--> main render calls `RenderTerrain`, `RenderShape`, other-player render, and
-   `s_pPlayer->Render`.
+WS05 now models the two zone namespaces explicitly:
 
-Moradon is zone `21`. WS14's pinned milestone placement is X `312.0`, Z `402.0`,
-Y `0.0`.
+- **wire/server Moradon zone:** `21` — unchanged, source-verified, still owned by WS03/WS14 protocol/world semantics;
+- **pinned 1.298 native client world zone:** `210` — used by WS05 browser-only world/render comparisons after the authentic client-side `* 10` conversion.
 
-## Furthest verified real-client state
+`tools/ws05_moradon/patch_moradon_client.py` now compares `CN3TerrainManager::InitWorld()` / player render state against native `210`. Evidence markers preserve `zone=21` as the wire identity and append `native_zone=210`, for example:
 
-The inherited WS04 evidence reaches the real Character Select/Create client and
-proves genuine `WIZ_NEW_CHAR (0x02)` emission. WS04's own status does not claim a
-successful create response/list refresh/occupied-slot `WIZ_SEL_CHAR`; its base
-GAME stub intentionally does not implement those responses.
+```text
+WS05_GATE event=moradon-zone-begin zone=21 native_zone=210 ...
+WS05_GATE event=moradon-terrain-rendered zone=21 native_zone=210
+WS05_GATE event=moradon-shapes-rendered zone=21 native_zone=210
+WS05_GATE event=moradon-local-player-rendered zone=21 native_zone=210
+```
 
-Therefore this WS05 control session **does not claim that Moradon has rendered
-yet**. The new render gate is implementation-complete, but its native PASS has
-not been observed against an integrated WS03+WS14 runtime.
+This keeps the current WS10 driver's existing `... zone=21` substring waits compatible while making the actual native predicate and provider gate authentic.
 
-## Precise MORADON PASS blocker
+`tools/ws05_moradon/moradon_gate.py` now fails closed unless the same run proves both wire `21` and native `210`, plus:
 
-The missing evidence is a reachable integrated session path that supplies a real,
-authenticated occupied character through:
+- successful real character selection;
+- authentic zone-table filenames;
+- terrain load/render;
+- shape load/render;
+- local-player render;
+- non-black native pre-swap GL framebuffer;
+- no Null renderer, page error, or forbidden WebGL/GL errors.
 
-`WIZ_SEL_CHAR success -> 0D 01 -> MYINFO + ZONEABILITY + REGION + NPC + 0D ack
--> optional 0x16/0x1D detail replies -> 0D 02`.
+No Three.js, Canvas2D world, DOM reconstruction, fake marker path, synthetic packet or synthetic PASS was added.
 
-Until that environment drives the real WASM client into zone 21 and the WS05 gate
-captures genuine terrain + shape + local-player pixels, status remains
-**BLOCKED**, not PASS.
+## Verification
 
-No server implementation was added by WS05 and no fake Moradon evidence is
-accepted.
+GitHub Actions run #2 executed the branch workflow's static/unit gate at implementation commit `c72346b84c19db43452e0b1739bd53d2bff4c804`:
 
-## Asset identity check
+```text
+python3 -m py_compile tools/ws05_moradon/patch_moradon_client.py tools/ws05_moradon/moradon_gate.py
+python3 tools/ws05_moradon/test_moradon_gate.py
+```
 
-The pinned 1298 asset tree was rechecked and contains genuine `Zones/moradon.gtd`, `Zones/moradon.opd`, and `Zones/moradon.tct`. WS05 explicitly requires these files before build/preload so an empty or fabricated world package cannot satisfy the gate.
+Result: `ws05-contract-gate` **SUCCESS**. The unit suite now contains 8 tests, including regression checks that old native-zone-21 probes cannot satisfy the contract and that both wire 21 / native 210 are required.
+
+The workflow's `native-moradon-render` job was **skipped**, not failed, because this validation was triggered by a normal branch push; that job is intentionally restricted to manual `workflow_dispatch` with `run_native_gate=true` and reachable integrated auth/game inputs.
+
+## Current blocker / readiness decision
+
+No further WS05 implementation blocker is known after the 21/210 correction. A new full native Moradon PASS is **not claimed** until the integrated browser E2E is rerun.
+
+**WS05 is ready for an unchanged WS10 E2E rerun.** WS10 should keep server/wire Moradon zone `21`, consume this WS05 branch, and rerun the same authentic create -> select -> world -> native render gate without changing WS03/WS14 packet semantics or relaxing the framebuffer/render requirements.
+
+If that rerun exposes another failure, only the first newly observed real blocker should be reported.
