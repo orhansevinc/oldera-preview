@@ -18,7 +18,7 @@
       { "name": "game", "url": "/game" }
     ],
     "required": true,
-    "timeoutMs": 4000
+    "timeoutMs": 12000
   },
   "runtime": {
     "readySelector": "#status",
