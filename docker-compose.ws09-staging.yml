@@ -1,0 +1,127 @@
+name: oldkoweb-staging
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  logging: *default-logging
+  stop_grace_period: 20s
+
+services:
+  reverse-proxy:
+    <<: *service-defaults
+    image: ${NGINX_IMAGE:-nginx:stable-alpine}
+    ports:
+      - "${STAGING_HTTP_BIND:-8080}:80"
+    environment:
+      STAGING_HOST: ${STAGING_HOST:-localhost}
+      GATEWAY_INTERNAL_PORT: ${GATEWAY_INTERNAL_PORT:-8080}
+      NGINX_ENVSUBST_FILTER: '^(STAGING_HOST|GATEWAY_INTERNAL_PORT)$'
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/nginx/mime.types:/etc/nginx/oldkoweb-mime.types:ro
+      - ./infra/nginx/templates/staging.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./deploy/artifacts/staging-play:/srv/oldkoweb/play:ro
+    depends_on:
+      gateway-auth:
+        condition: service_healthy
+      gateway-game:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/healthz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    networks:
+      - edge
+      - backend
+
+  # Integrated WS03 + WS14 runtime image. WS03 dynamically loads WS14's
+  # services/ko1298-world provider when both are present in the same image.
+  session-world:
+    <<: *service-defaults
+    image: ${KO_SESSION_WORLD_IMAGE:?Set KO_SESSION_WORLD_IMAGE to an integrated WS03+WS14 staging image}
+    environment:
+      NODE_ENV: staging
+      AUTH_PORT: ${AUTH_TCP_PORT:-15100}
+      GAME_PORT: ${GAME_TCP_PORT:-15001}
+      GAME_HOST: ${KO_GAME_ADVERTISE_HOST:-localhost}
+    expose:
+      - "${AUTH_TCP_PORT:-15100}"
+      - "${GAME_TCP_PORT:-15001}"
+    networks:
+      - backend
+
+  gateway-auth:
+    <<: *service-defaults
+    image: ${GATEWAY_IMAGE:?Set GATEWAY_IMAGE to the WS02 gateway image}
+    environment:
+      NODE_ENV: staging
+      GATEWAY_MODE: auth
+      AUTH_TCP_HOST: session-world
+      AUTH_TCP_PORT: ${AUTH_TCP_PORT:-15100}
+      LISTEN_HOST: 0.0.0.0
+      PORT: ${GATEWAY_INTERNAL_PORT:-8080}
+      WS_PATH: /auth
+      HEALTH_PATH: /healthz
+      ALLOWED_ORIGINS: ${STAGING_PUBLIC_ORIGIN:-http://localhost:8080}
+      ALLOWED_HOSTS: ${STAGING_ALLOWED_HOST:-localhost:8080}
+      REQUIRE_ORIGIN: "true"
+      TRUST_PROXY: "true"
+      LOG_LEVEL: ${GATEWAY_LOG_LEVEL:-info}
+    expose:
+      - "${GATEWAY_INTERNAL_PORT:-8080}"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:${GATEWAY_INTERNAL_PORT:-8080}/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 4s
+      retries: 10
+      start_period: 5s
+    depends_on:
+      session-world:
+        condition: service_started
+    networks:
+      - backend
+
+  gateway-game:
+    <<: *service-defaults
+    image: ${GATEWAY_IMAGE:?Set GATEWAY_IMAGE to the WS02 gateway image}
+    environment:
+      NODE_ENV: staging
+      GATEWAY_MODE: game
+      GAME_TCP_HOST: session-world
+      GAME_TCP_PORT: ${GAME_TCP_PORT:-15001}
+      LISTEN_HOST: 0.0.0.0
+      PORT: ${GATEWAY_INTERNAL_PORT:-8080}
+      WS_PATH: /game
+      HEALTH_PATH: /healthz
+      ALLOWED_ORIGINS: ${STAGING_PUBLIC_ORIGIN:-http://localhost:8080}
+      ALLOWED_HOSTS: ${STAGING_ALLOWED_HOST:-localhost:8080}
+      REQUIRE_ORIGIN: "true"
+      TRUST_PROXY: "true"
+      LOG_LEVEL: ${GATEWAY_LOG_LEVEL:-info}
+    expose:
+      - "${GATEWAY_INTERNAL_PORT:-8080}"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:${GATEWAY_INTERNAL_PORT:-8080}/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 4s
+      retries: 10
+      start_period: 5s
+    depends_on:
+      session-world:
+        condition: service_started
+    networks:
+      - backend
+
+networks:
+  edge:
+    name: oldkoweb_staging_edge
+  backend:
+    name: oldkoweb_staging_backend
+    internal: true
