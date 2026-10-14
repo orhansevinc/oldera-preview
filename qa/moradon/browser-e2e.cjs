@@ -5,6 +5,7 @@ const path = require('node:path');
 const { chromium } = require('playwright');
 const { PNG } = require('pngjs');
 
+(async () => {
 const out = process.env.QA_ARTIFACT_DIR || 'artifacts/moradon';
 const url = process.env.WS10_CLIENT_URL || 'http://127.0.0.1:8000/ws10-moradon.html';
 const username = process.env.WS10_TEST_ID || 'ws10e2e';
@@ -198,3 +199,7 @@ try {
   await page.screenshot({ path: path.join(out, 'final-compositor.png') }).catch(() => {});
   await browser.close();
 }
+})().catch((error) => {
+  console.error(error.stack || error.message);
+  process.exitCode = 1;
+});
