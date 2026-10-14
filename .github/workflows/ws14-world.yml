@@ -76,7 +76,6 @@ jobs:
           node-version: '22'
 
       - name: Run WS14 tests with exact pinned visibility providers
-        id: tests
         env:
           WS14_MORADON_SMD: ${{ github.workspace }}/.authority/openko/assets/Server/MAP/moradon_0826.smd
           WS14_WS11_VISIBILITY_FIXTURES: ${{ github.workspace }}/.authority/ws11/protocol-lab/visibility-fixtures
@@ -85,21 +84,14 @@ jobs:
           WS14_WS25_PROVIDER_ROOT: ${{ github.workspace }}/.authority/ws25
           WS14_WS25_MOB_DATA: ${{ github.workspace }}/.authority/ws25/world-data/mobs/verified/moradon-zone21.verified.json
         run: |
-          set +e
           set -o pipefail
           node --test tests/ko1298-world/*.test.js 2>&1 | tee ws14-test.log
-          status=${PIPESTATUS[0]}
-          if [ "$status" -ne 0 ]; then
-            signature=$(grep -E 'not ok|Error:|AssertionError|Expected|actual:|operator:' ws14-test.log | tail -n 12 | base64 -w0 | head -c 180)
-            echo "failure_signature=$signature" >> "$GITHUB_OUTPUT"
-          fi
-          exit "$status"
 
       - name: Upload WS14 diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ws14-diag-${{ steps.tests.outputs.failure_signature || 'pass' }}
+          name: ws14-visibility-authority-diagnostics
           path: ws14-test.log
           if-no-files-found: error
           retention-days: 7
