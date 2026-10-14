@@ -4,7 +4,7 @@
     "game": "OldKO",
     "patch": "1298"
   },
-  "cacheVersion": "ws12-1298-preview-1",
+  "cacheVersion": "ws12-1298-preview-2",
   "client": {
     "entryUrl": "../real1298/index.html",
     "buildUrl": "../real1298/BUILD.txt",
@@ -15,7 +15,7 @@
     ]
   },
   "gateway": {
-    "url": "",
+    "endpoints": [],
     "required": false,
     "timeoutMs": 3000
   },
