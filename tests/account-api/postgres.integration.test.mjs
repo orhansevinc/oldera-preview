@@ -83,11 +83,9 @@ async function fixture(label = 'Prod') {
     const closed = new Promise((resolve) => server.close(resolve));
     server.closeAllConnections?.();
     await closed;
-    if (accountId) {
-      await repository.db.query('DELETE FROM oldko.account_sessions WHERE account_id=$1', [accountId]);
-      await repository.db.query('DELETE FROM oldko.account_action_tokens WHERE account_id=$1', [accountId]);
-      await repository.db.query('DELETE FROM oldko.accounts WHERE id=$1', [accountId]);
-    }
+    // The pinned WS07 schema intentionally rejects hard account deletion. The CI
+    // PostgreSQL service is ephemeral and account names are unique, so fixtures
+    // are left intact while only the shared limiter state is reset between gates.
     await repository.db.query('TRUNCATE oldko.account_rate_limits');
     await rateLimitStore.close();
     await repository.db.end();
