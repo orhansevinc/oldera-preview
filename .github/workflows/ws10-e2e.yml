@@ -1,4 +1,4 @@
-name: WS10 QA Integration
+name: WS10 Moradon E2E Integration Gate
 
 on:
   push:
@@ -10,34 +10,34 @@ on:
       - '.github/workflows/ws10-e2e.yml'
   workflow_dispatch:
     inputs:
-      client_ref:
-        description: 'Ref containing the browser package under openko-web/'
-        required: true
-        default: 'openko-browser-port'
       gateway_ref:
-        description: 'Gateway workstream ref (metadata/integration target)'
-        required: false
+        description: 'WS02 WebSocket gateway ref'
+        required: true
         default: 'ws02-websocket-gateway'
       session_ref:
-        description: 'KO1298 session-server workstream ref'
-        required: false
+        description: 'WS03 KO1298 session ref'
+        required: true
         default: 'ws03-ko1298-session'
-      database_ref:
-        description: 'Database workstream ref'
-        required: false
-        default: 'ws07-database'
-      admin_ref:
-        description: 'Admin API workstream ref'
-        required: false
-        default: 'ws08-admin-api'
-      admin_base_url:
-        description: 'Running Admin API base, e.g. http://127.0.0.1:8080/api/admin'
-        required: false
-        default: ''
-      restart_command:
-        description: 'Optional controlled service restart command for M20'
-        required: false
-        default: ''
+      character_ref:
+        description: 'WS04 character client ref'
+        required: true
+        default: 'ws04-character-client'
+      moradon_ref:
+        description: 'WS05 Moradon render ref'
+        required: true
+        default: 'ws05-moradon-world'
+      protocol_ref:
+        description: 'WS11 protocol evidence ref'
+        required: true
+        default: 'ws11-protocol-lab'
+      world_ref:
+        description: 'WS14 world-session ref'
+        required: true
+        default: 'ws14-world-session'
+      ownership_ref:
+        description: 'WS45 session-ownership ref'
+        required: true
+        default: 'ws45-session-ownership'
 
 permissions:
   contents: read
@@ -51,81 +51,239 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
-          cache-dependency-path: qa/package.json
       - run: npm install --prefix qa --no-audit --no-fund
       - run: node qa/selftest.mjs
+      - run: node --check qa/moradon/integration-server.cjs
+      - run: node --check qa/moradon/browser-e2e.cjs
 
-  milestones:
+  moradon-native-e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 90
     env:
-      QA_ARTIFACT_DIR: artifacts
-      QA_CLIENT_DIR: .qa-target/client
-      QA_ADMIN_BASE_URL: ${{ inputs.admin_base_url || '' }}
-      QA_RESTART_COMMAND: ${{ inputs.restart_command || '' }}
-      CLIENT_REF: ${{ inputs.client_ref || 'openko-browser-port' }}
       GATEWAY_REF: ${{ inputs.gateway_ref || 'ws02-websocket-gateway' }}
       SESSION_REF: ${{ inputs.session_ref || 'ws03-ko1298-session' }}
-      DATABASE_REF: ${{ inputs.database_ref || 'ws07-database' }}
-      ADMIN_REF: ${{ inputs.admin_ref || 'ws08-admin-api' }}
+      CHARACTER_REF: ${{ inputs.character_ref || 'ws04-character-client' }}
+      MORADON_REF: ${{ inputs.moradon_ref || 'ws05-moradon-world' }}
+      PROTOCOL_REF: ${{ inputs.protocol_ref || 'ws11-protocol-lab' }}
+      WORLD_REF: ${{ inputs.world_ref || 'ws14-world-session' }}
+      OWNERSHIP_REF: ${{ inputs.ownership_ref || 'ws45-session-ownership' }}
+      WS10_TEST_ID: ws10e2e
+      WS10_TEST_PW: ws10pass
+      WS10_CHAR_NAME: Ws10Hero
+      QA_ARTIFACT_DIR: artifacts/moradon
     steps:
-      - name: Checkout WS10 harness only
+      - name: Checkout WS10 integration harness
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Record refs without merging
-        shell: bash
-        run: |
-          set -u
-          mkdir -p artifacts .qa-target/client
-          : > artifacts/refs.txt
-          for pair in "client:$CLIENT_REF" "gateway:$GATEWAY_REF" "session:$SESSION_REF" "database:$DATABASE_REF" "admin:$ADMIN_REF"; do
-            kind=${pair%%:*}; ref=${pair#*:}
-            if git fetch --no-tags origin "$ref"; then
-              sha=$(git rev-parse FETCH_HEAD)
-              echo "$kind $ref $sha" | tee -a artifacts/refs.txt
-            else
-              echo "$kind $ref MISSING" | tee -a artifacts/refs.txt
-            fi
-          done
-      - name: Stage browser package from requested ref
+
+      - name: Resolve exact provider refs and create isolated worktrees
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf .qa-target/client && mkdir -p .qa-target/client
-          git fetch --no-tags origin "$CLIENT_REF"
-          git archive FETCH_HEAD openko-web | tar -x --strip-components=1 -C .qa-target/client
-          find .qa-target/client -maxdepth 1 -type f -printf '%f %s bytes\n' | sort | tee artifacts/client-files.txt
-      - name: Install QA dependencies and Chromium
+          mkdir -p artifacts/moradon .qa-providers
+          : > artifacts/moradon/provider-refs.txt
+          resolve() {
+            key="$1"; ref="$2"
+            git fetch --no-tags origin "$ref"
+            sha="$(git rev-parse FETCH_HEAD)"
+            printf '%s %s %s\n' "$key" "$ref" "$sha" | tee -a artifacts/moradon/provider-refs.txt
+            printf '%s' "$sha"
+          }
+          WS02_SHA="$(resolve WS02 "$GATEWAY_REF" | tail -n1)"
+          WS03_SHA="$(resolve WS03 "$SESSION_REF" | tail -n1)"
+          WS04_SHA="$(resolve WS04 "$CHARACTER_REF" | tail -n1)"
+          WS05_SHA="$(resolve WS05 "$MORADON_REF" | tail -n1)"
+          WS11_SHA="$(resolve WS11 "$PROTOCOL_REF" | tail -n1)"
+          WS14_SHA="$(resolve WS14 "$WORLD_REF" | tail -n1)"
+          WS45_SHA="$(resolve WS45 "$OWNERSHIP_REF" | tail -n1)"
+          {
+            echo "WS02_SHA=$WS02_SHA"
+            echo "WS03_SHA=$WS03_SHA"
+            echo "WS04_SHA=$WS04_SHA"
+            echo "WS05_SHA=$WS05_SHA"
+            echo "WS11_SHA=$WS11_SHA"
+            echo "WS14_SHA=$WS14_SHA"
+            echo "WS45_SHA=$WS45_SHA"
+          } >> "$GITHUB_ENV"
+          git merge-base --is-ancestor "$WS04_SHA" "$WS05_SHA" || { echo 'WS05 no longer contains the selected WS04 client baseline' >&2; exit 1; }
+          git worktree add --detach .qa-providers/ws02 "$WS02_SHA"
+          git worktree add --detach .qa-providers/ws03 "$WS03_SHA"
+          git worktree add --detach .qa-providers/ws05 "$WS05_SHA"
+          git worktree add --detach .qa-providers/ws14 "$WS14_SHA"
+
+      - name: Re-run provider server contract suites
+        shell: bash
         run: |
+          set -euo pipefail
+          node --test .qa-providers/ws02/tests/ko-gateway/*.test.js | tee artifacts/moradon/ws02-tests.log
+          node --test .qa-providers/ws03/tests/ko1298-session/*.test.js | tee artifacts/moradon/ws03-tests.log
+          node --test .qa-providers/ws14/tests/ko1298-world/*.test.js | tee artifacts/moradon/ws14-tests.log
+
+      - name: Checkout browser-capable OpenKO source
+        uses: actions/checkout@v4
+        with:
+          repository: luisfelipe18/old-school-openko
+          ref: 97eb0ea20207afc0c360bfed6915113572711be3
+          path: openko
+          submodules: false
+          fetch-depth: 1
+
+      - name: Checkout genuine KO 1298 assets
+        uses: actions/checkout@v4
+        with:
+          repository: ko4life-net/ko-assets
+          ref: 705874881c8308e0a45a0c849e4b3881088d8138
+          path: ko-assets
+          fetch-depth: 1
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            Data
+            UI_US
+            Snd/Intro_Sound.mp3
+            Server.ini
+
+      - name: Apply verified browser, WS04 and WS05 instrumentation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .qa-providers/ws05/tools/patch_openko_browser.py
+          python3 .qa-providers/ws05/tools/patch_openko_browser_gateway.py
+          python3 .qa-providers/ws05/tools/fix_browser_server_ini_case.py
+          python3 .qa-providers/ws05/tools/patch_openko_browser_serverlist_probe.py
+          python3 .qa-providers/ws05/tools/patch_openko_browser_auth_probe.py
+          python3 .qa-providers/ws05/tools/ws04_character/patch_character_client.py
+          python3 .qa-providers/ws05/tools/ws04_character/patch_frame_capture.py
+          python3 .qa-providers/ws05/tools/ws05_moradon/patch_moradon_client.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('openko/src/Client/WarFare/RHIDeviceGL.cpp')
+          s = p.read_text()
+          bad = r'#version 300 es\nprecision highp float;'
+          good = '#version 300 es\nprecision highp float;'
+          if s.count(bad) != 2:
+              raise SystemExit('escaped GLSL browser shader anchors changed')
+          p.write_text(s.replace(bad, good))
+          PY
+          for d in Chr DTex Item Misc Object Zones fx; do
+            test -n "$(find "ko-assets/$d" -type f -print -quit)" || { echo "empty genuine asset dir: $d" >&2; exit 1; }
+          done
+          for f in moradon.gtd moradon.opd moradon.tct; do
+            test -s "ko-assets/Zones/$f" || { echo "missing genuine Moradon asset: Zones/$f" >&2; exit 1; }
+          done
+          grep -q 'WS04_CHAR_CREATE_SENT opcode=0x02' openko/src/Client/WarFare/GameProcCharacterCreate.cpp
+          grep -q 'WS05_GATE event=moradon-zone-begin zone=21' openko/src/Client/WarFare/N3TerrainManager.cpp
+          grep -q 'WS05_GATE event=moradon-local-player-rendered zone=21' openko/src/Client/WarFare/GameProcMain.cpp
+
+      - name: Install build and browser tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake python3 git
           npm install --prefix qa --no-audit --no-fund
           npx --prefix qa playwright install --with-deps chromium
-      - name: M0 package integrity
-        continue-on-error: true
-        run: node qa/check-package.mjs .qa-target/client
-      - name: M1-M16 browser black-box milestones
-        continue-on-error: true
-        run: node qa/run-client.mjs
-      - name: M17-M20 service milestones
-        continue-on-error: true
-        run: node qa/run-api.mjs
-      - name: Fill and print milestone summary
-        if: always()
-        continue-on-error: true
-        run: node qa/finalize.mjs | tee artifacts/finalize.log
-      - name: Upload QA proof
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest
+          actions-cache-folder: emsdk-cache
+
+      - name: Build real WarFare WASM client
+        shell: bash
+        run: |
+          set -o pipefail
+          emcmake cmake -S openko -B build-web -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_FLAGS='-DBOOST_HAS_PTHREADS=1' \
+            -DCMAKE_CXX_FLAGS='-DBOOST_HAS_PTHREADS=1 -DASIO_DISABLE_THREADS=1 -fexceptions' \
+            -DCMAKE_EXE_LINKER_FLAGS='-fexceptions' \
+            -DOPENKO_BUILD_CLIENT=ON \
+            -DOPENKO_CLIENT_POSIX_EXPERIMENTAL=ON \
+            -DOPENKO_BUILD_CLIENT_TOOLS=OFF \
+            -DOPENKO_BUILD_TOOLS=OFF \
+            -DOPENKO_BUILD_SERVERS=OFF \
+            -DOPENKO_BUILD_TESTS=OFF \
+            -DOPENKO_FETCH_CLIENT_ASSETS=OFF \
+            -DOPENKO_COMPILE_WARNINGS_AS_ERROR=OFF \
+            2>&1 | tee artifacts/moradon/configure.log
+          cmake --build build-web --target WarFare -j2 2>&1 | tee artifacts/moradon/build.log
+          test -s build-web/bin/Release/KnightOnLine.js
+          test -s build-web/bin/Release/KnightOnLine.wasm
+          test -s build-web/bin/Release/KnightOnLine.data
+
+      - name: Run one real browser create-select-Moradon session
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$GITHUB_WORKSPACE/build-web/bin/Release"
+          cat > "$OUT/ws10-moradon.html" <<'EOF'
+          <!doctype html><html><body style="margin:0;background:#000;overflow:hidden">
+          <canvas id="canvas" width="1024" height="768" tabindex="0"></canvas>
+          <pre id="status" style="display:none"></pre>
+          <script>
+          (() => {
+            const status=document.getElementById('status');
+            const write=(kind,args)=>{const line='['+kind+'] '+args.join(' ');status.textContent+=line+'\n';console.log(line);};
+            window.Module={canvas:document.getElementById('canvas'),arguments:['--renderer','gl','--data','/data'],
+              print:(...a)=>write('OUT',a),printErr:(...a)=>write('ERR',a),onRuntimeInitialized:()=>write('SMOKE',['WASM_RUNTIME_READY'])};
+          })();
+          </script><script src="KnightOnLine.js"></script></body></html>
+          EOF
+
+          WS03_ROOT="$GITHUB_WORKSPACE/.qa-providers/ws03" \
+          WS14_ROOT="$GITHUB_WORKSPACE/.qa-providers/ws14" \
+          WS10_TEST_ID="$WS10_TEST_ID" WS10_TEST_PW="$WS10_TEST_PW" \
+          AUTH_TCP_PORT=16100 GAME_TCP_PORT=16101 \
+            node qa/moradon/integration-server.cjs >artifacts/moradon/composition-server.log 2>&1 &
+          COMPOSE_PID=$!
+
+          GATEWAY_MODE=auth AUTH_TCP_HOST=127.0.0.1 AUTH_TCP_PORT=16100 \
+          LISTEN_HOST=127.0.0.1 PORT=15100 WS_PATH=/ REQUIRE_ORIGIN=false \
+            node .qa-providers/ws02/services/ko-gateway/src/server.js >artifacts/moradon/gateway-auth.log 2>&1 &
+          AUTH_GW_PID=$!
+
+          GATEWAY_MODE=game GAME_TCP_HOST=127.0.0.1 GAME_TCP_PORT=16101 \
+          LISTEN_HOST=127.0.0.1 PORT=15001 WS_PATH=/ REQUIRE_ORIGIN=false \
+            node .qa-providers/ws02/services/ko-gateway/src/server.js >artifacts/moradon/gateway-game.log 2>&1 &
+          GAME_GW_PID=$!
+
+          python3 -m http.server 8000 --bind 127.0.0.1 --directory "$OUT" >artifacts/moradon/http.log 2>&1 &
+          HTTP_PID=$!
+          trap 'kill $HTTP_PID $AUTH_GW_PID $GAME_GW_PID $COMPOSE_PID 2>/dev/null || true' EXIT
+          sleep 3
+
+          set +e
+          node qa/moradon/browser-e2e.cjs 2>&1 | tee artifacts/moradon/driver.log
+          DRIVER_RC=${PIPESTATUS[0]}
+          set -e
+
+          cat artifacts/moradon/composition-server.log
+          cat artifacts/moradon/gateway-auth.log
+          cat artifacts/moradon/gateway-game.log
+          test "$DRIVER_RC" -eq 0
+
+          grep -q 'WS10_COMPOSE event=game-rx opcode=0x02' artifacts/moradon/composition-server.log
+          grep -q 'WS10_COMPOSE event=game-rx opcode=0x04' artifacts/moradon/composition-server.log
+          grep -q 'WS10_COMPOSE event=game-rx opcode=0x0d' artifacts/moradon/composition-server.log
+          grep -q 'WS10_COMPOSE event=game-tx opcode=0x0e' artifacts/moradon/composition-server.log
+          grep -q 'WS10_COMPOSE event=game-tx opcode=0x5e' artifacts/moradon/composition-server.log
+          grep -q 'WS10_COMPOSE event=game-tx opcode=0x1c' artifacts/moradon/composition-server.log
+          grep -q 'WS10_MORADON_E2E_PASS' artifacts/moradon/driver.log
+
+          python3 .qa-providers/ws05/tools/ws05_moradon/moradon_gate.py artifacts/moradon/driver.log | tee artifacts/moradon/ws05-gate.log
+
+      - name: Upload WS10 Moradon evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ws10-qa-${{ github.run_number }}
+          name: ws10-moradon-e2e-${{ github.run_number }}
           retention-days: 14
           if-no-files-found: warn
           path: |
-            artifacts/**
-      - name: Enforce PASS/FAIL gate
-        if: always()
-        run: node qa/finalize.mjs
+            artifacts/moradon/**
