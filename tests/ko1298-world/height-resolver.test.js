@@ -78,6 +78,7 @@ test('terrain height is parsed/interpolated in world units and deterministic', (
   assert.equal(first.status, HEIGHT_STATUS.AUTHORITATIVE);
   assert.equal(first.surface, 'terrain');
   assert.equal(first.height, 12.5);
+  assert.equal(first.policy, 'xz-max-terrain-highest-shape');
   assert.equal(map.mapWidth, 16);
   assert.equal(map.unitDist, 4);
 });
@@ -89,40 +90,51 @@ test('terrain interpolation follows the SMD parity triangles', () => {
   assert.equal(map.terrainHeightAt(0, 0), 0);
 });
 
-test('single invariant shape above terrain is authoritative without guessing a Y hint', () => {
+test('single shape above terrain is authoritative without synthetic Y', () => {
   const map = new SmdHeightMap(buildSmd({ triangles: [triangleAt(5)] }));
   const result = map.resolve(1, 1);
   assert.equal(result.status, HEIGHT_STATUS.AUTHORITATIVE);
   assert.equal(result.surface, 'shape');
   assert.equal(result.height, 5);
+  assert.equal(result.policy, 'xz-max-terrain-highest-shape');
+  assert.equal(Object.hasOwn(result, 'yHint'), false);
 });
 
-test('stacked shape surfaces require source Y and fail closed without it', () => {
+test('stacked shape surfaces use exact xz-only highest-shape policy while yHint uses nearest shape', () => {
   const map = new SmdHeightMap(buildSmd({ triangles: [triangleAt(5), triangleAt(10)] }));
-  const unresolved = map.resolve(1, 1);
-  assert.equal(unresolved.status, HEIGHT_STATUS.UNRESOLVED);
-  assert.equal(unresolved.reason, 'shape-y-hint-required');
-  assert.equal(Object.hasOwn(unresolved, 'height'), false);
+
+  const xzOnly = map.resolve(1, 1);
+  assert.equal(xzOnly.status, HEIGHT_STATUS.AUTHORITATIVE);
+  assert.equal(xzOnly.height, 10);
+  assert.equal(xzOnly.surface, 'shape');
+  assert.equal(xzOnly.policy, 'xz-max-terrain-highest-shape');
+  assert.equal(Object.hasOwn(xzOnly, 'yHint'), false);
 
   const nearUpper = map.resolve(1, 1, { yHint: 9 });
   assert.equal(nearUpper.status, HEIGHT_STATUS.AUTHORITATIVE);
   assert.equal(nearUpper.height, 10);
   assert.equal(nearUpper.surface, 'shape');
+  assert.equal(nearUpper.policy, 'server-nearest-shape-with-y-hint');
 
   const nearLower = map.resolve(1, 1, { yHint: 5.1 });
   assert.equal(nearLower.status, HEIGHT_STATUS.AUTHORITATIVE);
   assert.equal(nearLower.height, 5);
+  assert.equal(nearLower.policy, 'server-nearest-shape-with-y-hint');
 });
 
-test('terrain/shape ambiguity does not silently degrade to terrain', () => {
+test('xz-only policy compares the highest shape against terrain without guessing a Y seed', () => {
   const map = new SmdHeightMap(buildSmd({
     terrainHeight: 0,
     triangles: [triangleAt(-1), triangleAt(5)],
   }));
   const result = map.resolve(1, 1);
-  assert.equal(result.status, HEIGHT_STATUS.UNRESOLVED);
-  assert.equal(result.reason, 'shape-y-hint-required');
-  assert.equal(Object.hasOwn(result, 'height'), false);
+  assert.equal(result.status, HEIGHT_STATUS.AUTHORITATIVE);
+  assert.equal(result.surface, 'shape');
+  assert.equal(result.height, 5);
+  assert.equal(result.shapeHeight, 5);
+  assert.equal(result.terrainHeight, 0);
+  assert.equal(result.policy, 'xz-max-terrain-highest-shape');
+  assert.equal(Object.hasOwn(result, 'yHint'), false);
 });
 
 test('invalid coordinates and outside-map queries are explicit', () => {
@@ -141,11 +153,13 @@ test('resolver distinguishes unknown zone from known zone without a height asset
     reason: 'unknown-zone',
     zoneId: 999,
   });
-  assert.deepEqual(resolver.resolveHeight(1, 1, 1), {
+  const unresolved = resolver.resolveHeight(1, 1, 1);
+  assert.deepEqual(unresolved, {
     status: HEIGHT_STATUS.UNRESOLVED,
     reason: 'zone-height-asset-unavailable',
     zoneId: 1,
   });
+  assert.equal(Object.hasOwn(unresolved, 'height'), false);
 });
 
 test('resolver parses a zone asset once and reuses a deterministic read-only cache', () => {
