@@ -64,6 +64,23 @@ server {
         return 200 'ok\n';
     }
 
+    # The official site's account API is deliberately same-origin. The trailing
+    # slash proxy_pass strips /api/account before handing the request to WS13.
+    location = /api/account { return 308 /api/account/; }
+    location /api/account/ {
+        proxy_pass http://account-api:${ACCOUNT_API_PORT}/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Request-ID $request_id;
+        proxy_hide_header Access-Control-Allow-Origin;
+        proxy_hide_header Access-Control-Allow-Credentials;
+        proxy_buffering off;
+    }
+
     location = /index.html {
         add_header Cache-Control "no-cache, no-store, must-revalidate" always;
         try_files $uri =404;
