@@ -1,10 +1,11 @@
 # Final Moradon E2E rerun request
 
-Triggered after WS05 dependency synchronization consumed WS04 native capture fix with ancestry preserved.
+Triggered after the final WS04/WS05 native framebuffer orchestration fix.
 
-Provider sync correction:
-- WS04 current branch HEAD: `424db3a3c574dd885c14a66c7f2bca23249c0fd5`
-- WS04 tested implementation ancestor: `6dfbf1203c58fd3ab474a32cdf81a5bbca527aea`
-- WS05 now contains BOTH through merge ancestry; current sync commit: `b2b07b87295a62bba55366a729deb8e810dc447d`
+Provider sync:
+- WS04 current capture head: `32616b1b7ccbdc3de41c0949f182a65e03450d18`
+- WS05 synchronized head: `0537c481383a69c534799b43810f35e7279c5578`
+- Moradon world proof request id `1010` is now Present-only: timer fallback cannot invoke DumpFramePPM during asset preload; the next genuine RHIDeviceGL::Present() services the request.
+- WS10 browser driver remains armed before sustained world rendering so JS/native starvation cannot lose the request.
 
-Run the unchanged WS10 Moradon E2E gate and record PASS/BLOCKED with the first true blocker only.
+Run the real create -> select -> Moradon native framebuffer gate and record PASS/BLOCKED with the first true blocker only.
