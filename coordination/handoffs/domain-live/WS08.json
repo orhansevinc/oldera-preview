@@ -1,0 +1,166 @@
+{
+  "schema_version": 1,
+  "workstream": "WS08",
+  "release_id": "oldkoweb-domain-live-20261015",
+  "source_commit": "97771268f37735e6ebaad9ed48a6927438f65f59",
+  "status_commit": "8274a5b12747c4dac4782745e40205bbd4abec4f",
+  "input_pins": {
+    "WS08_task_start": "239cdacf0fb6bacde5017fb3b787451595a3be0d",
+    "WS07": "1ae85c96319cbab11648a91ed28300e17d4c607f",
+    "WS03": "7c5f5f3584e7d3621aa5a318ad65c011bd77276f",
+    "WS28": "c1ef0f6e84456cb38edd2f3ce2b11ca5ff7de99a",
+    "WS35": "5327d50906d02c829add08cf1ca73fbe978526dc",
+    "WS45": "4a66338743553c2781c68ca84b866ff4e999c14e",
+    "WS48": "d3ec3873d4e7d6c254897e591addd0c220508914"
+  },
+  "implementation": {
+    "production_app": "services/admin-api/src/production-app.js",
+    "persistent_auth": "services/admin-api/src/persistent-auth.js",
+    "production_contract": "services/admin-api/src/production-contract.js",
+    "ws28_executor": "services/admin-api/src/ws28-command-executor.js",
+    "server_composition": "services/admin-api/src/server.js",
+    "frontend_modified": false,
+    "memory_repository_production_allowed": false,
+    "silent_fallback_allowed": false
+  },
+  "adapter_contracts": {
+    "repository_module_env": "ADMIN_REPOSITORY_MODULE",
+    "repository_factory": "createAdminRepository({env})",
+    "repository_methods": [
+      "transaction", "overview", "listPlayers", "getCharacter", "updateCharacter", "updateStats", "updateSkills",
+      "getInventory", "getInn", "getTransactions", "getSanctions", "searchItems", "itemHistory", "itemAction",
+      "findDuplicateSerials", "createSanction", "removeSanction", "appendAudit", "listAudit",
+      "createAdminSession", "getAdminSession", "revokeAdminSession", "runIdempotent",
+      "enqueueCommand", "updateCommand", "getCommand"
+    ],
+    "runtime_module_env": "ADMIN_RUNTIME_AUTHORITY_MODULE",
+    "runtime_factory": "createAdminRuntimeAuthority({env})",
+    "runtime_methods": ["listOnlineCharacters", "getCharacterState", "mutateOnlineCharacter"],
+    "command_module_env": "ADMIN_COMMAND_BUS_MODULE",
+    "command_factory": "createAdminCommandBus({env})",
+    "command_interface": ["execute"]
+  },
+  "auth_contract": {
+    "identity_source": "ADMIN_USERS_JSON server configuration",
+    "root_owner_binding": "exact immutable admin id equals ADMIN_ROOT_OWNER_ID",
+    "owner_from_username_or_first_record": false,
+    "owner_from_browser_label": false,
+    "sessions": "opaque cookie plus durable server-side revocable session",
+    "csrf": "X-CSRF-Token plus session-bound CSRF cookie/hash",
+    "origin": "unsafe requests and login require ADMIN_ALLOWED_ORIGINS match",
+    "logout_revokes_server_session": true
+  },
+  "api_contract": {
+    "base": "/api/admin",
+    "production_additions": ["GET /capabilities", "GET /commands/:id"],
+    "mutation_requirements": ["reason", "Idempotency-Key", "X-CSRF-Token", "allowed Origin"],
+    "versioned_mutations": ["character", "stats", "skills", "item moderation"],
+    "expected_version_error": {"http": 428, "code": "EXPECTED_VERSION_REQUIRED"},
+    "cas_conflict": {"http": 409, "code": "VERSION_CONFLICT"},
+    "online_character_rule": "route through WS03/WS45 runtime/domain authority; no direct offline repository mutation",
+    "online_source": "authoritative runtime adapter only"
+  },
+  "command_contract": {
+    "states": ["PENDING", "SUCCEEDED", "FAILED", "UNSUPPORTED"],
+    "success_requires_downstream_apply": true,
+    "legacy_202_forwarded_false_is_success": false,
+    "supported": {
+      "CUTOFF": "player.kick",
+      "SUMMONUSER": "player.summon",
+      "FORBIDUSER": "account.ban",
+      "FORBIDCONNECT": "account.ban",
+      "FORBIDCHAT": "chat.mute",
+      "PERMITCHAT": "chat.unmute",
+      "NOTICE": "notice.zone",
+      "NOTICEALL": "notice.global",
+      "COUNT": "server.player-count"
+    },
+    "unsupported": [
+      "INVISIBLE", "CLEAN", "RAINING", "SNOWING", "TIME", "ARREST", "VIEW", "UNVIEW",
+      "ATTACKDISABLE", "ATTACKENABLE", "PROGRAMLISTCHECK"
+    ],
+    "arbitrary_shell_exposed": false,
+    "server_restart_shutdown_exposed": false
+  },
+  "supported_capabilities": {
+    "reads": ["overview", "player search", "authoritative online list", "character", "inventory", "inn", "transactions", "sanctions", "item search/history/duplicates", "audit"],
+    "secured_mutations": ["offline character", "offline stats", "offline skills", "item moderation", "sanctions"],
+    "online_mutation_boundary": true,
+    "durable_session_boundary": true,
+    "durable_idempotency_boundary": true,
+    "durable_command_outbox_boundary": true,
+    "ws28_result_propagation": true
+  },
+  "frontend_owner_contract": {
+    "login_response": ["user", "csrfToken", "capabilities"],
+    "session_response": ["user", "csrfToken", "capabilities"],
+    "unsafe_header": "X-CSRF-Token",
+    "retry_header": "Idempotency-Key",
+    "mutation_field": "expectedVersion",
+    "command_success_ui_only_when": "game.status == SUCCEEDED",
+    "command_status_endpoint": "GET /api/admin/commands/:id",
+    "capability_endpoint": "GET /api/admin/capabilities",
+    "details": "workstreams/ws08/PRODUCTION_INTEGRATION_CONTRACT.md"
+  },
+  "ws09_required_config": [
+    "ADMIN_USERS_JSON",
+    "ADMIN_ROOT_OWNER_ID",
+    "ADMIN_SESSION_SECRET",
+    "ADMIN_ALLOWED_ORIGINS",
+    "ADMIN_REPOSITORY_MODULE",
+    "ADMIN_RUNTIME_AUTHORITY_MODULE",
+    "ADMIN_COMMAND_BUS_MODULE",
+    "DATABASE_URL"
+  ],
+  "checks": {
+    "workflow": "WS08 Admin API",
+    "run_id": 38654675678,
+    "run_head": "97771268f37735e6ebaad9ed48a6927438f65f59",
+    "conclusion": "success",
+    "existing_tests_preserved": true,
+    "production_fixture_tests": [
+      "verified owner id and forged OWNER stripping",
+      "authoritative runtime online filtering",
+      "Origin/CSRF enforcement",
+      "CAS plus durable-idempotency contract plus audit",
+      "online mutation routed to runtime authority",
+      "WS28 SUCCEEDED versus UNSUPPORTED",
+      "WS28 downstream failure -> FAILED/503",
+      "server-side logout revocation"
+    ],
+    "real_postgres_admin_e2e": "BLOCKED_EXTERNAL_ADAPTER"
+  },
+  "blockers": [
+    {
+      "owner": "WS07",
+      "code": "WS07_ADMIN_ADAPTER_MISSING",
+      "detail": "Current WS07 has no WS08/admin adapter and no shipped durable admin-session plus admin-command-outbox/status adapter. Production intentionally fails closed until createAdminRepository implements the handed-off contract."
+    },
+    {
+      "owner": "WS03/WS45/WS50",
+      "code": "ADMIN_RUNTIME_AUTHORITY_ADAPTER_MISSING",
+      "detail": "Need createAdminRuntimeAuthority over authoritative game/session ownership for online state and online character mutation delegation."
+    },
+    {
+      "owner": "WS28/WS50",
+      "code": "WS28_DOWNSTREAM_COMPOSITION_REQUIRED",
+      "detail": "Need production game/moderation/notices/observability adapters behind the existing WS28 command bus. Missing handlers must remain FAILED/UNSUPPORTED."
+    },
+    {
+      "owner": "official-site-domain-release",
+      "code": "ADMIN_V10_FRONTEND_WIRING_REQUIRED",
+      "detail": "Accepted frontend must send CSRF/idempotency/version fields and render command capability/status/error semantics from this handoff."
+    },
+    {
+      "owner": "WS09",
+      "code": "PRODUCTION_CONFIG_AND_DEPLOY_REQUIRED",
+      "detail": "Provision listed admin identity/secrets/module composition and deploy admin.oldkoweb.com."
+    },
+    {
+      "owner": "WS10",
+      "code": "LIVE_DOMAIN_VERIFICATION_REQUIRED",
+      "detail": "Verify auth, reads, controlled isolated-account mutation, audit, idempotent replay, command failure propagation and restart persistence on admin.oldkoweb.com after dependencies land."
+    }
+  ],
+  "claim": "WS08 backend production security and integration boundaries are implemented. Full live admin functionality is not claimed until the listed external adapters/config/frontend/deploy blockers are resolved."
+}
