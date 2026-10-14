@@ -17,7 +17,7 @@ async function fixture() {
   const repository = new InMemoryAccountRepository();
   const delivery = new CaptureDelivery();
   const service = new AccountService({ repository, delivery, audit: new MemoryAuditSink() });
-  await service.register({ username: 'PlayerOne', email: 'player@example.test', password: 'Str0ng!Passwd' }, { ip: '127.0.0.1', requestId: 'register-0001' });
+  await service.register({ username: 'PlayerOne', email: 'player@example.test', password: 'Str0ng!Pwd12' }, { ip: '127.0.0.1', requestId: 'register-0001' });
   await service.confirmVerification({ token: delivery.verifications[0].token }, { ip: '127.0.0.1', requestId: 'verify-0001' });
   const account = await repository.findByUsernameCanonical('playerone');
   repository.characters.set(account.id, [{ id: '1001', slot: 0, name: 'KnightOne', nation: 1, level: 1, classId: 101, clan: null, np: 0 }]);
@@ -38,16 +38,18 @@ test('web session uses secure HttpOnly cookie, authorizes dashboard data, and lo
   try {
     const missing = await fetch(`${base}/v1/session/current`);
     assert.equal(missing.status, 401);
-    const bad = await request(base, '/v1/session/login', { method: 'POST', body: JSON.stringify({ identifier: 'PlayerOne', password: 'wrong-password' }) });
+    const bad = await request(base, '/v1/session/login', { method: 'POST', headers: { origin }, body: JSON.stringify({ identifier: 'PlayerOne', password: 'wrong-password' }) });
     assert.equal(bad.status, 401);
-    const login = await request(base, '/v1/session/login', { method: 'POST', headers: { origin }, body: JSON.stringify({ identifier: 'player@example.test', password: 'Str0ng!Passwd' }) });
+    const login = await request(base, '/v1/session/login', { method: 'POST', headers: { origin }, body: JSON.stringify({ identifier: 'player@example.test', password: 'Str0ng!Pwd12' }) });
     assert.equal(login.status, 200);
+    const loginBody = await login.clone().json();
+    assert.equal(loginBody.credentialUpgradeRequired, false);
     const setCookie = login.headers.get('set-cookie');
     assert.match(setCookie, /^oldko_session=/);
     assert.match(setCookie, /HttpOnly/i);
     assert.match(setCookie, /Secure/i);
     assert.match(setCookie, /SameSite=Strict/i);
-    assert.equal(JSON.stringify(await login.json()).includes('oldko_session'), false);
+    assert.equal(JSON.stringify(loginBody).includes('oldko_session'), false);
     const cookie = setCookie.split(';', 1)[0];
     const current = await fetch(`${base}/v1/session/current`, { headers: { cookie } });
     assert.equal(current.status, 200);
