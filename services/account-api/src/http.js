@@ -116,8 +116,9 @@ export function createHttpServer({ service, openApiDocument, trustProxy = false,
         return send(res, 200, result, { ...cors, 'x-request-id': requestId });
       }
       if (req.method === 'POST' && pathname === '/v1/session/login') {
+        assertTrustedOrigin(req, allowedOrigins);
         const result = await service.login(await readJson(req), context);
-        return send(res, 200, { user: result.user }, { ...cors, 'x-request-id': requestId, 'set-cookie': sessionCookie(result.token, result.expiresAt) });
+        return send(res, 200, { user: result.user, credentialUpgradeRequired: result.credentialUpgradeRequired }, { ...cors, 'x-request-id': requestId, 'set-cookie': sessionCookie(result.token, result.expiresAt) });
       }
       if (req.method === 'POST' && pathname === '/v1/session/logout') {
         assertTrustedOrigin(req, allowedOrigins);
@@ -125,24 +126,22 @@ export function createHttpServer({ service, openApiDocument, trustProxy = false,
         return send(res, 200, result, { ...cors, 'x-request-id': requestId, 'set-cookie': clearSessionCookie() });
       }
 
-      const changePassword = (body) => service.changePassword(body, context);
-      const requestPasswordReset = (body) => service.requestPasswordReset(body, context);
-      const confirmPasswordReset = (body) => service.confirmPasswordReset(body, context);
       const routes = new Map([
-        ['/v1/accounts/register', (body) => service.register(body, context)],
-        ['/v1/accounts/access-check', (body) => service.accessCheck(body, context)],
-        ['/v1/password/change', changePassword],
-        ['/v1/password-reset/request', requestPasswordReset],
-        ['/v1/password-reset/confirm', confirmPasswordReset],
-        // Pinned official account-v15.js compatibility. Do not remove without a coordinated frontend release.
-        ['/v1/accounts/password/change', changePassword],
-        ['/v1/accounts/password-reset/request', requestPasswordReset],
-        ['/v1/accounts/password-reset/confirm', confirmPasswordReset],
-        ['/v1/accounts/verification/request', (body) => service.requestVerification(body, context)],
-        ['/v1/accounts/verification/confirm', (body) => service.confirmVerification(body, context)]
+        ['/v1/accounts/register', { browser: true, handler: (body) => service.register(body, context) }],
+        ['/v1/accounts/access-check', { browser: false, handler: (body) => service.accessCheck(body, context) }],
+        ['/v1/password/change', { browser: true, handler: (body) => service.changePassword(body, context) }],
+        ['/v1/password-reset/request', { browser: true, handler: (body) => service.requestPasswordReset(body, context) }],
+        ['/v1/password-reset/confirm', { browser: true, handler: (body) => service.confirmPasswordReset(body, context) }],
+        ['/v1/accounts/password/change', { browser: true, handler: (body) => service.changePassword(body, context) }],
+        ['/v1/accounts/password-reset/request', { browser: true, handler: (body) => service.requestPasswordReset(body, context) }],
+        ['/v1/accounts/password-reset/confirm', { browser: true, handler: (body) => service.confirmPasswordReset(body, context) }],
+        ['/v1/accounts/verification/request', { browser: true, handler: (body) => service.requestVerification(body, context) }],
+        ['/v1/accounts/verification/confirm', { browser: true, handler: (body) => service.confirmVerification(body, context) }]
       ]);
       if (req.method === 'POST' && routes.has(pathname)) {
-        const result = await routes.get(pathname)(await readJson(req));
+        const route = routes.get(pathname);
+        if (route.browser) assertTrustedOrigin(req, allowedOrigins);
+        const result = await route.handler(await readJson(req));
         const status = pathname.endsWith('/request') ? 202 : (pathname === '/v1/accounts/register' ? 201 : 200);
         return send(res, status, result, { ...cors, 'x-request-id': requestId });
       }
