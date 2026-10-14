@@ -4,31 +4,55 @@
   "milestone": "MORADON_PLAYABLE_COMBAT_SESSION",
   "taskStartWs03Head": "607f0079bd2daca28e94ec9ba88a9c8b60f0cd34",
   "providers": {
-    "WS11":"013559b6e66ef9f6257403c96f3b012884739470",
-    "WS14":"ed5f806ce7505f4dfae406e4164735def63b6c86",
-    "WS15":"ce9bed13b8d45c32ff0592595aa3a0d1e7b3964d",
-    "WS17":"eb3e9fce63b71fa68682d81d9227e6ed7ae905bf",
-    "WS19":"cc1490672b676f0bf1675f83c8f4fc146b940df4",
-    "WS25":"18c9e9b8439fef88fc93d74bfec7981b0cb41958",
-    "WS31":"56ada741532c8f6cabfc83b129a8e87e645db055"
+    "WS11": "013559b6e66ef9f6257403c96f3b012884739470",
+    "WS14": "ed5f806ce7505f4dfae406e4164735def63b6c86",
+    "WS15": "ce9bed13b8d45c32ff0592595aa3a0d1e7b3964d",
+    "WS17": "eb3e9fce63b71fa68682d81d9227e6ed7ae905bf",
+    "WS19": "cc1490672b676f0bf1675f83c8f4fc146b940df4",
+    "WS25": "18c9e9b8439fef88fc93d74bfec7981b0cb41958",
+    "WS31": "56ada741532c8f6cabfc83b129a8e87e645db055"
   },
   "canonicalSlice": {
-    "character":{"nation":"KARUS","classId":101,"class":"WARRIOR","level":3},
-    "weapon":{"itemId":120010000,"name":"Short Sword","weaponRange":1.0,"attackDelayMs":1140,"damage":4},
-    "skill":{"skillId":101003,"name":"Slash","resourceCost":4,"resourceKind":"SP"},
-    "target":{"sid":850,"pid":800,"name":"Bandicoot","maxHp":11}
+    "character": {"nation": "KARUS", "classId": 101, "class": "WARRIOR", "level": 3},
+    "weapon": {"itemId": 120010000, "name": "Short Sword", "weaponRange": 1.0, "attackDelayMs": 1140, "damage": 4},
+    "skill": {"skillId": 101003, "name": "Slash", "resourceCost": 4, "resourceKind": "SP"},
+    "target": {"sid": 850, "pid": 800, "name": "Bandicoot", "maxHp": 11}
   },
   "routes": {
-    "WIZ_ATTACK_0x08":{"direction":"C2S+S2C","actorAuthority":"authenticated WS03 session","domain":"WS19","target":"WS25"},
-    "WIZ_TARGET_HP_0x22":{"direction":"C2S+S2C","decoder":"WS11 decodeTargetHpQuery","authority":"WS25 combat snapshot","encoder":"WS11 encodeTargetHp"},
-    "WIZ_MAGIC_PROCESS_0x31":{"direction":"C2S+S2C","actorAuthority":"authenticated WS03 session","skill":101003,"domain":"WS19","encoder":"WS11 encodeSlash101003Result"},
-    "MOB_ATTACK":{"input":"WS25 attackIntent","domain":"WS19 resolveMobAttackIntent","playerMutation":"authoritative playerCombatPort"},
-    "RESPAWN":{"input":"WS25 IN(reason=respawn)","owner":"WS14 visibility lifecycle","wire":"WIZ_NPC_INOUT IN + NPC_DETAIL_RECORD"}
+    "WIZ_ATTACK_0x08": {"direction": "C2S+S2C", "actorAuthority": "authenticated WS03 session", "domain": "WS19", "target": "WS25"},
+    "WIZ_TARGET_HP_0x22": {"direction": "C2S+S2C", "decoder": "WS11 decodeTargetHpQuery", "authority": "WS25 combat snapshot", "encoder": "WS11 encodeTargetHp"},
+    "WIZ_MAGIC_PROCESS_0x31": {"direction": "C2S+S2C", "actorAuthority": "authenticated WS03 session", "skill": 101003, "domain": "WS19", "encoder": "WS11 encodeSlash101003Result"},
+    "MOB_ATTACK": {"input": "WS25 attackIntent", "domain": "WS19 resolveMobAttackIntent", "playerMutation": "authoritative playerCombatPort"},
+    "RESPAWN": {"input": "WS25 IN(reason=respawn)", "owner": "WS14 visibility lifecycle", "wire": "WIZ_NPC_INOUT IN + NPC_DETAIL_RECORD", "ws11Ws14ByteParity": true}
   },
-  "outboundPacketFamilies":["WIZ_ATTACK 0x08","WIZ_DEAD 0x11","WIZ_HP_CHANGE 0x17","WIZ_MSP_CHANGE 0x18","WIZ_TARGET_HP 0x22","WIZ_MAGIC_PROCESS 0x31","WIZ_NPC_INOUT 0x0A"],
-  "authorityGuards":["client source id is observation-only","client result hint is observation-only","client interval/distance are observation-only","client damage/HP/resource/range/result are never authoritative","player and mob wire IDs validated as signed i16 by WS11 codec"],
-  "compositionTest":"tests/ko1298-session/combat-composition.contract.js",
-  "testResults":{"unit":"CI_PENDING","realComposition":"CI_PENDING","regression":"CI_PENDING","ci":"CI_PENDING"},
-  "remainingBlockers":[],
-  "status":"PENDING_CI"
+  "outboundPacketFamilies": [
+    "WIZ_ATTACK 0x08",
+    "WIZ_DEAD 0x11",
+    "WIZ_HP_CHANGE 0x17",
+    "WIZ_MSP_CHANGE 0x18",
+    "WIZ_TARGET_HP 0x22",
+    "WIZ_MAGIC_PROCESS 0x31",
+    "WIZ_NPC_INOUT 0x0A"
+  ],
+  "authorityGuards": [
+    "client source id is observation-only",
+    "client result hint is observation-only",
+    "client interval/distance are observation-only",
+    "client damage/HP/resource/range/result are never authoritative",
+    "player and mob wire IDs validated as signed i16 by WS11 codec"
+  ],
+  "observedResults": {
+    "targetHpQuery": {"initialHp": 11, "maxHp": 11, "status": "PASS"},
+    "normalAttack": {"wireResult": "SUCCESS", "positiveDamage": 3, "targetHpBefore": 11, "targetHpAfter": 8, "status": "PASS"},
+    "mobAttack": {"playerHpBefore": 33, "playerHpAfter": 32, "damage": 1, "packetOrder": ["WIZ_HP_CHANGE", "WIZ_ATTACK"], "status": "PASS"},
+    "slashFirst": {"wireResult": "EFFECTING_SUCCESS", "spBefore": 33, "spAfter": 29, "targetHpBefore": 8, "targetHpAfter": 4, "status": "PASS"},
+    "slashLethal": {"wireResult": "EFFECTING_SUCCESS", "spBefore": 29, "spAfter": 25, "targetHpBefore": 4, "targetHpAfter": 0, "status": "PASS"},
+    "death": {"deathPackets": 1, "duplicateReplayAdditionalDeathPackets": 0, "status": "PASS"},
+    "respawn": {"targetHpAfterRespawn": 11, "npcInPacket": true, "ws11Ws14ByteParity": true, "status": "PASS"}
+  },
+  "compositionTest": "tests/ko1298-session/combat-composition.contract.js",
+  "validatedGreenRun": {"workflow": "WS03 KO1298 Session", "runId": 38645627027, "runNumber": 23, "head": "94d3d987c399c927bc2bce9fffe32bf436e96113"},
+  "testResults": {"unit": "PASS", "realComposition": "PASS", "regression": "PASS", "existingWorldComposition": "PASS", "ci": "PASS"},
+  "remainingBlockers": [],
+  "status": "PASS"
 }
