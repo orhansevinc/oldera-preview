@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "identitySource": "WS31 ws31-data-catalog@a92ed73876be604273bc97e9d1faa68ac9cdc166 / data-catalog/zones.json",
+  "worldSource": "Open-KO/OpenKO-db@bec619466938d278339c30e5b1a4bff3c9413bab / ManualSetup/6_InsertData_ZONE_INFO.sql",
+  "zones": [
+    {"zoneId":1,"name":"Karus","zoneType":"NATION_HOME","nationConstraint":1,"mapRef":"karus_0730.smd","spawn":{"x":1630,"z":394,"y":150},"entryStatus":"RULES_PENDING","unknown":["1298 zone-ability/entry-rule packet values not pinned in WS14"]},
+    {"zoneId":2,"name":"El Morad","zoneType":"NATION_HOME","nationConstraint":2,"mapRef":"elmorad_1220.smd","spawn":null,"entryStatus":"DATA_CONFLICT","rawSpawnHundredths":{"x":1630000,"z":39400,"y":15000},"unknown":["OpenKO-db InitX converts to 16300.0, which is not representable by the 1298 u16 tenths coordinate; no guessed correction is accepted"]},
+    {"zoneId":11,"name":"Eslant (Karus)","zoneType":"NATION_ESLANT","nationConstraint":1,"mapRef":"k_eslant.smd","spawn":{"x":150,"z":150,"y":150},"entryStatus":"RULES_PENDING","unknown":["1298 zone-ability/entry-rule packet values not pinned in WS14"]},
+    {"zoneId":12,"name":"Eslant (El Morad)","zoneType":"NATION_ESLANT","nationConstraint":2,"mapRef":"e_eslant.smd","spawn":{"x":150,"z":150,"y":150},"entryStatus":"RULES_PENDING","unknown":["1298 zone-ability/entry-rule packet values not pinned in WS14"]},
+    {"zoneId":21,"name":"Moradon","zoneType":"NEUTRAL","nationConstraint":null,"mapRef":"moradon_0826.smd","spawn":{"x":312,"z":402,"y":0},"entryStatus":"PRODUCTION_READY","zoneAbility":{"canTradeWithOtherNation":true,"abilityType":0,"canTalkToOtherNation":true,"tariff":10},"unknown":[]},
+    {"zoneId":30,"name":"Delos","zoneType":"SIEGE","nationConstraint":null,"mapRef":"siege_0722.smd","spawn":{"x":10,"z":10,"y":0},"entryStatus":"RULES_PENDING","unknown":["1298 zone-entry/ability runtime rules pending WS24 integration"]},
+    {"zoneId":31,"name":"Bifrost","zoneType":"PVP_EVENT","nationConstraint":null,"mapRef":null,"spawn":null,"entryStatus":"IDENTITY_ONLY","unknown":["No matching pinned OpenKO-db ZONE_INFO row in WS14 source snapshot"]},
+    {"zoneId":32,"name":"Desperation Abyss","zoneType":"DUNGEON","nationConstraint":null,"mapRef":"dungeonb_0925.smd","spawn":{"x":10,"z":10,"y":0},"entryStatus":"RULES_PENDING","unknown":["1298 zone-entry/ability runtime rules pending"]},
+    {"zoneId":33,"name":"Hell Abyss","zoneType":"DUNGEON","nationConstraint":null,"mapRef":"dungeonc_1008.smd","spawn":{"x":10,"z":10,"y":0},"entryStatus":"RULES_PENDING","unknown":["1298 zone-entry/ability runtime rules pending"]},
+    {"zoneId":48,"name":"Arena","zoneType":"PVP_ARENA","nationConstraint":null,"mapRef":"clanfight48_0520.smd","spawn":{"x":1.28,"z":1.23,"y":0},"entryStatus":"RULES_PENDING","unknown":["1298 zone-entry/ability runtime rules pending"]},
+    {"zoneId":55,"name":"Caitharos Arena","zoneType":"PVP_ARENA","nationConstraint":null,"mapRef":null,"spawn":null,"entryStatus":"DATA_CONFLICT","unknown":["WS31 labels zone 55 Caitharos Arena while pinned OpenKO-db labels zone 55 Forgotten Temple; fail closed until reconciled"]},
+    {"zoneId":101,"name":"Battle Zone 1","zoneType":"NATION_WAR","nationConstraint":null,"mapRef":"battle1_1111.smd","spawn":{"x":10,"z":10,"y":10},"entryStatus":"RULES_PENDING","unknown":["battle-open/nation entry rules must come from WS24 runtime"]},
+    {"zoneId":102,"name":"Battle Zone 2","zoneType":"NATION_WAR","nationConstraint":null,"mapRef":"battle2_0722.smd","spawn":{"x":10,"z":10,"y":10},"entryStatus":"RULES_PENDING","unknown":["battle-open/nation entry rules must come from WS24 runtime"]},
+    {"zoneId":103,"name":"Battle Zone 3","zoneType":"NATION_WAR","nationConstraint":null,"mapRef":"battle3_1111.smd","spawn":{"x":10,"z":10,"y":0},"entryStatus":"RULES_PENDING","unknown":["battle-open/nation entry rules must come from WS24 runtime"]},
+    {"zoneId":111,"name":"Snow Battle","zoneType":"NATION_WAR","nationConstraint":null,"mapRef":"battle1_1111.smd","spawn":{"x":10,"z":10,"y":0},"entryStatus":"RULES_PENDING","unknown":["battle-open/nation entry rules must come from WS24 runtime"]},
+    {"zoneId":201,"name":"Frontier","zoneType":"PVP","nationConstraint":null,"mapRef":"freezone_1217.smd","spawn":{"x":10,"z":10,"y":0},"entryStatus":"RULES_PENDING","unknown":["1298 zone-entry/ability runtime rules pending WS24 integration"]}
+  ]
+}

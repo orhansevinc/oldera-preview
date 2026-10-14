@@ -36,10 +36,28 @@ const ZONE_CHANGE_PHASE = Object.freeze({
 const ZONE_ABILITY = Object.freeze({
   UPDATE: 0x01,
   NEUTRAL: 0x00,
+  PVP: 0x01,
 });
 
+// IDs are source-backed by WS31/Open-KO 1298. Presence here does not imply
+// that spawn/rules/zone-ability data is complete enough to enable entry.
 const ZONE = Object.freeze({
+  KARUS: 1,
+  EL_MORAD: 2,
+  KARUS_ESLANT: 11,
+  EL_MORAD_ESLANT: 12,
   MORADON: 21,
+  DELOS: 30,
+  BIFROST: 31,
+  DESPERATION_ABYSS: 32,
+  HELL_ABYSS: 33,
+  ARENA: 48,
+  CAITHAROS_ARENA: 55,
+  BATTLE_ZONE_1: 101,
+  BATTLE_ZONE_2: 102,
+  BATTLE_ZONE_3: 103,
+  SNOW_BATTLE: 111,
+  FRONTIER: 201,
 });
 
 // OpenKO-db ZONE_INFO zone 21: InitX=31200, InitZ=40200, InitY=0.
@@ -55,9 +73,35 @@ const SKILL_BYTES = 9;
 const WORLD_STATE = Object.freeze({
   WAIT_GAMESTART_LOADING: 'WAIT_GAMESTART_LOADING',
   WAIT_GAMESTART_LOADED: 'WAIT_GAMESTART_LOADED',
+  REQUESTED: 'REQUESTED',
+  AUTHORIZED: 'AUTHORIZED',
+  LEAVING_SOURCE: 'LEAVING_SOURCE',
+  TELEPORT: 'TELEPORT',
+  LOADING: 'LOADING',
+  LOADED: 'LOADED',
   WORLD_READY: 'WORLD_READY',
-  ZONE_CHANGE_WAIT_LOADING: 'ZONE_CHANGE_WAIT_LOADING',
-  ZONE_CHANGE_WAIT_LOADED: 'ZONE_CHANGE_WAIT_LOADED',
+
+  // Backward-compatible names consumed by the canonical 14-test Moradon suite.
+  ZONE_CHANGE_WAIT_LOADING: 'TELEPORT',
+  ZONE_CHANGE_WAIT_LOADED: 'LOADED',
+});
+
+const TRANSITION_REASON = Object.freeze({
+  WARP: 'WARP',
+  GATE: 'GATE',
+  TELEPORT: 'TELEPORT',
+  RESPAWN: 'RESPAWN',
+});
+
+const WORLD_ENTRY_REASON = Object.freeze({
+  INITIAL: 'INITIAL',
+  RECONNECT: 'RECONNECT',
+});
+
+const BOOTSTRAP_STAGE = Object.freeze({
+  USERS: 'USERS',
+  NPCS: 'NPCS',
+  MOBS: 'MOBS',
 });
 
 module.exports = {
@@ -74,4 +118,7 @@ module.exports = {
   VISIBLE_EQUIPMENT_RECORDS,
   SKILL_BYTES,
   WORLD_STATE,
+  TRANSITION_REASON,
+  WORLD_ENTRY_REASON,
+  BOOTSTRAP_STAGE,
 };
