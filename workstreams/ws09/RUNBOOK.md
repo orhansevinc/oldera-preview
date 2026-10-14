@@ -4,12 +4,28 @@
 
 Use `.github/workflows/ws09-ephemeral-staging.yml` only after both upstream gates exist:
 
-- one exact completed **successful** WS10 `WS10 Moradon E2E Integration Gate` run with explicit Moradon E2E PASS evidence;
+- one exact completed **successful** WS10 `WS10 Moradon E2E Integration Gate` run with explicit Moradon E2E PASS evidence and a frozen passing client artifact;
 - one exact WS50 commit whose `integration-rehearsal/STAGING_LINK_HANDOFF.md` says `STAGING LINK CANDIDATE: READY` and freezes the same WS10 run/artifacts plus exact WS01/WS02/WS03/WS12/WS14/WS38 SHAs.
 
 The publisher is intentionally fail-closed. `READY_PENDING_WS10`, a failed/stale WS10 run, a missing artifact, mismatched SHA, or mismatched handoff stops before public publication.
 
-Example dispatch after WS10 + WS50 have supplied the exact values:
+### Current branch-native trigger — no main merge required
+
+Copy `workstreams/ws09/EPHEMERAL_REQUEST.example.json` to `workstreams/ws09/EPHEMERAL_REQUEST.json`, replace every placeholder with the exact WS10 + WS50 values, then commit/push that request to `ws09-production-infra`.
+
+```sh
+cp workstreams/ws09/EPHEMERAL_REQUEST.example.json workstreams/ws09/EPHEMERAL_REQUEST.json
+# edit only the exact run/artifact/SHA values from WS10 + WS50
+git add workstreams/ws09/EPHEMERAL_REQUEST.json
+git commit -m "ops(ws09): publish exact ephemeral staging candidate"
+git push origin ws09-production-infra
+```
+
+The push path is watched by `WS09 Ephemeral Test Link`, so this works while the publisher remains branch-only. The request contains release identities only; do not put credentials or secrets in it. A later candidate can replace the same request file with new exact values.
+
+### Optional manual dispatch
+
+If/when this workflow file is available to GitHub's manual-dispatch UI/API from the repository default branch, the same publisher also accepts direct `workflow_dispatch` inputs:
 
 ```sh
 gh workflow run ws09-ephemeral-staging.yml \
@@ -40,7 +56,7 @@ The job performs these gates before it prints any link:
 7. verifies public HTTPS, WS38 identity/marker, strict MIME/cache headers, `wss://<host>/auth`, `wss://<host>/game`, and the exact WS12 publication preflight;
 8. only then prints `TEST_LINK=https://<temporary-host>/play-shell/` in the job log and summary.
 
-The temporary URL exists only while the workflow process is alive. `keepalive_minutes` is deliberately bounded to 5–45 minutes; re-run the workflow for a fresh link. This flow does not require `oldkoweb.com`, DNS changes, production TLS certificates, or repository secrets.
+The temporary URL exists only while the workflow process is alive. `keepalive_minutes` is deliberately bounded to 5–45 minutes; trigger a new exact request for a fresh link. This flow does not require `oldkoweb.com`, DNS changes, production TLS certificates, or repository secrets.
 
 ## 1. Prepare host
 
