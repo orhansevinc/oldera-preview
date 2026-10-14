@@ -1,0 +1,14 @@
+{
+  "ws10_run_id": "38505039290",
+  "ws10_head_sha": "f0cadfb50b5d1a36d2bfe4e5bf0a68f7c3061f41",
+  "ws10_pass_artifact_name": "ws10-moradon-e2e-26",
+  "ws10_client_artifact_name": "ws10-moradon-passing-client-26",
+  "ws50_handoff_ref": "a1e6ad525ff964384ff058cdc9bfbdf2104e7114",
+  "ws01_sha": "25c2fcd9c59e8f7a704f7d2ac0d5c331d0042ff9",
+  "ws02_sha": "1738f60945b24e00bdd2266e6600b5c0cf3c64cf",
+  "ws03_sha": "d634870bbcd2c541695516643d34e0ac119354d7",
+  "ws12_sha": "77f55b2949844e0fdd279526dab0fba4e8ab4f94",
+  "ws14_sha": "82cdcef40bed265ff4c4ce0fb7c8f6ad8cf2f52b",
+  "ws38_sha": "5f323f3cf055ba7f96d928605a2f2faf84e609cb",
+  "keepalive_minutes": "30"
+}
