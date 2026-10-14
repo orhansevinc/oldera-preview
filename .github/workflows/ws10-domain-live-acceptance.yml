@@ -1,6 +1,13 @@
 name: WS10 Domain Live Acceptance
 
 on:
+  workflow_call:
+    inputs:
+      release_id:
+        description: Exact coordinated release id
+        required: false
+        type: string
+        default: oldkoweb-domain-live-20261015
   workflow_dispatch:
     inputs:
       release_id:
@@ -102,7 +109,8 @@ jobs:
           blockers += (a or {}).get('blockers',[])
           blockers += (b or {}).get('blockers',[])
           overall='BLOCKED'
-          if gate_a=='READY_FOR_GATE_A' and gate_b=='PARTIAL_PASS_MANDATORY_FLOWS_NOT_RUN': overall='PARTIAL_PASS_MANDATORY_FLOWS_NOT_RUN'
+          if gate_a=='READY_FOR_GATE_A_BROWSER_INTEGRATION' and gate_b=='PARTIAL_PASS_MANDATORY_FLOWS_NOT_RUN':
+            overall='PARTIAL_PASS_MANDATORY_FLOWS_NOT_RUN'
           if 'FAIL' in (gate_a,gate_b,browser): overall='FAIL'
           out={
             'schema_version':'ws10-domain-live-acceptance/v1',
