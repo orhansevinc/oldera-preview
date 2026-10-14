@@ -56,7 +56,7 @@ function install(GameSession) {
       ['WS22', async () => { if (this.economyAdapter && typeof this.economyAdapter.cleanup === 'function') await this.economyAdapter.cleanup(actor, { reason }); }],
       ['WS25/26/27', async () => { if (this.domainEventAdapter && typeof this.domainEventAdapter.cleanup === 'function') await this.domainEventAdapter.cleanup(actor, { reason }); }],
       ['WS14', async () => {
-        if (this.worldSession && typeof this.worldSession.disconnect === 'function') await this.worldSession.disconnect(this.socketId, { reason });
+        if (this.worldSession && typeof this.worldSession.disconnect === 'function') await this.worldSession.disconnect(this.socketId, reason);
         else if (this.worldSession && typeof this.worldSession.cleanup === 'function') await this.worldSession.cleanup(actor, { reason });
       }],
       ['WS45', async () => {

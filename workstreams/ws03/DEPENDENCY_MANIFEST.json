@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "workstream": "WS03",
+  "strategy": "resolve-live-provider-heads-and-record-exact-tested-shas",
+  "providers": {
+    "WS14": {
+      "branch": "ws14-world-session",
+      "servicePath": "services/ko1298-world",
+      "lastTestedSha": "c1a1d454285db02c6de0c087a2d65434bfb4593b"
+    },
+    "WS15": {
+      "branch": "ws15-movement-sync",
+      "servicePath": "services/ko1298-movement",
+      "lastTestedSha": "ce9bed13b8d45c32ff0592595aa3a0d1e7b3964d"
+    },
+    "WS16": {
+      "branch": "ws16-npc-world",
+      "servicePath": "services/ko1298-npc",
+      "lastTestedSha": "234657c1264ead6b8828425ae9e7fcdca0cca5c8"
+    },
+    "WS45": {
+      "branch": "ws45-session-ownership",
+      "servicePath": "services/session-ownership",
+      "lastTestedSha": "4a66338743553c2781c68ca84b866ff4e999c14e"
+    }
+  }
+}

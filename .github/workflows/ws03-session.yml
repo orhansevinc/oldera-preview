@@ -26,22 +26,75 @@ jobs:
         with: {fetch-depth: 1}
       - uses: actions/setup-node@v4
         with: {node-version: '20'}
-      - name: Fetch pinned downstream contract branches
+      - name: Resolve exact downstream provider heads
+        shell: bash
         run: |
+          set -euo pipefail
           git fetch --no-tags origin \
-            ws14-world-session:refs/remotes/origin/ws14-world-session \
-            ws15-movement-sync:refs/remotes/origin/ws15-movement-sync \
-            ws16-npc-world:refs/remotes/origin/ws16-npc-world \
-            ws45-session-ownership:refs/remotes/origin/ws45-session-ownership
-          test "$(git rev-parse origin/ws14-world-session)" = "82cdcef40bed265ff4c4ce0fb7c8f6ad8cf2f52b"
-          test "$(git rev-parse origin/ws15-movement-sync)" = "ba44d65628a78f475b376a3996ff32b21ff1e1ab"
-          test "$(git rev-parse origin/ws16-npc-world)" = "e6ee973eead1dbd40f5e7a5e2eb7bc5bd29235a2"
-          test "$(git rev-parse origin/ws45-session-ownership)" = "4a66338743553c2781c68ca84b866ff4e999c14e"
-      - name: Materialize downstream services without modifying their branches
+            +refs/heads/ws14-world-session:refs/remotes/origin/ws14-world-session \
+            +refs/heads/ws15-movement-sync:refs/remotes/origin/ws15-movement-sync \
+            +refs/heads/ws16-npc-world:refs/remotes/origin/ws16-npc-world \
+            +refs/heads/ws45-session-ownership:refs/remotes/origin/ws45-session-ownership
+
+          WS14_SHA="$(git rev-parse refs/remotes/origin/ws14-world-session)"
+          WS15_SHA="$(git rev-parse refs/remotes/origin/ws15-movement-sync)"
+          WS16_SHA="$(git rev-parse refs/remotes/origin/ws16-npc-world)"
+          WS45_SHA="$(git rev-parse refs/remotes/origin/ws45-session-ownership)"
+          export WS14_SHA WS15_SHA WS16_SHA WS45_SHA
+
+          mkdir -p artifacts/ws03
+          node <<'NODE'
+          const fs = require('node:fs');
+          const baseline = JSON.parse(fs.readFileSync('workstreams/ws03/DEPENDENCY_MANIFEST.json', 'utf8'));
+          const resolved = {
+            schemaVersion: 1,
+            workstream: 'WS03',
+            strategy: baseline.strategy,
+            run: {
+              repository: process.env.GITHUB_REPOSITORY,
+              runId: process.env.GITHUB_RUN_ID,
+              runNumber: process.env.GITHUB_RUN_NUMBER,
+              ws03Sha: process.env.GITHUB_SHA,
+            },
+            providers: {
+              WS14: { branch: baseline.providers.WS14.branch, sha: process.env.WS14_SHA },
+              WS15: { branch: baseline.providers.WS15.branch, sha: process.env.WS15_SHA },
+              WS16: { branch: baseline.providers.WS16.branch, sha: process.env.WS16_SHA },
+              WS45: { branch: baseline.providers.WS45.branch, sha: process.env.WS45_SHA },
+            },
+          };
+          for (const [id, provider] of Object.entries(resolved.providers)) {
+            const previous = baseline.providers[id].lastTestedSha;
+            if (previous !== provider.sha) {
+              console.log(`::notice title=${id} dependency advanced::${previous} -> ${provider.sha}; testing live resolved HEAD and recording the exact SHA`);
+            }
+          }
+          fs.writeFileSync('artifacts/ws03/resolved-providers.json', `${JSON.stringify(resolved, null, 2)}\n`);
+          NODE
+
+          cat artifacts/ws03/resolved-providers.json
+          echo "WS14_SHA=$WS14_SHA" >> "$GITHUB_ENV"
+          echo "WS15_SHA=$WS15_SHA" >> "$GITHUB_ENV"
+          echo "WS16_SHA=$WS16_SHA" >> "$GITHUB_ENV"
+          echo "WS45_SHA=$WS45_SHA" >> "$GITHUB_ENV"
+
+      - name: Materialize exact resolved provider services read-only
+        shell: bash
         run: |
-          git archive origin/ws14-world-session services/ko1298-world | tar -x
-          git archive origin/ws15-movement-sync services/ko1298-movement | tar -x
-          git archive origin/ws16-npc-world services/ko1298-npc | tar -x
-          git archive origin/ws45-session-ownership services/session-ownership | tar -x
+          set -euo pipefail
+          git archive "$WS14_SHA" services/ko1298-world | tar -x
+          git archive "$WS15_SHA" services/ko1298-movement | tar -x
+          git archive "$WS16_SHA" services/ko1298-npc | tar -x
+          git archive "$WS45_SHA" services/session-ownership | tar -x
+          chmod -R a-w services/ko1298-world services/ko1298-movement services/ko1298-npc services/session-ownership
+
       - name: Real downstream contract composition
         run: node --test tests/ko1298-session/composed-contracts.contract.js
+
+      - name: Upload resolved dependency report
+        if: ${{ always() && hashFiles('artifacts/ws03/resolved-providers.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ws03-resolved-providers-${{ github.run_number }}
+          path: artifacts/ws03/resolved-providers.json
+          if-no-files-found: error
