@@ -9,50 +9,52 @@ x-logging: &default-logging
 x-service-defaults: &service-defaults
   restart: unless-stopped
   logging: *default-logging
-  stop_grace_period: 20s
+  stop_grace_period: 30s
+  init: true
 
 services:
   reverse-proxy:
     <<: *service-defaults
-    image: ${NGINX_IMAGE:-nginx:stable-alpine}
+    image: ${NGINX_IMAGE:?Set NGINX_IMAGE to an immutable image digest}
     ports:
       - "${HTTP_BIND:-80}:80"
       - "${HTTPS_BIND:-443}:443"
     environment:
-      OFFICIAL_HOST: ${OFFICIAL_HOST:-oldkoweb.local}
-      PLAY_HOST: ${PLAY_HOST:-play.oldkoweb.local}
-      ADMIN_HOST: ${ADMIN_HOST:-admin.oldkoweb.local}
-      API_HOST: ${API_HOST:-api.oldkoweb.local}
-      GATEWAY_HOST: ${GATEWAY_HOST:-gateway.oldkoweb.local}
+      OFFICIAL_HOST: ${OFFICIAL_HOST:-oldkoweb.com}
+      PLAY_HOST: ${PLAY_HOST:-play.oldkoweb.com}
+      ADMIN_HOST: ${ADMIN_HOST:-admin.oldkoweb.com}
       ADMIN_API_PORT: ${ADMIN_API_PORT:-8080}
-      GATEWAY_PORT: ${GATEWAY_PORT:-8080}
-      NGINX_ENVSUBST_FILTER: '^(OFFICIAL_HOST|PLAY_HOST|ADMIN_HOST|API_HOST|GATEWAY_HOST|ADMIN_API_PORT|GATEWAY_PORT)$'
+      GATEWAY_INTERNAL_PORT: ${GATEWAY_INTERNAL_PORT:-8080}
+      NGINX_ENVSUBST_FILTER: '^(OFFICIAL_HOST|PLAY_HOST|ADMIN_HOST|ADMIN_API_PORT|GATEWAY_INTERNAL_PORT)$'
     volumes:
       - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./infra/nginx/mime.types:/etc/nginx/oldkoweb-mime.types:ro
-      - ./infra/nginx/templates/${NGINX_TEMPLATE:-local.conf.template}:/etc/nginx/templates/default.conf.template:ro
-      - ./deploy/artifacts/site:/srv/oldkoweb/site:ro
-      - ./deploy/artifacts/play:/srv/oldkoweb/play:ro
-      - ./deploy/artifacts/admin:/srv/oldkoweb/admin:ro
+      - ./infra/nginx/templates/production.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./deploy/artifacts:/srv/oldkoweb:ro
       - ${TLS_CERT_DIR:-./deploy/tls}:/etc/nginx/tls:ro
     depends_on:
       admin-api:
-        condition: service_started
-      gateway:
-        condition: service_started
+        condition: service_healthy
+      gateway-auth:
+        condition: service_healthy
+      gateway-game:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/healthz || exit 1"]
       interval: 15s
       timeout: 3s
       retries: 5
       start_period: 10s
+    mem_limit: ${NGINX_MEMORY_LIMIT:-256m}
+    cpus: ${NGINX_CPU_LIMIT:-1.0}
+    pids_limit: 128
     networks:
       - edge
       - backend
 
   admin-api:
     <<: *service-defaults
-    image: ${ADMIN_API_IMAGE:-ghcr.io/orhansevinc/oldkoweb-admin-api:ws08}
+    image: ${ADMIN_API_IMAGE:?Set ADMIN_API_IMAGE to an immutable image digest}
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0
@@ -76,63 +78,119 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    mem_limit: ${ADMIN_API_MEMORY_LIMIT:-512m}
+    cpus: ${ADMIN_API_CPU_LIMIT:-1.0}
+    pids_limit: 256
     networks:
       - backend
 
-  ko-session:
+  session-world:
     <<: *service-defaults
-    image: ${KO_SESSION_IMAGE:-ghcr.io/orhansevinc/oldkoweb-ko1298-session:ws03}
+    image: ${KO_SESSION_WORLD_IMAGE:?Set KO_SESSION_WORLD_IMAGE to the immutable integrated WS03+WS14 image}
     environment:
       NODE_ENV: production
-      HOST: 0.0.0.0
-      PORT: ${KO_SESSION_PORT:-15001}
-      DATABASE_HOST: db
-      DATABASE_PORT: 5432
-      DATABASE_NAME: ${POSTGRES_DB:-oldkoweb}
-      DATABASE_USER: ${POSTGRES_USER:-oldkoweb}
-      DATABASE_PASSWORD_FILE: /run/secrets/postgres_password
-    secrets:
-      - postgres_password
+      AUTH_PORT: ${AUTH_TCP_PORT:-15100}
+      GAME_PORT: ${GAME_TCP_PORT:-15001}
+      GAME_HOST: ${KO_GAME_ADVERTISE_HOST:-play.oldkoweb.com}
     expose:
-      - "${KO_SESSION_PORT:-15001}"
+      - "${AUTH_TCP_PORT:-15100}"
+      - "${GAME_TCP_PORT:-15001}"
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"const n=require('net');const s=n.connect(${KO_SESSION_PORT:-15001},'127.0.0.1');s.setTimeout(2000);s.on('connect',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1));s.on('timeout',()=>process.exit(1))\""]
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "const n=require('net');
+          const ports=[${AUTH_TCP_PORT:-15100},${GAME_TCP_PORT:-15001}];
+          let ok=0;
+          for(const p of ports){
+            const s=n.connect(p,'127.0.0.1');
+            s.setTimeout(1500);
+            s.once('connect',()=>{ok++;s.destroy();if(ok===ports.length)process.exit(0)});
+            s.once('error',()=>process.exit(1));
+            s.once('timeout',()=>process.exit(1));
+          }
+          setTimeout(()=>process.exit(1),2500);"
       interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-    depends_on:
-      db:
-        condition: service_healthy
+      timeout: 4s
+      retries: 8
+      start_period: 15s
+    mem_limit: ${SESSION_WORLD_MEMORY_LIMIT:-1024m}
+    cpus: ${SESSION_WORLD_CPU_LIMIT:-2.0}
+    pids_limit: 512
     networks:
       - backend
 
-  gateway:
+  gateway-auth:
     <<: *service-defaults
-    image: ${GATEWAY_IMAGE:-ghcr.io/orhansevinc/oldkoweb-ko-gateway:ws02}
+    image: ${GATEWAY_IMAGE:?Set GATEWAY_IMAGE to an immutable WS02 image digest}
     environment:
       NODE_ENV: production
-      HOST: 0.0.0.0
-      PORT: ${GATEWAY_PORT:-8080}
-      UPSTREAM_HOST: ko-session
-      UPSTREAM_PORT: ${KO_SESSION_PORT:-15001}
+      GATEWAY_MODE: auth
+      AUTH_TCP_HOST: session-world
+      AUTH_TCP_PORT: ${AUTH_TCP_PORT:-15100}
+      LISTEN_HOST: 0.0.0.0
+      PORT: ${GATEWAY_INTERNAL_PORT:-8080}
+      WS_PATH: /auth
+      HEALTH_PATH: /healthz
+      ALLOWED_ORIGINS: ${PLAY_PUBLIC_ORIGIN:-https://play.oldkoweb.com}
+      ALLOWED_HOSTS: ${PLAY_ALLOWED_HOST:-play.oldkoweb.com}
+      REQUIRE_ORIGIN: "true"
+      TRUST_PROXY: "true"
+      LOG_LEVEL: ${GATEWAY_LOG_LEVEL:-info}
     expose:
-      - "${GATEWAY_PORT:-8080}"
+      - "${GATEWAY_INTERNAL_PORT:-8080}"
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:${GATEWAY_PORT:-8080}/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:${GATEWAY_INTERNAL_PORT:-8080}/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 4s
+      retries: 10
+      start_period: 5s
     depends_on:
-      ko-session:
+      session-world:
         condition: service_healthy
+    mem_limit: ${GATEWAY_MEMORY_LIMIT:-256m}
+    cpus: ${GATEWAY_CPU_LIMIT:-1.0}
+    pids_limit: 256
+    networks:
+      - backend
+
+  gateway-game:
+    <<: *service-defaults
+    image: ${GATEWAY_IMAGE:?Set GATEWAY_IMAGE to an immutable WS02 image digest}
+    environment:
+      NODE_ENV: production
+      GATEWAY_MODE: game
+      GAME_TCP_HOST: session-world
+      GAME_TCP_PORT: ${GAME_TCP_PORT:-15001}
+      LISTEN_HOST: 0.0.0.0
+      PORT: ${GATEWAY_INTERNAL_PORT:-8080}
+      WS_PATH: /game
+      HEALTH_PATH: /healthz
+      ALLOWED_ORIGINS: ${PLAY_PUBLIC_ORIGIN:-https://play.oldkoweb.com}
+      ALLOWED_HOSTS: ${PLAY_ALLOWED_HOST:-play.oldkoweb.com}
+      REQUIRE_ORIGIN: "true"
+      TRUST_PROXY: "true"
+      LOG_LEVEL: ${GATEWAY_LOG_LEVEL:-info}
+    expose:
+      - "${GATEWAY_INTERNAL_PORT:-8080}"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:${GATEWAY_INTERNAL_PORT:-8080}/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 4s
+      retries: 10
+      start_period: 5s
+    depends_on:
+      session-world:
+        condition: service_healthy
+    mem_limit: ${GATEWAY_MEMORY_LIMIT:-256m}
+    cpus: ${GATEWAY_CPU_LIMIT:-1.0}
+    pids_limit: 256
     networks:
       - backend
 
   db:
     <<: *service-defaults
-    image: ${POSTGRES_IMAGE:-postgres:17-alpine}
+    image: ${POSTGRES_IMAGE:?Set POSTGRES_IMAGE to an immutable image digest}
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-oldkoweb}
       POSTGRES_USER: ${POSTGRES_USER:-oldkoweb}
@@ -148,6 +206,9 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+    mem_limit: ${POSTGRES_MEMORY_LIMIT:-1024m}
+    cpus: ${POSTGRES_CPU_LIMIT:-2.0}
+    pids_limit: 512
     networks:
       - backend
 

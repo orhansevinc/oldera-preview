@@ -1,0 +1,145 @@
+name: WS09 production readiness
+
+on:
+  push:
+    branches: [ws09-production-infra]
+    paths:
+      - 'docker-compose.ws09.yml'
+      - 'infra/nginx/**'
+      - 'deploy/.env.production.example'
+      - 'deploy/RELEASE.ws10-38505039290.env'
+      - 'deploy/ko-auth-roundtrip-smoke.mjs'
+      - 'deploy/production-smoke.sh'
+      - 'deploy/release-switch.sh'
+      - 'deploy/rollback-static.sh'
+      - 'deploy/validate-production-env.sh'
+      - 'deploy/.gitignore'
+      - 'workstreams/ws09/**'
+      - '.github/workflows/ws09-production-readiness.yml'
+  pull_request:
+    paths:
+      - 'docker-compose.ws09.yml'
+      - 'infra/nginx/**'
+      - 'deploy/.env.production.example'
+      - 'deploy/RELEASE.ws10-38505039290.env'
+      - 'deploy/ko-auth-roundtrip-smoke.mjs'
+      - 'deploy/production-smoke.sh'
+      - 'deploy/release-switch.sh'
+      - 'deploy/rollback-static.sh'
+      - 'deploy/validate-production-env.sh'
+      - 'workstreams/ws09/**'
+      - '.github/workflows/ws09-production-readiness.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  production-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax and secret-policy checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check deploy/ko-auth-roundtrip-smoke.mjs
+          sh -n deploy/production-smoke.sh
+          sh -n deploy/release-switch.sh
+          sh -n deploy/rollback-static.sh
+          sh -n deploy/validate-production-env.sh
+          ! grep -RIE --exclude='*.md' --exclude='*.example' '(password|token|secret)[=:][^$<{ ]{6,}' deploy workstreams/ws09 || {
+            echo 'possible literal secret detected in WS09 production surfaces' >&2
+            exit 1
+          }
+
+      - name: Prepare production contract fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p deploy/secrets deploy/tls deploy/artifacts/{site,play,admin,acme}
+          printf 'ci-only-not-a-secret\n' > deploy/secrets/postgres_password.txt
+          chmod 600 deploy/secrets/postgres_password.txt
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -subj '/CN=oldkoweb.com' \
+            -addext 'subjectAltName=DNS:oldkoweb.com,DNS:play.oldkoweb.com,DNS:admin.oldkoweb.com' \
+            -keyout deploy/tls/privkey.pem \
+            -out deploy/tls/fullchain.pem >/dev/null 2>&1
+          cp deploy/.env.production.example /tmp/ws09-production-ci.env
+          fake='example.invalid/oldkoweb@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+          sed -i \
+            -e "s#^NGINX_IMAGE=.*#NGINX_IMAGE=$fake#" \
+            -e "s#^POSTGRES_IMAGE=.*#POSTGRES_IMAGE=$fake#" \
+            -e "s#^ADMIN_API_IMAGE=.*#ADMIN_API_IMAGE=$fake#" \
+            -e "s#^GATEWAY_IMAGE=.*#GATEWAY_IMAGE=$fake#" \
+            -e "s#^KO_SESSION_WORLD_IMAGE=.*#KO_SESSION_WORLD_IMAGE=$fake#" \
+            /tmp/ws09-production-ci.env
+
+      - name: Production compose dry-run
+        run: |
+          docker compose --env-file /tmp/ws09-production-ci.env -f docker-compose.ws09.yml config --quiet
+
+      - name: Production env fail-closed contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh deploy/validate-production-env.sh /tmp/ws09-production-ci.env
+          if sh deploy/validate-production-env.sh deploy/.env.production.example; then
+            echo 'placeholder production env unexpectedly passed immutable image validation' >&2
+            exit 1
+          fi
+
+      - name: Production Nginx syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --add-host gateway-auth:127.0.0.1 \
+            --add-host gateway-game:127.0.0.1 \
+            --add-host admin-api:127.0.0.1 \
+            -e OFFICIAL_HOST=oldkoweb.com \
+            -e PLAY_HOST=play.oldkoweb.com \
+            -e ADMIN_HOST=admin.oldkoweb.com \
+            -e ADMIN_API_PORT=8080 \
+            -e GATEWAY_INTERNAL_PORT=8080 \
+            -e 'NGINX_ENVSUBST_FILTER=^(OFFICIAL_HOST|PLAY_HOST|ADMIN_HOST|ADMIN_API_PORT|GATEWAY_INTERNAL_PORT)$' \
+            -v "$PWD/infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" \
+            -v "$PWD/infra/nginx/mime.types:/etc/nginx/oldkoweb-mime.types:ro" \
+            -v "$PWD/infra/nginx/templates/production.conf.template:/etc/nginx/templates/default.conf.template:ro" \
+            -v "$PWD/deploy/tls:/etc/nginx/tls:ro" \
+            -v "$PWD/deploy/artifacts:/srv/oldkoweb:ro" \
+            nginx:stable-alpine nginx -t
+
+      - name: Production route contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'location = /auth' infra/nginx/templates/production.conf.template
+          grep -Fq 'location = /game' infra/nginx/templates/production.conf.template
+          grep -Fq 'location /api/admin/' infra/nginx/templates/production.conf.template
+          ! grep -Fq '${API_HOST}' infra/nginx/templates/production.conf.template
+          ! grep -Fq '${GATEWAY_HOST}' infra/nginx/templates/production.conf.template
+          ! grep -Fq 'Strict-Transport-Security' infra/nginx/templates/production.conf.template
+          grep -Fq 'application/wasm' infra/nginx/mime.types
+          grep -Fq 'application/octet-stream' infra/nginx/mime.types
+
+      - name: Release switch and rollback dry-run
+        shell: bash
+        run: |
+          set -euo pipefail
+          release=/tmp/ws09-release-a
+          previous=/tmp/ws09-release-b
+          mkdir -p "$release"/{site,play,admin} "$previous"/{site,play,admin} deploy/state
+          sh deploy/release-switch.sh --dry-run "$release"
+          printf '%s\n' "$previous" > deploy/state/previous-release
+          sh deploy/rollback-static.sh --dry-run deploy/state/previous-release
+
+      - name: Exact passing client identity contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'WS10_RUN_ID=38505039290' deploy/RELEASE.ws10-38505039290.env
+          grep -Fq 'WS10_HEAD_SHA=f0cadfb50b5d1a36d2bfe4e5bf0a68f7c3061f41' deploy/RELEASE.ws10-38505039290.env
+          grep -Fq 'WS10_CLIENT_ARTIFACT=ws10-moradon-passing-client-26' deploy/RELEASE.ws10-38505039290.env
+          grep -Fq 'WS10_CLIENT_ARTIFACT_DIGEST=sha256:ff9fb679ad1b3caa184ad098cff81cfb5469b0698d5e5f3b76ef4fab2ea775b3' deploy/RELEASE.ws10-38505039290.env
+          grep -Fq 'KNIGHTONLINE_DATA_BYTES=615930538' deploy/RELEASE.ws10-38505039290.env

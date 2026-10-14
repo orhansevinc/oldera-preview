@@ -1,102 +1,107 @@
 WS09
 
-# Dependency Snapshot — Ephemeral HTTPS/WSS Test Link
+# Dependency Snapshot — Production domain preparation
 
 ## SELF
 
 - Workstream: `WS09`
 - Branch: `ws09-production-infra`
-- Current publisher implementation: `d952f5b5cb2987edbf8849c54bb673f911d1235e`.
-- Validation: `WS09 deployment config` run #31 / `38504474693` — **SUCCESS**.
-- Owned surfaces used: `infra/**`, `deploy/**`, `workstreams/ws09/**`, `.github/workflows/ws09-*.yml`, existing `docker-compose.ws09-staging.yml`.
-- No provider/game/client implementation was modified.
+- Pre-production baseline head before this work: `22254254776293d0f3eed45950011de8742532fc`.
+- Last successful WS09 public ephemeral validation: run `38515548307` / run #6 — **SUCCESS**.
+- Last successful WS09 config validation observed before this work: run `38515548191` / run #40 — **SUCCESS**.
+- No main merge, force push, DNS change or registrar action.
 
-## UPSTREAM
+## CANONICAL PASS / RELEASE
 
-### WS01 — browser WSS transport
+WS50 READY handoff: `9e0fc1822351965755fc490c2d2abf34d40f430d`.
 
-- Frozen by current WS50 pending handoff as `25c2fcd9c59e8f7a704f7d2ac0d5c331d0042ff9`.
-- Public browser transport is same-origin `/auth` and `/game`; legacy TCP ports remain backend-only.
+Canonical WS10:
 
-### WS10 — real Moradon acceptance + frozen passing client
+```text
+run id             38505039290
+run number         26
+head                f0cadfb50b5d1a36d2bfe4e5bf0a68f7c3061f41
+PASS artifact       ws10-moradon-e2e-26
+client artifact     ws10-moradon-passing-client-26
+artifact id         11867980473
+artifact digest     sha256:ff9fb679ad1b3caa184ad098cff81cfb5469b0698d5e5f3b76ef4fab2ea775b3
+contentVersion      1298-ws10-38505039290
+```
 
-- Latest observed attempt: `WS10 Moradon E2E Integration Gate` run #25, run id `38503397843`, head `419d52b363a73c8ab77ff8ad944a30968fda967d` — still `in_progress` at this snapshot.
-- Previous run #24 (`38501204665`, head `b11929915d881e046ff50aa34695c9da70a5480a`) failed and is ineligible for publication.
-- The publisher requires one exact **completed successful** WS10 run, exact head SHA, explicit Moradon PASS evidence artifact, and exact frozen client artifact containing one non-empty `KnightOnLine.js`, `KnightOnLine.wasm`, and `KnightOnLine.data`.
-- Stale/failed runs or artifacts fail closed before public publication.
+Frozen production-relevant provider refs:
 
-### WS12 — browser launcher / strict publication preflight
+```text
+WS01 57d0aa7c6a82810d5f126bda83a368e7eb7801bb
+WS02 1738f60945b24e00bdd2266e6600b5c0cf3c64cf
+WS03 237c4a613e94434baae656c1399cb449e7b78067
+WS12 121bb7bdb82c364bf9459111096f5ff007873a61
+WS14 82cdcef40bed265ff4c4ce0fb7c8f6ad8cf2f52b
+WS38 5f323f3cf055ba7f96d928605a2f2faf84e609cb
+```
 
-- Frozen by current WS50 pending handoff as `77f55b2949844e0fdd279526dab0fba4e8ab4f94`.
-- WS09 runs that exact launcher config check and launcher-core publication preflight.
-- Required same-origin endpoints are `/auth` and `/game`.
-- The public preflight verifies WS38 pointer/manifest/marker identity, required-file bodies/hashes, strict MIME, and launchable HTML entry.
+The WS09 public run built those exact WS02 + WS03/WS14 slices, published the exact passing client via WS38, and passed public HTTPS/MIME/WSS + WS12 preflight. The temporary URL was intentionally removed after its 45-minute keepalive.
 
-### WS38 — immutable client publication
+## WS01
 
-- Frozen by current WS50 pending handoff as `5f323f3cf055ba7f96d928605a2f2faf84e609cb`.
-- Exact content contract consumed:
-  - `KnightOnLine.js` -> `text/javascript; charset=utf-8`
-  - `KnightOnLine.wasm` -> `application/wasm`
-  - `KnightOnLine.data` -> `application/octet-stream`
-- Publication order: immutable files -> manifest -> verify -> `_complete` -> verify -> `latest.json` last.
+Same-origin browser transport is canonical:
 
-### WS50 — staging integration handoff
+```text
+/auth
+/game
+```
 
-- Current branch head checked: `ws50-integration-rehearsal@8c4c1c71e3f7ecff2d4eb49240a813a4928e1bf7`.
-- `integration-rehearsal/STAGING_LINK_HANDOFF.md` now exists and declares **`STAGING LINK CANDIDATE: READY_PENDING_WS10`**.
-- Exact WS10 release fields remain `REQUIRED`; the handoff explicitly says the single remaining blocker is WS10.
-- Frozen provider set relevant to WS09:
-  - WS01 `25c2fcd9c59e8f7a704f7d2ac0d5c331d0042ff9`
-  - WS02 `1738f60945b24e00bdd2266e6600b5c0cf3c64cf`
-  - WS03 `d634870bbcd2c541695516643d34e0ac119354d7`
-  - WS12 `77f55b2949844e0fdd279526dab0fba4e8ab4f94`
-  - WS14 `82cdcef40bed265ff4c4ce0fb7c8f6ad8cf2f52b`
-  - WS38 `5f323f3cf055ba7f96d928605a2f2faf84e609cb`
-- That pending handoff froze WS09 at `bac4f9d1338e385c8aff3989becaa8ed74037b38`, but WS09 intentionally moved afterward to complete the publisher. Therefore the final WS50 `READY` handoff must re-freeze WS09 at a revision containing the current publisher.
-- The WS09 workflow now enforces this: it parses `WS09_SHA` from the exact handoff and rejects the release if any publisher/infra code changed after that frozen SHA. Docs/status/request-only commits may follow without invalidating the publisher freeze.
+Production maps both only under `play.oldkoweb.com`. Legacy TCP auth/game ports remain private behind WS02.
 
-## EPHEMERAL PUBLISHER CONTRACT
+## WS02
 
-Workflow: `.github/workflows/ws09-ephemeral-staging.yml`
+Production uses two gateway instances from the same frozen image: auth mode and game mode. Both require exact Origin and Host allowlists for `https://play.oldkoweb.com` / `play.oldkoweb.com`.
 
-Branch-native activation path, with no main merge required:
+## WS03 + WS14
 
-1. copy `workstreams/ws09/EPHEMERAL_REQUEST.example.json` to `workstreams/ws09/EPHEMERAL_REQUEST.json`;
-2. fill it only with exact WS10 PASS/run/artifact values and the final WS50 READY handoff/frozen SHAs;
-3. commit/push that request to `ws09-production-infra`;
-4. the publisher starts automatically on that branch.
+Production Compose preserves the integrated `session-world` shape proven by WS50. The canonical staging composition is protocol-complete for the browser path. Production durability is not fabricated by WS09; persistent gameplay repository integration remains a provider concern (WS07/WS03).
 
-The publisher then:
+## WS12 + WS38
 
-1. verifies exact WS10 successful run identity and exact live artifacts through GitHub Actions metadata;
-2. verifies exact WS50 `READY` handoff, all frozen upstream identities, and a non-stale WS09 publisher freeze;
-3. downloads the frozen passing client without rebuilding provider/client code;
-4. materializes exact provider slices into a disposable runner composition;
-5. stages the client with exact WS38 tools/order;
-6. builds WS02 gateway and integrated WS03+WS14 runtime images from exact frozen SHAs;
-7. creates a temporary HTTPS/WSS `*.trycloudflare.com` origin using pinned `cloudflared 2026.10.0` with verified linux-amd64 SHA-256;
-8. boots the existing WS09 same-origin edge with `/play-shell/`, `/auth`, `/game`;
-9. runs public HTTPS/WS38/MIME/cache/WSS smoke plus exact WS12 full publication preflight;
-10. emits `TEST_LINK=https://<temporary-host>/play-shell/` only after every gate passes, then keeps the process alive for a bounded 5–45 minute window.
+Production publishes the exact frozen client through the same immutable content contract:
 
-Public edge smoke intentionally uses HEAD for large immutable files. Exact WS12 preflight performs the full required-file body/hash verification once, avoiding a redundant ~587 MB-class download through the temporary tunnel.
+- JS `text/javascript; charset=utf-8`
+- WASM `application/wasm`
+- DATA `application/octet-stream`
+- immutable version path
+- `latest.json` last and no-store.
 
-## CURRENT DECISION
+## WS35 runtime/security config
 
-- `EPHEMERAL STAGING PIPELINE`: **READY**.
-- `EPHEMERAL TEST LINK`: **NOT LIVE / NOT CLAIMED**.
-- Current blockers are release inputs, not WS09 implementation: WS10 run #25 has not produced an exact PASS yet, and WS50 remains `READY_PENDING_WS10`; the final WS50 READY revision must also re-freeze the completed WS09 publisher.
-- No production domain, DNS, production certificate, repository secret, or main merge is required for the branch-native publication path.
+Observed head: `5327d50906d02c829add08cf1ca73fbe978526dc`.
 
-## BOUNDARIES
+Relevant contract: typed production config, trusted origins/CORS rules, secret references, production literal-secret rejection and redaction. WS09 uses file-mounted secrets and exact origin/host rules, while avoiding unsupported provider variables.
 
-- No merge to `main`.
-- No force push.
-- No provider/client/game implementation change.
-- No fake client or stale PASS/handoff accepted.
-- No production DNS/certificate change.
+## WS29 observability
 
-## LAST_SYNC
+Observed head: `d26f5af7aae0892576af5f35599a9d6076daf129`.
 
-Checked on 2026-10-14 against current `main` test-link coordination and current WS01/WS10/WS12/WS38/WS50 staging evidence.
+Relevant contract: structured/redacted logs, correlation IDs, health/readiness, metrics and graceful shutdown. WS09 supplies edge/container health and log rotation and leaves service instrumentation to provider integration.
+
+## DOMAIN / HOST
+
+- Domain: `oldkoweb.com` — purchased/owned by the user.
+- Persistent host target: **WAITING FOR HOST TARGET**.
+- DNS changes performed by WS09: **NO**.
+- Required public names: apex, `play`, `admin`.
+- Recommended permanent staging name: `staging`.
+- Public `api` / `gateway`: not required.
+
+## EPHEMERAL FALLBACK
+
+Known-good fallback evidence remains WS09 public run `38515548307` at branch commit `22254254776293d0f3eed45950011de8742532fc`.
+
+Production infra changes after that frozen publisher revision must not be misrepresented as covered by the old WS50 WS09 freeze. If the Quick Tunnel publisher itself is rerun from a newer infra revision, obtain a matching WS50 re-freeze or use the known-good validated publisher revision.
+
+## BLOCKERS TO LIVE CUTOVER
+
+1. Choose/provision a persistent host with a stable target.
+2. Produce/publish immutable image digests for Nginx, Postgres, admin API, WS02, and integrated WS03+WS14 (or build/freeze equivalent images on the host).
+3. Obtain the production SAN certificate after the host/DNS challenge path is available.
+4. Human-approved DNS cutover.
+
+None of these justify changing DNS tonight.

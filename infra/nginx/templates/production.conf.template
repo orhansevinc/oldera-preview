@@ -1,28 +1,74 @@
-# Production mode. Activate only after domain ownership, DNS and certificates are real.
+# OldKOWeb production edge.
+# Initial cutover intentionally does NOT emit HSTS. Enable it only after all
+# required hostnames have valid HTTPS, renewal has been tested, and rollback is
+# proven. See workstreams/ws09/RUNBOOK.md.
+
+# Unknown HTTP hosts are rejected. /healthz remains available to the local
+# container healthcheck using Host: 127.0.0.1.
 server {
     listen 80 default_server;
     server_name _;
-    location = /healthz { access_log off; return 200 'ok\n'; add_header Content-Type text/plain; }
-    location /.well-known/acme-challenge/ { root /srv/acme; }
+    location = /healthz {
+        access_log off;
+        add_header Content-Type text/plain;
+        return 200 'ok\n';
+    }
+    location / { return 444; }
+}
+
+# ACME HTTP-01 and HTTP -> HTTPS only for intended public names.
+server {
+    listen 80;
+    server_name ${OFFICIAL_HOST} ${PLAY_HOST} ${ADMIN_HOST};
+
+    location /.well-known/acme-challenge/ {
+        root /srv/oldkoweb/acme;
+        try_files $uri =404;
+    }
+
     location / { return 308 https://$host$request_uri; }
+}
+
+# Reject unexpected SNI/Host on TLS while still using the production SAN cert.
+server {
+    listen 443 ssl default_server;
+    http2 on;
+    server_name _;
+    ssl_certificate /etc/nginx/tls/fullchain.pem;
+    ssl_certificate_key /etc/nginx/tls/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    return 444;
 }
 
 server {
     listen 443 ssl;
     http2 on;
     server_name ${OFFICIAL_HOST};
+
     ssl_certificate /etc/nginx/tls/fullchain.pem;
     ssl_certificate_key /etc/nginx/tls/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_session_cache shared:SSL:10m;
     ssl_session_timeout 1d;
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
     add_header X-Content-Type-Options nosniff always;
     add_header Referrer-Policy strict-origin-when-cross-origin always;
-    add_header Content-Security-Policy-Report-Only "default-src 'self'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.oldkoweb.com wss://gateway.oldkoweb.com wss://play.oldkoweb.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" always;
+    add_header Content-Security-Policy-Report-Only "default-src 'self'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" always;
+
     root /srv/oldkoweb/site;
     index index.html;
-    location = /index.html { add_header Cache-Control "no-cache, no-store, must-revalidate" always; try_files $uri =404; }
+
+    location = /healthz {
+        access_log off;
+        add_header Content-Type text/plain;
+        return 200 'ok\n';
+    }
+
+    location = /index.html {
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+        try_files $uri =404;
+    }
+
     location / { try_files $uri $uri/ /index.html; }
 }
 
@@ -30,32 +76,82 @@ server {
     listen 443 ssl;
     http2 on;
     server_name ${PLAY_HOST};
+
     ssl_certificate /etc/nginx/tls/fullchain.pem;
     ssl_certificate_key /etc/nginx/tls/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
     add_header X-Content-Type-Options nosniff always;
     add_header Referrer-Policy strict-origin-when-cross-origin always;
+    add_header Content-Security-Policy-Report-Only "default-src 'self'; img-src 'self' data: blob:; font-src 'self' data:; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; connect-src 'self' wss://$host; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" always;
+
     root /srv/oldkoweb/play;
     index index.html;
 
-    location = /index.html { add_header Cache-Control "no-cache, no-store, must-revalidate" always; try_files $uri =404; }
-    location ~* ^/releases/[^/]+/.*\.(wasm|data|js)$ { add_header Cache-Control "public, max-age=31536000, immutable" always; try_files $uri =404; }
-    location ~* \.(wasm|data)$ { add_header Cache-Control "public, max-age=604800, must-revalidate" always; try_files $uri =404; }
+    location = /healthz {
+        access_log off;
+        add_header Content-Type text/plain;
+        return 200 'ok\n';
+    }
 
-    location /ws {
-        proxy_pass http://gateway:${GATEWAY_PORT};
+    # Launcher and mutable release pointers must never pin a stale release.
+    location = /index.html {
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+        try_files $uri =404;
+    }
+
+    location = /play-shell/config.json {
+        add_header Cache-Control "no-store, max-age=0" always;
+        try_files $uri =404;
+    }
+
+    location ~* ^/(latest|rollback)\.json$ {
+        add_header Cache-Control "no-store, max-age=0" always;
+        try_files $uri =404;
+    }
+
+    # WS38 version-addressed package, including manifest and _complete marker.
+    # Nginx static-file byte range support remains enabled; .data is not gzip
+    # compressed because application/octet-stream is not in gzip_types.
+    location ~* ^/client-content/v1/[^/]+/ {
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        try_files $uri =404;
+    }
+
+    # Same-origin browser AUTH WebSocket.
+    location = /auth {
+        proxy_pass http://gateway-auth:${GATEWAY_INTERNAL_PORT};
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
         proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
         proxy_read_timeout 3600s;
         proxy_send_timeout 3600s;
         proxy_buffering off;
     }
+
+    # Same-origin browser GAME WebSocket.
+    location = /game {
+        proxy_pass http://gateway-game:${GATEWAY_INTERNAL_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_buffering off;
+    }
+
     location / { try_files $uri $uri/ /index.html; }
 }
 
@@ -63,72 +159,48 @@ server {
     listen 443 ssl;
     http2 on;
     server_name ${ADMIN_HOST};
+
     ssl_certificate /etc/nginx/tls/fullchain.pem;
     ssl_certificate_key /etc/nginx/tls/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
     add_header X-Frame-Options DENY always;
     add_header X-Content-Type-Options nosniff always;
     add_header Referrer-Policy no-referrer always;
-    add_header Content-Security-Policy-Report-Only "default-src 'self'; connect-src 'self' https://api.oldkoweb.com; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" always;
+    add_header Content-Security-Policy-Report-Only "default-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" always;
+
     root /srv/oldkoweb/admin;
     index index.html;
 
-    # Matches admin/live-api.js default base: /api/admin
+    location = /healthz {
+        access_log off;
+        add_header Content-Type text/plain;
+        return 200 'ok\n';
+    }
+
+    location = /index.html {
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+        try_files $uri =404;
+    }
+
+    # Same-origin API. No CORS header is added at the edge.
+    # Integrate authentication-aware rate limits here once WS48/WS08 expose the
+    # final mutation/login endpoint list; do not rate-limit WebSocket traffic by guess.
     location /api/admin/ {
         proxy_pass http://admin-api:${ADMIN_API_PORT}/;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Request-ID $request_id;
+        proxy_hide_header Access-Control-Allow-Origin;
+        proxy_hide_header Access-Control-Allow-Credentials;
         proxy_buffering off;
     }
+
     location / { try_files $uri $uri/ /index.html; }
-}
-
-server {
-    listen 443 ssl;
-    http2 on;
-    server_name ${API_HOST};
-    ssl_certificate /etc/nginx/tls/fullchain.pem;
-    ssl_certificate_key /etc/nginx/tls/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header X-Content-Type-Options nosniff always;
-
-    location / {
-        proxy_pass http://admin-api:${ADMIN_API_PORT};
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Request-ID $request_id;
-    }
-}
-
-server {
-    listen 443 ssl;
-    http2 on;
-    server_name ${GATEWAY_HOST};
-    ssl_certificate /etc/nginx/tls/fullchain.pem;
-    ssl_certificate_key /etc/nginx/tls/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-
-    location / {
-        proxy_pass http://gateway:${GATEWAY_PORT};
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection $connection_upgrade;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_read_timeout 3600s;
-        proxy_send_timeout 3600s;
-        proxy_buffering off;
-    }
 }

@@ -1,137 +1,254 @@
-# OldKOWeb production and ephemeral-staging runbook
+# OldKOWeb production runbook
 
-## 0. Ephemeral HTTPS/WSS test link (no production domain)
+This runbook does not authorize DNS changes. Domain-panel work is a separate human-approved cutover step.
 
-Use `.github/workflows/ws09-ephemeral-staging.yml` only after both upstream gates exist:
+## 1. Fresh server provisioning
 
-- one exact completed **successful** WS10 `WS10 Moradon E2E Integration Gate` run with explicit Moradon E2E PASS evidence and a frozen passing client artifact;
-- one exact WS50 commit whose `integration-rehearsal/STAGING_LINK_HANDOFF.md` says `STAGING LINK CANDIDATE: READY` and freezes the same WS10 run/artifacts plus exact WS01/WS02/WS03/WS12/WS14/WS38 SHAs.
+Recommended baseline: maintained Linux VM/VPS with stable public IPv4.
 
-The publisher is intentionally fail-closed. `READY_PENDING_WS10`, a failed/stale WS10 run, a missing artifact, mismatched SHA, or mismatched handoff stops before public publication.
+Install Docker Engine, Compose v2, `curl`, `jq`, OpenSSL and an ACME client. Enable time synchronization and unattended security updates according to the host OS policy.
 
-### Current branch-native trigger — no main merge required
+Firewall:
 
-Copy `workstreams/ws09/EPHEMERAL_REQUEST.example.json` to `workstreams/ws09/EPHEMERAL_REQUEST.json`, replace every placeholder with the exact WS10 + WS50 values, then commit/push that request to `ws09-production-infra`.
-
-```sh
-cp workstreams/ws09/EPHEMERAL_REQUEST.example.json workstreams/ws09/EPHEMERAL_REQUEST.json
-# edit only the exact run/artifact/SHA values from WS10 + WS50
-git add workstreams/ws09/EPHEMERAL_REQUEST.json
-git commit -m "ops(ws09): publish exact ephemeral staging candidate"
-git push origin ws09-production-infra
+```text
+PUBLIC INBOUND:  TCP 80, TCP 443
+ADMIN SSH:       restricted source/VPN/operator policy
+DO NOT EXPOSE:   5432, 15100, 15001, 8080 or Docker daemon/socket
 ```
 
-The push path is watched by `WS09 Ephemeral Test Link`, so this works while the publisher remains branch-only. The request contains release identities only; do not put credentials or secrets in it. A later candidate can replace the same request file with new exact values.
+Only `reverse-proxy` publishes host ports. PostgreSQL, admin API, session-world and both WS02 gateways stay on the Compose internal backend network.
 
-### Optional manual dispatch
-
-If/when this workflow file is available to GitHub's manual-dispatch UI/API from the repository default branch, the same publisher also accepts direct `workflow_dispatch` inputs:
+Create host directories:
 
 ```sh
-gh workflow run ws09-ephemeral-staging.yml \
-  --repo orhansevinc/oldera-preview \
-  --ref ws09-production-infra \
-  -f ws10_run_id=<successful-run-id> \
-  -f ws10_head_sha=<40-char-ws10-sha> \
-  -f ws10_pass_artifact_name=<exact-pass-artifact> \
-  -f ws10_client_artifact_name=<exact-frozen-client-artifact> \
-  -f ws50_handoff_ref=<40-char-ws50-handoff-sha> \
-  -f ws01_sha=<40-char-sha> \
-  -f ws02_sha=<40-char-sha> \
-  -f ws03_sha=<40-char-sha> \
-  -f ws12_sha=<40-char-sha> \
-  -f ws14_sha=<40-char-sha> \
-  -f ws38_sha=<40-char-sha> \
-  -f keepalive_minutes=30
-```
-
-The job performs these gates before it prints any link:
-
-1. validates exact WS10 run conclusion/branch/head and artifact identities;
-2. validates the exact WS50 READY handoff and its frozen provider identities;
-3. consumes the frozen `KnightOnLine.js`, `KnightOnLine.wasm`, and `KnightOnLine.data` without rebuilding them;
-4. composes WS02 gateway + integrated WS03/WS14 runtime from exact handoff SHAs;
-5. stages the exact client through WS38 in `immutable files -> manifest -> verify -> _complete -> verify -> latest last` order;
-6. starts one same-origin WS09 edge and a pinned Cloudflare Quick Tunnel;
-7. verifies public HTTPS, WS38 identity/marker, strict MIME/cache headers, `wss://<host>/auth`, `wss://<host>/game`, and the exact WS12 publication preflight;
-8. only then prints `TEST_LINK=https://<temporary-host>/play-shell/` in the job log and summary.
-
-The temporary URL exists only while the workflow process is alive. `keepalive_minutes` is deliberately bounded to 5–45 minutes; trigger a new exact request for a fresh link. This flow does not require `oldkoweb.com`, DNS changes, production TLS certificates, or repository secrets.
-
-## 1. Prepare host
-
-Use a maintained Linux host with Docker Engine + Compose v2. Open inbound TCP 80/443 only. Keep PostgreSQL, KO session and Admin API unexposed to the public internet.
-
-Copy `deploy/.env.example` to `.env` and replace image tags with immutable release tags/digests. Keep `NGINX_TEMPLATE=local.conf.template` until domain/DNS/TLS are real.
-
-Create the database secret:
-
-```sh
+mkdir -p deploy/secrets deploy/tls deploy/state deploy/releases deploy/artifacts deploy/backups
+chmod 700 deploy/secrets deploy/tls deploy/state deploy/backups
 umask 077
 openssl rand -base64 36 > deploy/secrets/postgres_password.txt
+chmod 600 deploy/secrets/postgres_password.txt
 ```
 
-Stage finished static outputs under `deploy/artifacts/site`, `deploy/artifacts/play` and `deploy/artifacts/admin`.
+Copy `deploy/.env.production.example` to the host-local `deploy/.env.production`. Do not commit it.
 
-## 2. Validate before start
+## 2. Freeze images and release identities
+
+The application release baseline is `deploy/RELEASE.ws10-38505039290.env`. Client binaries must come from the exact frozen artifact and remain byte-identical.
+
+Before production start, replace every `REQUIRED_*_IMAGE_DIGEST` in the host env with an immutable registry digest:
+
+```text
+<registry>/<image>@sha256:<64 hex chars>
+```
+
+The WS02 gateway image must represent `1738f60945b24e00bdd2266e6600b5c0cf3c64cf`. The integrated session-world image must represent WS03 `237c4a613e94434baae656c1399cb449e7b78067` + WS14 `82cdcef40bed265ff4c4ce0fb7c8f6ad8cf2f52b`. Do not substitute a moving `latest`/workstream tag at cutover.
+
+Run:
 
 ```sh
-sh deploy/verify-config.sh
-docker compose --env-file .env -f docker-compose.ws09.yml config --quiet
-docker compose --env-file .env -f docker-compose.ws09.yml pull
+sh deploy/validate-production-env.sh deploy/.env.production
+docker compose --env-file deploy/.env.production -f docker-compose.ws09.yml config --quiet
+docker compose --env-file deploy/.env.production -f docker-compose.ws09.yml pull
 ```
 
-Confirm backend images implement the WS09 interface contract in `deploy/env/README.md`. Run DB migrations from the WS07-approved migration mechanism before exposing traffic.
+That is the deploy dry-run/config gate. It must pass before any service change.
 
-## 3. Start and inspect
+## 3. Stage static releases
+
+Use a release root outside Git-tracked runtime paths, for example:
+
+```text
+/opt/oldkoweb/releases/1298-ws10-38505039290/
+  site/
+  play/
+  admin/
+```
+
+`play/` must contain the WS12 launcher and the exact WS38 publication:
+
+```text
+play-shell/
+latest.json
+client-content/v1/1298-ws10-38505039290/
+  KnightOnLine.js
+  KnightOnLine.wasm
+  KnightOnLine.data
+  manifest.json
+  _complete.json
+  ...
+```
+
+Verify the WS38 manifest before activation. Then dry-run and atomically activate:
 
 ```sh
-docker compose --env-file .env -f docker-compose.ws09.yml up -d
-docker compose --env-file .env -f docker-compose.ws09.yml ps
-docker compose --env-file .env -f docker-compose.ws09.yml logs --tail=200 reverse-proxy admin-api gateway ko-session db
+sh deploy/release-switch.sh --dry-run /opt/oldkoweb/releases/1298-ws10-38505039290
+sh deploy/release-switch.sh /opt/oldkoweb/releases/1298-ws10-38505039290
 ```
 
-In local mode, map the `*.oldkoweb.local` names to the host in `/etc/hosts` or send explicit Host headers. Verify official/admin/play HTML, Admin API health and a WebSocket upgrade through `/ws`.
+The proxy mounts the parent artifacts directory, so symlink replacement does not require rebuilding the Nginx image.
 
-## 4. Database backup
+## 4. TLS certificate bootstrap
 
-Run at least daily and before every migration/deploy:
+Before production Nginx TLS start, obtain one SAN certificate containing exactly:
+
+```text
+oldkoweb.com
+play.oldkoweb.com
+admin.oldkoweb.com
+```
+
+Preferred portable method: ACME. HTTP-01 can use port 80 and `/srv/oldkoweb/acme`; DNS-01 is acceptable when operationally preferred.
+
+Install/mount:
+
+```text
+deploy/tls/fullchain.pem
+deploy/tls/privkey.pem
+```
+
+Permissions must prevent non-operator reads of the private key. Configure automatic renewal and an Nginx reload deploy-hook. Test renewal before enabling long HSTS.
+
+Do not enable HSTS for initial cutover. After HTTPS, renewal and DNS rollback are proven, add a short HSTS max-age; increase deliberately later. `includeSubDomains` only when all relevant subdomains are guaranteed HTTPS.
+
+## 5. Start / restart
+
+Fresh start:
 
 ```sh
-sh deploy/backup-db.sh
+docker compose --env-file deploy/.env.production -f docker-compose.ws09.yml up -d
+docker compose --env-file deploy/.env.production -f docker-compose.ws09.yml ps
 ```
 
-Copy backups off-host to encrypted storage with retention such as 7 daily + 4 weekly + 6 monthly. A backup is not accepted until `gzip -t` succeeds and a periodic restore drill works.
+Startup order is health-gated:
 
-Restore requires an explicit `RESTORE` confirmation:
+```text
+db -> admin-api
+session-world -> gateway-auth + gateway-game
+healthy admin/gateways -> reverse-proxy
+```
+
+Inspect:
 
 ```sh
-sh deploy/restore-db.sh deploy/backups/<backup>.sql.gz
+docker compose --env-file deploy/.env.production -f docker-compose.ws09.yml logs --tail=200 \
+  reverse-proxy admin-api session-world gateway-auth gateway-game db
 ```
 
-## 5. Domain cutover
+Restart one service at a time unless the incident requires a full restart:
 
-Only after `oldkoweb.com` is purchased:
+```sh
+docker compose --env-file deploy/.env.production -f docker-compose.ws09.yml restart gateway-auth
+```
 
-1. Provision the production host/load balancer and obtain its stable public IP/hostname.
-2. Add the DNS records from `DNS_PLAN.md` with temporary 300-second TTLs.
-3. Obtain certificates for the enabled hostnames and place/mount them as `fullchain.pem` + `privkey.pem` under `TLS_CERT_DIR`.
-4. Change `.env` hosts to real domains, set `NGINX_TEMPLATE=production.conf.template`, then run `nginx -t`/Compose validation and restart only the reverse proxy.
-5. Verify HTTPS, Admin API authentication, browser `.wasm/.data` MIME/cache headers and a real `wss://play.oldkoweb.com/ws` session before raising TTLs.
+Every app service gets a 30-second Compose stop grace period. Provider implementations should use WS29 draining/graceful-shutdown hooks when integrated.
 
-## 6. Deployment policy
+## 6. Production smoke
 
-Prefer immutable image tags/digests and release-addressed client assets. Deploy one layer at a time: database migrations, backend services, static client/admin/site, then proxy changes. Keep the previous image tags and static release directory for immediate rollback.
+After DNS/TLS points at the host:
 
-## 7. Rollback
+```sh
+sh deploy/production-smoke.sh
+```
 
-If application code fails but schema is backward compatible, restore prior image tags/static release and recreate affected containers. Database rollback should use WS07 migration guidance; do **not** automatically restore a DB backup over newer production writes unless data-loss impact is understood.
+It checks official/play/admin HTTPS health, launcher availability, non-cacheable `latest.json`, a real byte-range request against `KnightOnLine.data`, and then:
 
-## 8. Security follow-up
+- performs a TLS/WebSocket handshake on `/auth`;
+- sends the real credential-free 1298 `WIZ_SERVER_LIST` (`0xF5`) KO binary frame;
+- validates a framed `0xF5` response;
+- upgrades `/game` without sending a mutating gameplay packet.
 
-- Keep Docker socket unavailable to app containers.
-- Run containers as non-root when each service image supports it.
-- Rate-limit login/admin mutation endpoints in the API or edge layer.
-- Restrict admin access further with MFA/VPN/IP policy if operationally practical.
-- Move CSP from Report-Only to enforced after violations are resolved.
-- Keep `api`/`gateway` DNS records absent if dedicated public hosts are not needed.
+No password is read, sent or logged. No real account is mutated.
+
+The canonical full client acceptance remains WS10 run `38505039290`.
+
+## 7. Upgrade
+
+1. Back up DB and verify backup integrity.
+2. Materialize the new immutable images and static release.
+3. Run config/dry-run validation.
+4. Run any WS07-approved forward migration.
+5. Activate static symlinks.
+6. Recreate only changed backend services with immutable digests.
+7. Wait for health after every layer.
+8. Reload/recreate reverse proxy last.
+9. Run `deploy/production-smoke.sh`.
+10. Keep previous images/static release until the observation window closes.
+
+Docker JSON logs rotate at 20 MB x 5 files per service. Export/centralize according to WS29 without packet/password bodies.
+
+## 8. Rollback
+
+Static rollback dry-run:
+
+```sh
+sh deploy/rollback-static.sh --dry-run
+```
+
+Execute:
+
+```sh
+sh deploy/rollback-static.sh
+```
+
+Restore previous backend image digests in the host env and recreate only affected services. Then run production smoke.
+
+Do not automatically reverse a database migration or restore an old DB over newer writes. Follow the WS07/WS30 migration and recovery contracts, assess data loss, and take a new backup before any destructive recovery.
+
+## 9. Incident checklist
+
+1. Confirm edge `/healthz`.
+2. `docker compose ps` and identify unhealthy dependency.
+3. Check rotated logs using request/correlation IDs; never print secrets or WebSocket packet bodies.
+4. If static release is bad, switch to previous release.
+5. If one backend image is bad, restore prior digest.
+6. If certificate is bad, restore prior valid cert and reload Nginx.
+7. If origin is healthy but public traffic is bad, bypass any CDN/proxy and test DNS-only origin behavior.
+8. If compromise is suspected, isolate host, rotate secrets/certs, preserve logs, then recover from known-good images/releases/backups.
+
+## 10. Certificate incident
+
+Check certificate name, chain and expiry locally before DNS changes. Renewal must write new files atomically and reload Nginx only after `nginx -t` succeeds. Keep the previous certificate until the reload is verified.
+
+## 11. DNS cutover — human approval required
+
+**WS09 does not perform this step automatically.**
+
+Prerequisites:
+
+- stable persistent host target is known;
+- host is provisioned and firewalled;
+- exact images/static release are staged;
+- SAN certificate is ready;
+- local/Host-header smoke passes.
+
+Then apply only the records in `workstreams/ws09/DNS_PLAN.md` with TTL 300. Start DNS-only. Validate:
+
+```text
+https://oldkoweb.com
+https://play.oldkoweb.com/play-shell/
+wss://play.oldkoweb.com/auth
+wss://play.oldkoweb.com/game
+https://admin.oldkoweb.com
+```
+
+Run production smoke before raising TTL or enabling a CDN proxy.
+
+## 12. DNS rollback
+
+If cutover fails, restore the previous DNS target while TTL is still 300. Do not delete the new host until old DNS resolution has propagated and sessions are stable. If this is the first production cutover and no previous production target exists, remove/disable the new records and return to the known-good temporary/staging access path.
+
+## 13. Permanent staging
+
+Recommended hostname: `staging.oldkoweb.com`, using the same `/play-shell`, `/auth`, `/game` same-origin topology with a separate staging certificate and staging-only origin allowlist. Protect it with an access policy/VPN/basic-auth layer as operationally appropriate; never reuse production admin credentials.
+
+Quick Tunnel remains fallback/dev. The last proven Quick Tunnel composition is WS09 run `38515548307` at commit `22254254776293d0f3eed45950011de8742532fc`.
+
+## 14. Rate limiting / abuse integration points
+
+Do not invent protocol rate limits in WS09. Integrate WS48/WS02 verified controls at:
+
+- WebSocket handshake admission in WS02;
+- login/auth attempt policy;
+- admin authentication and mutation endpoints at `/api/admin/`;
+- reverse-proxy connection/request limits only after real thresholds are known.
+
+No CORS is enabled by WS09 because all browser APIs/WSS are same-origin.

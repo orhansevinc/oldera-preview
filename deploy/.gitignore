@@ -5,7 +5,14 @@ tls/*
 # Generated backups
 backups/*
 
+# Host-local deployment state / release roots
+state/*
+releases/*
+
 # Staged release artifacts (built by release pipeline)
+artifacts/site
+artifacts/play
+artifacts/admin
 artifacts/site/*
 artifacts/play/*
 artifacts/admin/*
