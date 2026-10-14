@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { AppError } from './errors.js';
 
 const MAX_BODY = 32 * 1024;
+const SESSION_COOKIE = 'oldko_session';
 
 async function readJson(req) {
   const type = req.headers['content-type'] || '';
@@ -39,13 +40,46 @@ function clientIp(req, trustProxy) {
   return req.socket.remoteAddress || 'unknown';
 }
 
+function readCookie(req, name) {
+  const raw = req.headers.cookie;
+  if (typeof raw !== 'string') return null;
+  for (const part of raw.split(';')) {
+    const idx = part.indexOf('=');
+    if (idx < 0) continue;
+    const key = part.slice(0, idx).trim();
+    if (key !== name) continue;
+    try { return decodeURIComponent(part.slice(idx + 1).trim()); } catch { return null; }
+  }
+  return null;
+}
+
+function sessionCookie(token, expiresAt) {
+  const maxAge = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+  return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Strict`;
+}
+
+function clearSessionCookie() {
+  return `${SESSION_COOKIE}=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Strict`;
+}
+
+function assertTrustedOrigin(req, allowedOrigins) {
+  const origin = req.headers.origin;
+  if (typeof origin !== 'string' || !allowedOrigins.includes(origin)) throw new AppError(403, 'ORIGIN_NOT_ALLOWED', 'Origin is not allowed');
+}
+
 export function createHttpServer({ service, openApiDocument, trustProxy = false, allowedOrigins = [] }) {
   return http.createServer(async (req, res) => {
     const requestId = (typeof req.headers['x-request-id'] === 'string' && /^[A-Za-z0-9._-]{8,128}$/.test(req.headers['x-request-id']))
       ? req.headers['x-request-id'] : crypto.randomUUID();
     const origin = req.headers.origin;
-    const cors = origin && allowedOrigins.includes(origin) ? { 'access-control-allow-origin': origin, vary: 'Origin' } : {};
-    const context = { requestId, ip: clientIp(req, trustProxy) };
+    const cors = origin && allowedOrigins.includes(origin)
+      ? { 'access-control-allow-origin': origin, 'access-control-allow-credentials': 'true', vary: 'Origin' }
+      : {};
+    const context = {
+      requestId,
+      ip: clientIp(req, trustProxy),
+      userAgent: typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'].slice(0, 512) : null
+    };
 
     try {
       if (req.method === 'OPTIONS') {
@@ -60,6 +94,19 @@ export function createHttpServer({ service, openApiDocument, trustProxy = false,
       if (req.method === 'GET' && url.pathname === '/v1/accounts/username/availability') {
         const result = await service.usernameAvailability(url.searchParams.get('username'), context);
         return send(res, 200, result, { ...cors, 'x-request-id': requestId });
+      }
+      if (req.method === 'GET' && url.pathname === '/v1/session/current') {
+        const result = await service.currentUser(readCookie(req, SESSION_COOKIE), context);
+        return send(res, 200, result, { ...cors, 'x-request-id': requestId });
+      }
+      if (req.method === 'POST' && url.pathname === '/v1/session/login') {
+        const result = await service.login(await readJson(req), context);
+        return send(res, 200, { user: result.user }, { ...cors, 'x-request-id': requestId, 'set-cookie': sessionCookie(result.token, result.expiresAt) });
+      }
+      if (req.method === 'POST' && url.pathname === '/v1/session/logout') {
+        assertTrustedOrigin(req, allowedOrigins);
+        const result = await service.logout(readCookie(req, SESSION_COOKIE), context);
+        return send(res, 200, result, { ...cors, 'x-request-id': requestId, 'set-cookie': clearSessionCookie() });
       }
 
       const routes = new Map([

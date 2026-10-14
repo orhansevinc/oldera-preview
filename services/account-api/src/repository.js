@@ -12,6 +12,11 @@ export class AccountRepository {
   async updateAccount(_id, _patch) { throw new Error('Not implemented'); }
   async createActionToken(_record) { throw new Error('Not implemented'); }
   async consumeActionToken(_kind, _digest, _now) { throw new Error('Not implemented'); }
+  async createSession(_record) { throw new Error('Not implemented'); }
+  async findSessionByDigest(_digest, _now) { throw new Error('Not implemented'); }
+  async revokeSessionByDigest(_digest, _now) { throw new Error('Not implemented'); }
+  async touchSession(_digest, _now) { throw new Error('Not implemented'); }
+  async listCharactersByAccount(_accountId) { return []; }
 }
 
 export class InMemoryAccountRepository extends AccountRepository {
@@ -21,6 +26,8 @@ export class InMemoryAccountRepository extends AccountRepository {
     this.byUsername = new Map();
     this.byEmail = new Map();
     this.actionTokens = new Map();
+    this.sessions = new Map();
+    this.characters = new Map();
   }
 
   async createAccount(account) {
@@ -66,5 +73,36 @@ export class InMemoryAccountRepository extends AccountRepository {
     record.consumedAt = now;
     this.actionTokens.set(key, record);
     return structuredClone(record);
+  }
+
+  async createSession(record) {
+    this.sessions.set(record.digest, structuredClone(record));
+    return structuredClone(record);
+  }
+
+  async findSessionByDigest(digest, now) {
+    const session = this.sessions.get(digest);
+    if (!session || session.revokedAt || session.expiresAt <= now) return null;
+    return structuredClone(session);
+  }
+
+  async revokeSessionByDigest(digest, now) {
+    const session = this.sessions.get(digest);
+    if (!session || session.revokedAt) return false;
+    session.revokedAt = now;
+    this.sessions.set(digest, session);
+    return true;
+  }
+
+  async touchSession(digest, now) {
+    const session = this.sessions.get(digest);
+    if (!session || session.revokedAt || session.expiresAt <= now) return false;
+    session.lastSeenAt = now;
+    this.sessions.set(digest, session);
+    return true;
+  }
+
+  async listCharactersByAccount(accountId) {
+    return structuredClone(this.characters.get(accountId) || []);
   }
 }
