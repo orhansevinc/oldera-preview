@@ -1,0 +1,77 @@
+{
+  "release_id": "oldkoweb-domain-live-20261015",
+  "workstream": "WS03",
+  "source_commit": "77e001bb6f43618883b626ae403d2fa134065c0f",
+  "task_start_commit": "7c5f5f3584e7d3621aa5a318ad65c011bd77276f",
+  "status": "implementation_green_external_release_gates_remain",
+  "input_pins": {
+    "WS07": "1ae85c96319cbab11648a91ed28300e17d4c607f",
+    "WS13_reviewed": "1ef67bd7c0c98a588bce4db6c0f1305b820af008",
+    "WS14": "ed5f806ce7505f4dfae406e4164735def63b6c86",
+    "WS15": "ce9bed13b8d45c32ff0592595aa3a0d1e7b3964d",
+    "WS16": "5ed48ff32187000312652838674388df52fc3fb7",
+    "WS25": "18c9e9b8439fef88fc93d74bfec7981b0cb41958",
+    "WS50_C5": "0d5001095fa3b43693b4fa0cda615f84e2cb7df5"
+  },
+  "production": {
+    "entrypoint": "services/ko1298-session/production-server.js",
+    "composition": "services/ko1298-session/production-composition.js",
+    "repository": "services/ko1298-session/postgres-repository.js",
+    "movement_port": "services/ko1298-session/persistent-movement-port.js",
+    "session_authority": "services/ko1298-session/session-authority.js",
+    "required_env": ["DATABASE_URL", "OLDKO_MORADON_SMD"],
+    "required_external_data": ["world-data/npc/moradon.json", "world-data/mobs/verified/moradon-zone21.verified.json"],
+    "memory_repository_allowed": false,
+    "missing_npc_provider": "fail_closed",
+    "mob_population": 135
+  },
+  "persistence_contract": {
+    "account": "oldko.accounts",
+    "character_fk": "oldko.characters.account_id -> oldko.accounts.id",
+    "identity": "trim(username).toLowerCase()",
+    "account_access": "active + verified + no active oldko.bans row",
+    "character_world": "PostgreSQL create/select and PgWs14WorldRepository save/load",
+    "movement": "database save is awaited; failure rolls runtime position back",
+    "restart": "fresh repository/pool restores account, character and saved zone/position"
+  },
+  "credential_contract": {
+    "wire": "signed-int16 length-prefixed Latin-1 bytes",
+    "username_max_bytes": 20,
+    "secret_max_bytes": 12,
+    "website_current_range": "10-128 characters",
+    "shared_required_range": "10-12 lossless Latin-1 bytes",
+    "frontend_truncation": false,
+    "owner": "WS13 register/change/reset validation"
+  },
+  "provider_delta": {
+    "WS16": "explicit 234657c1264ead6b8828425ae9e7fcdca0cca5c8 -> 5ed48ff32187000312652838674388df52fc3fb7 to match C5",
+    "WS25": "18c9e9b8439fef88fc93d74bfec7981b0cb41958 is direct child of C5 13c9bafe287b250d56b52f19e97a02e7ef18e6e5 and preserves C5 visibility blob 5f092b3b6daefde008b7548a971b5109ba05fde1",
+    "historical_browser_pass_inherited": false
+  },
+  "session_authority": {
+    "online": ["listOnlinePlayers", "findOnlinePlayer"],
+    "commands": ["KICK", "DISCONNECT"],
+    "admin_storage_owned_here": false,
+    "WS08_action": "bridge command/outbox transport to this runtime authority"
+  },
+  "checks": {
+    "baseline_run": 38650070368,
+    "domain_live_run": 38656083856,
+    "domain_live_head": "77e001bb6f43618883b626ae403d2fa134065c0f",
+    "test": "success",
+    "composed_contracts": "success",
+    "postgres_one_db_e2e": "success",
+    "browser_pass_claimed": false
+  },
+  "blockers": [
+    "WS13 must enforce the 10-12 byte game-capable credential envelope; no frontend truncation.",
+    "WS50 must materialize exact WS16 NPC data, WS25 mob data and the real Moradon SMD in the immutable child candidate.",
+    "WS10 must run a fresh browser visibility/movement gate for the new candidate; run 38604174659 is historical only.",
+    "WS08/WS50 must provide the transport bridge if remote admin online-player/KICK integration is required."
+  ],
+  "notes": [
+    "getSurroundingUsers remains outside this NPC/mob + local movement release scope.",
+    "No combat, loot, economy or client-display work was added."
+  ],
+  "ws50_instruction": "Create a new immutable child candidate; do not modify C5 in place or inherit its old browser PASS."
+}
