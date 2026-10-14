@@ -7,6 +7,19 @@ function sameIdentity(left, right) {
   return String(left) === String(right);
 }
 
+function normalizeSignedI16RuntimeId(value) {
+  if (Number.isInteger(value)) {
+    if (value < -0x8000 || value > 0x7fff) throw new RangeError('runtime ID must fit signed i16');
+    return value;
+  }
+  if (typeof value === 'string' && /^-?\d+$/.test(value)) {
+    const numeric = Number(value);
+    if (!Number.isSafeInteger(numeric) || numeric < -0x8000 || numeric > 0x7fff) throw new RangeError('runtime ID must fit signed i16');
+    return numeric;
+  }
+  return value;
+}
+
 function projectWs17EquipmentForWs19(snapshot) {
   if (!snapshot || typeof snapshot !== 'object') return snapshot;
   const rightHand = snapshot.rightHand;
@@ -37,6 +50,20 @@ function createWs17EquipmentCombatPort({ service, characterId }) {
     getCombatSnapshot() {
       if (!current) throw new Error('WS17 equipment combat snapshot must be refreshed before combat');
       return current;
+    },
+  });
+}
+
+function createWs25MobCombatPort({ service }) {
+  if (!service || typeof service.getCombatSnapshot !== 'function' || typeof service.applyCombatResult !== 'function') {
+    throw new TypeError('WS25 mob combat service is required');
+  }
+  return Object.freeze({
+    getCombatSnapshot(identifier) {
+      return service.getCombatSnapshot(normalizeSignedI16RuntimeId(identifier));
+    },
+    applyCombatResult(identifier, result, now, meta) {
+      return service.applyCombatResult(normalizeSignedI16RuntimeId(identifier), result, now, meta);
     },
   });
 }
@@ -87,4 +114,10 @@ function createPlayableCombatSessionAdapter({ service, mobCombatPort, playerComb
   });
 }
 
-module.exports = { createPlayableCombatSessionAdapter, createWs17EquipmentCombatPort, projectWs17EquipmentForWs19 };
+module.exports = {
+  createPlayableCombatSessionAdapter,
+  createWs17EquipmentCombatPort,
+  createWs25MobCombatPort,
+  projectWs17EquipmentForWs19,
+  normalizeSignedI16RuntimeId,
+};
