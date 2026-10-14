@@ -1,68 +1,80 @@
 WS10
 
-# STATUS — QA/E2E Integration Gate
+# STATUS — Final Moradon QA/E2E Integration Gate
 
-Status: **MORADON E2E: BLOCKED**
+Status: **MORADON E2E: PASS**
 
 Branch: `ws10-qa-integration`
-Evidence run: GitHub Actions `WS10 Moradon E2E Integration Gate` run **#16**, run id `38490102763`
-Tested WS10 commit: `3c22e0e6907b74651589a18818bbcc7e930698b2`
-Evidence artifact: `ws10-moradon-e2e-16` (artifact id `11862255468`)
+Canonical workflow: `WS10 Moradon E2E Integration Gate`
+Canonical run: **#26** / run id `38505039290`
+Tested WS10 harness commit: `f0cadfb50b5d1a36d2bfe4e5bf0a68f7c3061f41`
+Harness self-test job: `115660485382` — **SUCCESS**
+Native Moradon E2E job: `115660485730` — **SUCCESS**
 
-## Furthest verified integrated state
+## Final decision
 
-The Priority-0 integrated browser chain now proves, in one real C++/Emscripten/WebGL2 browser session:
+Run #26 proves the required final Moradon path in one genuine C++/Emscripten/WASM/WebGL2 browser session using genuine KO 1298 assets:
 
-- real browser WASM runtime and `render backend: OpenGL`;
-- WS02 WebSocket -> TCP auth/game transport;
-- login, server list and game version `1298`;
-- Nation Select;
-- empty real Character Select list;
-- real Character Create UI;
-- genuine client `WIZ_NEW_CHAR (0x02)` emission;
-- server create success `02 00`;
-- refreshed 3-slot list with slot 0 occupied by `Ws10Hero`;
-- genuine client `WIZ_SEL_CHAR (0x04)` emission;
-- WS03 -> WS14 `beginSelectedCharacter()` handoff;
-- select success;
-- WS14 GAMESTART loading bootstrap with `MYINFO (0x0E)`, `ZONEABILITY (0x5E)`, region user IDs (`0x15`), NPC IDs (`0x1C`) and GAMESTART ack;
-- NPC detail request/reply (`0x1D`);
-- GAMESTART loaded phase and WS14 `WORLD_READY` broadcast;
-- native main scene entry and full local-player `MYINFO` initialization.
+- real WASM runtime and `render backend: OpenGL`;
+- login -> server list -> version `1298` -> Nation Select;
+- genuine Character Create UI and real `WIZ_NEW_CHAR (0x02)`;
+- create success and refreshed occupied slot (`Ws10Hero`);
+- real `WIZ_SEL_CHAR (0x04)` with wire/server zone `21`;
+- WS03 -> WS14 selected-character/world handoff and two-phase GAMESTART bootstrap;
+- native client world zone `210`;
+- `moradon-assets-loaded`;
+- `moradon-terrain-rendered`;
+- `moradon-shapes-rendered`;
+- `moradon-local-player-rendered`;
+- `WS04_GL_CAPTURE id=1010 ... source=present` from the genuine native GL backbuffer;
+- native framebuffer `1024x768`, non-black `108300/786432`, ratio `0.1377`;
+- `WS05_MORADON_VISUAL_OK source=pre-swap-gl ratio=0.1377`;
+- `WS10_MORADON_E2E_PASS`;
+- provider-owned `WS05_MORADON_GATE=PASS`.
 
-The old WS10 M12 create/select blocker is therefore resolved by real integrated evidence.
+## WS10 harness correction
 
-## First true blocker
+The genuine client data package is `615930538` bytes (~587 MiB). Runs #23/#24 showed the fixed 60-second world-marker window was too short around synchronous preload/render work; this was a WS10 evidence-timing problem, not a reason to rewrite provider logic.
 
-**Owner: WS05**
+The final WS10-only correction:
 
-The server-side Moradon identifier is correctly sent as zone `21`, but this pinned OpenKO 1.298 client converts the selected-character wire zone into its native client zone namespace in `CGameProcedure::MsgRecv_CharacterSelect()`:
+- gives the world render phase a deterministic `600000 ms` deadline;
+- polls already-collected console evidence only from Node/Playwright with 15-second progress heartbeats instead of repeatedly injecting `page.evaluate()` calls during synchronous WASM work;
+- arms native capture id `1010` synchronously from the WS10-generated entry page when `moradon-assets-loaded` is printed;
+- explicitly sets that request Present-only, so the timer fallback cannot read the framebuffer during preload;
+- still requires a real `source=present` native capture and does not relax any terrain/shape/player/non-black gate.
 
-```text
-if (N3FORMAT_VER_DEFAULT >= N3FORMAT_VER_1264)
-    iZoneCur *= 10;
-```
+Run #25 proved the long preload/capture path itself succeeded and exposed only an overly strict WS10 log substring ordering check. Commit `f0cadfb...` accepts additive capture metadata while independently requiring `source=present`; run #26 then passed unchanged provider code.
 
-Accordingly the same run logs:
+## Frozen exact passing client
 
-```text
-WS04_CHAR_SELECT_REQUEST ... zone=21
-WS04_CHAR_SELECT_RESPONSE success=1
-main scene: InitUI done, InitZone starting (zone 210)
-InitZone: loading world/terrain for zone 210 (terrain='Zones\Moradon_xmas.gtd')
-MsgRecv_MyInfo_All: player character fully initialized
-```
+The same successful run staged and uploaded the exact passing build as:
 
-WS05's current browser-only probes instead hard-code native comparisons to `21` (`iZoneID == 21` and `m_InfoExt.iZoneCur == 21`). They therefore emit none of the mandatory `WS05_GATE event=moradon-* zone=21` markers after the real world transition. The official WS05 gate cannot PASS and WS10 deliberately does not synthesize replacement markers or edit the provider branch.
+- artifact: `ws10-moradon-passing-client-26`
+- artifact id: `11867980473`
+- artifact size: `623185661` bytes
+- digest: `sha256:ff9fb679ad1b3caa184ad098cff81cfb5469b0698d5e5f3b76ef4fab2ea775b3`
+- `KnightOnLine.js`: `1493510` bytes
+- `KnightOnLine.wasm`: `5631727` bytes
+- `KnightOnLine.data`: `615930538` bytes
+- entry: `ws10-moradon.html`
+- includes exact provider refs, PASS metadata/logs, native frame evidence and SHA256 manifest.
 
-This is the first unresolved Moradon critical-path defect observed after the now-working create/select/world bootstrap chain.
+Evidence artifact:
 
-## Decision
+- `ws10-moradon-e2e-26`
+- artifact id: `11867553862`
+- digest: `sha256:912319f5aafb7ac66fcc6a2578f8a0efdebc0564c5ce1962ed99e3f66b8c4abb`
 
-`MORADON E2E: BLOCKED`
+## Boundaries
 
-Single blocker owner: **WS05**. WS05 must reconcile server zone `21` with the pinned 1.298 client's native zone `210` representation in its instrumentation/gate and revalidate the authentic Moradon asset/render path. After that provider fix, rerun this WS10 gate unchanged at the protocol/world boundaries.
+- no provider branch/code was modified by WS10;
+- no fake packet/world/render evidence was accepted;
+- no HTML/Canvas2D/Three.js replacement was used;
+- no merge to `main`;
+- no force push;
+- no new workstream number.
 
-No provider branch was modified, no fake packet/world server was used for PASS, and no HTML/Canvas2D/Three.js Moradon evidence was accepted.
+`MORADON E2E: PASS`
 
 BU SOHBETE ARTIK GEREK VAR MI?: HAYIR
