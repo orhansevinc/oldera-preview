@@ -27,7 +27,8 @@
       webgl2Available:false,
       runtimeReady:false,
       runDependencies:null,
-      fatal:null
+      fatal:null,
+      transportConfigSource:null
     };
 
     const log=(kind,text)=>{
@@ -68,10 +69,21 @@
       catch(_){return path;}
     };
 
+    const externalTransport=window.__OLDKO_TRANSPORT_CONFIG__;
+    const oldkoTransport=externalTransport||{
+      routes:{
+        auth:{serverPorts:[15100],endpoint:'/auth'},
+        game:{serverPorts:[15001],endpoint:'/game'}
+      }
+    };
+    state.transportConfigSource=externalTransport?'external':'same-origin-default';
+    log('NET',`transport config: ${state.transportConfigSource}; auth=/auth game=/game`);
+
     window.Module={
       canvas,
       arguments:['--renderer','gl','--data','/data'],
       locateFile:(path)=>resolveRuntimeFile(path),
+      oldkoTransport,
       print:(...args)=>log('OUT',args.join(' ')),
       printErr:(...args)=>log('ERR',args.join(' ')),
       monitorRunDependencies:(left)=>{

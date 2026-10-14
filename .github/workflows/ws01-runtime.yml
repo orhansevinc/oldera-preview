@@ -71,6 +71,14 @@ jobs:
           echo "Data files: $(find ko-assets/Data -type f | wc -l)"
           echo "UI_US files: $(find ko-assets/UI_US -type f | wc -l)"
 
+      - name: Verify public WebSocket transport mapping contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test tools/ws01_runtime/transport_config.test.cjs 2>&1 | tee ws01-transport-tests.log
+          grep -q '# pass 9' ws01-transport-tests.log
+          grep -q '# fail 0' ws01-transport-tests.log
+
       - name: Verify currently committed browser package
         shell: bash
         run: |
@@ -80,7 +88,7 @@ jobs:
             --index openko-web/index.html \
             --manifest ws01-committed-package.json
 
-      - name: Apply existing real-browser patches and verify WebGL2/preload anchors
+      - name: Apply existing real-browser patches and verify WebGL2/preload/transport anchors
         shell: bash
         run: |
           set -euo pipefail
@@ -90,6 +98,12 @@ jobs:
           python3 tools/patch_openko_browser_serverlist_probe.py
           python3 tools/patch_openko_browser_auth_probe.py
           python3 tools/ws01_runtime/prepare_browser_source.py
+          grep -F 'OldKOWebResolveWebSocketUrl' openko/src/Client/WarFare/APISocket.cpp
+          grep -F 'browser_transport_pre.js' openko/src/Client/WarFare/CMakeLists.txt
+          if grep -F 'const std::string url = "ws://" + szIP' openko/src/Client/WarFare/APISocket.cpp; then
+            echo 'RUNTIME_SOURCE_FAIL: hardcoded ws:// host/port URL remains'
+            exit 1
+          fi
 
       - name: Install build and browser tools
         shell: bash
@@ -185,6 +199,7 @@ jobs:
             emscripten-version.txt
             configure-web.log
             build-web.log
+            ws01-transport-tests.log
             ws01-committed-package.json
             ws01-rebuilt-package.json
             ws01-http.log
