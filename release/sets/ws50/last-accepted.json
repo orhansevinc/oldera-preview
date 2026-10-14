@@ -1,0 +1,6 @@
+{
+  "kind": "last_accepted_set",
+  "set_id": "WS50-B0",
+  "immutable_key": "WS50-B0@sha256:57bf3e37dd4406380e35d042d3336b9bd2f9a6295ea91be7e8b835e7c94e8fda",
+  "reason": "Last canonical real-browser-proven provider set. Never replaced by branch drift."
+}

@@ -1,0 +1,93 @@
+name: WS50 Immutable Visibility Provider Sets
+
+on:
+  push:
+    branches:
+      - ws50-integration-rehearsal
+    paths:
+      - 'release/sets/ws50/**'
+      - 'tools/ws50_integration/provider_sets.py'
+      - 'tools/ws50_integration/visibility_candidate.py'
+      - 'integration-rehearsal/VISIBILITY_CANDIDATE_REPORT.md'
+      - 'integration-rehearsal/visibility-evidence-receipt.json'
+      - 'workstreams/ws50/STATUS.md'
+      - '.github/workflows/ws50-provider-sets.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  provider-set-ladder:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout WS50
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch provider refs for commit availability and drift observation
+        run: git fetch origin '+refs/heads/*:refs/remotes/origin/*' --prune
+
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate immutable provider-set schema, hashes and lineage
+        run: |
+          python3 tools/ws50_integration/provider_sets.py validate \
+            release/sets/ws50/B0.json \
+            release/sets/ws50/C1.json \
+            release/sets/ws50/C2.json \
+            release/sets/ws50/C3.json
+
+      - name: Verify exact provider SHA evidence
+        run: |
+          mkdir -p "$RUNNER_TEMP/ws50-provider-set-evidence"
+          for set in B0 C1 C2 C3; do
+            python3 tools/ws50_integration/provider_sets.py verify-git \
+              --manifest "release/sets/ws50/${set}.json" \
+              --repo "$GITHUB_WORKSPACE" \
+              --output "$RUNNER_TEMP/ws50-provider-set-evidence/${set}-sha-evidence.json"
+          done
+
+      - name: Record drift without mutating C3
+        run: |
+          python3 tools/ws50_integration/provider_sets.py drift \
+            --manifest release/sets/ws50/C3.json \
+            --repo "$GITHUB_WORKSPACE" \
+            --output "$RUNNER_TEMP/ws50-provider-set-evidence/C3-drift.json"
+
+      - name: Reproduce exact C1, C2 and C3 candidate ladder
+        run: |
+          set -euo pipefail
+          for set in C1 C2 C3; do
+            python3 tools/ws50_integration/visibility_candidate.py \
+              --repo "$GITHUB_WORKSPACE" \
+              --manifest "release/sets/ws50/${set}.json" \
+              --output "$RUNNER_TEMP/ws50-provider-set-evidence"
+          done
+
+      - name: Publish candidate summary
+        if: always()
+        run: |
+          cat integration-rehearsal/VISIBILITY_CANDIDATE_REPORT.md >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo '### Runtime receipts' >> "$GITHUB_STEP_SUMMARY"
+          for f in "$RUNNER_TEMP"/ws50-provider-set-evidence/*-receipt.json; do
+            test -f "$f" || continue
+            echo '' >> "$GITHUB_STEP_SUMMARY"
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat "$f" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Upload provider-set evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ws50-immutable-visibility-provider-sets
+          path: ${{ runner.temp }}/ws50-provider-set-evidence/**
+          if-no-files-found: error

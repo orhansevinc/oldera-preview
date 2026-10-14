@@ -1,0 +1,12 @@
+{
+  "kind": "current_candidate_set",
+  "set_id": "WS50-C3",
+  "immutable_key": "WS50-C3@sha256:a9c808898bd1cb9f3cadfb44ddbabadaf34448f9aef0a4990ca91958053458aa",
+  "status": "BLOCKED",
+  "browser_gate_ready_for_ws10": false,
+  "blockers": [
+    "WORLD_TERRAIN_HEIGHT_AUTHORITY",
+    "NPC_REGION_BODY_AUTHORITY",
+    "MOB_BROWSER_BOOTSTRAP_ENCODER_AUTHORITY"
+  ]
+}
