@@ -6,11 +6,12 @@ import { MemoryAuditSink } from '../../services/account-api/src/audit.js';
 import { AccountService } from '../../services/account-api/src/service.js';
 import { createHttpServer } from '../../services/account-api/src/http.js';
 import { openApiDocument } from '../../services/account-api/src/openapi.js';
+import { isGameCompatiblePassword, normalizeUsername, validatePassword } from '../../services/account-api/src/validation.js';
 
 class CaptureDelivery {
   constructor() { this.verifications = []; this.resets = []; }
-  async sendVerification(payload) { this.verifications.push(payload); }
-  async sendPasswordReset(payload) { this.resets.push(payload); }
+  async sendVerification(payload) { this.verifications.push(payload); return { accepted: true, provider: 'test', providerMessageId: `verify-${this.verifications.length}` }; }
+  async sendPasswordReset(payload) { this.resets.push(payload); return { accepted: true, provider: 'test', providerMessageId: `reset-${this.resets.length}` }; }
 }
 
 function fixture() {
@@ -23,7 +24,18 @@ function fixture() {
 }
 
 const ctx = (ip = '203.0.113.5') => ({ ip, requestId: 'test-request-0001' });
-const account = { username: 'PlayerOne', email: 'player@example.test', password: 'Str0ng!Passwd' };
+const account = { username: 'PlayerOne', email: 'player@example.test', password: 'Str0ng!Pwd12' };
+
+test('KO1298 credential policy is byte-exact and never silently trims or normalizes', () => {
+  assert.equal(Buffer.byteLength(account.password, 'utf8'), 12);
+  assert.equal(isGameCompatiblePassword(account.password), true);
+  assert.equal(validatePassword(account.password), account.password);
+  assert.throws(() => validatePassword('Str0ng!Pwd123'), (e) => e.code === 'WEAK_PASSWORD');
+  assert.throws(() => validatePassword('Ştr0ng!Pwd1'), (e) => e.code === 'WEAK_PASSWORD');
+  assert.throws(() => validatePassword(' Str0ng!Pwd1'), (e) => e.code === 'WEAK_PASSWORD');
+  assert.throws(() => normalizeUsername(' PlayerOne'), (e) => e.code === 'INVALID_USERNAME');
+  assert.deepEqual(normalizeUsername('PlayerOne'), { username: 'PlayerOne', canonical: 'playerone' });
+});
 
 test('registration hashes password and enforces canonical uniqueness', async () => {
   const f = fixture();
@@ -48,7 +60,23 @@ test('verification gates access and ban status is returned only after valid cred
   await assert.rejects(() => f.service.accessCheck({ username: account.username, password: 'Wrong!Pass123' }, ctx('203.0.113.9')), (e) => e.code === 'INVALID_CREDENTIALS');
 });
 
-test('password reset is non-enumerating, stores only token digest, and rotates password version', async () => {
+test('legacy web credential can sign in only as upgrade-required and can migrate without truncation', async () => {
+  const f = fixture();
+  await f.service.register(account, ctx());
+  await f.service.confirmVerification({ token: f.delivery.verifications[0].token }, ctx());
+  const stored = await f.repository.findByUsernameCanonical('playerone');
+  const legacyPassword = 'Legacy!Password123';
+  await f.repository.updateAccount(stored.id, { passwordHash: await f.service.hasher.hash(legacyPassword) });
+  const login = await f.service.login({ identifier: account.username, password: legacyPassword }, ctx('203.0.113.40'));
+  assert.equal(login.credentialUpgradeRequired, true);
+  await assert.rejects(() => f.service.accessCheck({ username: account.username, password: legacyPassword }, ctx('203.0.113.41')), (e) => e.code === 'CREDENTIAL_UPGRADE_REQUIRED');
+  const nextPassword = 'N3w!Pass1234';
+  await f.service.changePassword({ username: account.username, currentPassword: legacyPassword, newPassword: nextPassword }, ctx('203.0.113.42'));
+  await assert.rejects(() => f.service.accessCheck({ username: account.username, password: legacyPassword }, ctx('203.0.113.43')), (e) => e.code === 'INVALID_CREDENTIALS');
+  assert.equal((await f.service.accessCheck({ username: account.username, password: nextPassword }, ctx('203.0.113.44'))).access, 'allowed');
+});
+
+test('password reset is non-enumerating, stores only token digest, validates new password before consuming token, and rotates password version', async () => {
   const f = fixture();
   await f.service.register(account, ctx());
   const unknown = await f.service.requestPasswordReset({ email: 'missing@example.test' }, ctx('203.0.113.10'));
@@ -58,19 +86,20 @@ test('password reset is non-enumerating, stores only token digest, and rotates p
   const token = f.delivery.resets[0].token;
   assert.equal(JSON.stringify([...f.repository.actionTokens.values()]).includes(token), false);
   const before = await f.repository.findByUsernameCanonical('playerone');
-  await f.service.confirmPasswordReset({ token, newPassword: 'N3w!PasswordX' }, ctx());
+  await assert.rejects(() => f.service.confirmPasswordReset({ token, newPassword: 'Str0ng!Pwd123' }, ctx()), (e) => e.code === 'WEAK_PASSWORD');
+  await f.service.confirmPasswordReset({ token, newPassword: 'N3w!Pass1234' }, ctx());
   const after = await f.repository.findByUsernameCanonical('playerone');
   assert.equal(after.passwordVersion, before.passwordVersion + 1);
-  await assert.rejects(() => f.service.confirmPasswordReset({ token, newPassword: 'An0ther!PassX' }, ctx('203.0.113.12')), (e) => e.code === 'INVALID_OR_EXPIRED_TOKEN');
+  await assert.rejects(() => f.service.confirmPasswordReset({ token, newPassword: 'An0!Pass1234' }, ctx('203.0.113.12')), (e) => e.code === 'INVALID_OR_EXPIRED_TOKEN');
 });
 
 test('credential brute-force protection rate limits repeated failures', async () => {
   const f = fixture();
   await f.service.register(account, ctx());
   for (let i = 0; i < 8; i++) {
-    await assert.rejects(() => f.service.changePassword({ username: account.username, currentPassword: 'Wrong!Pass123', newPassword: 'N3w!PasswordX' }, ctx('198.51.100.20')), (e) => e.code === 'INVALID_CREDENTIALS');
+    await assert.rejects(() => f.service.changePassword({ username: account.username, currentPassword: 'Wrong!Pass123', newPassword: 'N3w!Pass1234' }, ctx('198.51.100.20')), (e) => e.code === 'INVALID_CREDENTIALS');
   }
-  await assert.rejects(() => f.service.changePassword({ username: account.username, currentPassword: 'Wrong!Pass123', newPassword: 'N3w!PasswordX' }, ctx('198.51.100.20')), (e) => e.status === 429 && e.code === 'RATE_LIMITED');
+  await assert.rejects(() => f.service.changePassword({ username: account.username, currentPassword: 'Wrong!Pass123', newPassword: 'N3w!Pass1234' }, ctx('198.51.100.20')), (e) => e.status === 429 && e.code === 'RATE_LIMITED');
 });
 
 test('health and OpenAPI endpoints are exposed without secrets', async () => {
