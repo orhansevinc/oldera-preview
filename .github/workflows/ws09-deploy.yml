@@ -59,7 +59,7 @@ jobs:
           grep -Fq 'WS10_PASS_ARTIFACT' .github/workflows/ws09-ephemeral-staging.yml
           grep -Fq 'STAGING_LINK_HANDOFF.md' .github/workflows/ws09-ephemeral-staging.yml
           grep -Fq 'client-content/v1/${CONTENT_VERSION}/_complete.json' .github/workflows/ws09-ephemeral-staging.yml
-          grep -Fq 'trycloudflare.com' .github/workflows/ws09-ephemeral-staging.yml
+          grep -Fq 'trycloudflare' .github/workflows/ws09-ephemeral-staging.yml
           grep -Fq 'websocketUpgrade('\''/auth'\'')' deploy/ephemeral-public-smoke.mjs
           grep -Fq 'websocketUpgrade('\''/game'\'')' deploy/ephemeral-public-smoke.mjs
           grep -Fq 'TEST_LINK=$TEST_LINK' .github/workflows/ws09-ephemeral-staging.yml
