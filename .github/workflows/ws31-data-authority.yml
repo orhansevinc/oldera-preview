@@ -6,6 +6,7 @@ on:
     paths:
       - "tools/ws31_data/generate_catalog.py"
       - "tools/ws31_data/generate_playable_combat_slice.py"
+      - "tools/ws31_data/sync_playable_combat_asset_status.py"
       - "tools/ws31_data/validate_generated_catalog.py"
       - "data-catalog/source-lock.json"
       - "data-catalog/schema/ws31-*.schema.json"
@@ -36,6 +37,7 @@ jobs:
       - name: Generate verified 1298 catalog
         run: |
           python tools/ws31_data/generate_catalog.py
+          python tools/ws31_data/sync_playable_combat_asset_status.py
           python tools/ws31_data/generate_playable_combat_slice.py
       - name: Validate schema provenance and cross-references
         run: |
@@ -49,6 +51,7 @@ jobs:
           sha256sum data-catalog/generated/MORADON_PLAYABLE_COMBAT_SLICE.md >> /tmp/ws31-before.sha
           sha256sum workstreams/ws31/STATUS.md workstreams/ws31/DATA_PROVENANCE.md workstreams/ws31/CATALOG_SUMMARY.md workstreams/ws31/UNRESOLVED.md >> /tmp/ws31-before.sha
           python tools/ws31_data/generate_catalog.py --check
+          python tools/ws31_data/sync_playable_combat_asset_status.py
           python tools/ws31_data/generate_playable_combat_slice.py --check
           find data-catalog/generated -type f -name '*.json' -print0 | sort -z | xargs -0 sha256sum > /tmp/ws31-after.sha
           sha256sum data-catalog/generated/MORADON_PLAYABLE_COMBAT_SLICE.md >> /tmp/ws31-after.sha
