@@ -54,6 +54,10 @@ class MemoryRepository extends SessionRepository {
     if (!spec.name || Buffer.byteLength(spec.name, 'latin1') > 20) return { ok: false, code: CREATE_RESULT.FAILED };
     if (this.#characterNameExists(spec.name)) return { ok: false, code: CREATE_RESULT.FAILED };
 
+    // Keep the development/staging repository protocol-complete. WS14's MYINFO
+    // encoder requires a full 1298 world snapshot after character select; the
+    // browser must not disconnect merely because this in-memory fixture omitted
+    // fields that production persistence would normally supply.
     const character = {
       accountId: username,
       characterId: spec.name,
@@ -65,6 +69,60 @@ class MemoryRepository extends SessionRepository {
       face: spec.face,
       hair: spec.hair,
       zone: 21,
+      equipment: {},
+      rank: 0,
+      title: 0,
+      points: 0,
+      maxExp: 100,
+      exp: 0,
+      loyalty: 0,
+      monthlyLoyalty: 0,
+      city: 0,
+      knightsId: 0,
+      fame: 0,
+      clan: null,
+      maxHp: 120,
+      hp: 120,
+      maxMp: 80,
+      mp: 80,
+      maxWeight: 2500,
+      itemWeight: 0,
+      str: spec.str,
+      itemStr: 0,
+      sta: spec.sta,
+      itemSta: 0,
+      dex: spec.dex,
+      itemDex: 0,
+      intel: spec.intel,
+      itemIntel: 0,
+      cha: spec.magicAttack,
+      itemCha: 0,
+      totalHit: 10,
+      totalAc: 5,
+      fireRes: 0,
+      coldRes: 0,
+      lightningRes: 0,
+      magicRes: 0,
+      diseaseRes: 0,
+      poisonRes: 0,
+      gold: 0,
+      authority: 1,
+      knightsRank: 0,
+      personalRank: 0,
+      skills: Array(9).fill(0),
+      protocolItems: [],
+      visibleEquipment: [],
+      accountStatus: 0,
+      premiumType: 0,
+      premiumTime: 0,
+      isChicken: false,
+      mannerPoint: 0,
+      resHpType: 1,
+      abnormalType: 1,
+      needParty: 1,
+      isPartyLeader: false,
+      invisibilityState: 0,
+      direction: 0,
       stats: {
         str: spec.str,
         sta: spec.sta,
@@ -72,7 +130,6 @@ class MemoryRepository extends SessionRepository {
         intel: spec.intel,
         magicAttack: spec.magicAttack,
       },
-      equipment: {},
     };
     account.characters[spec.slot] = character;
     return { ok: true, code: CREATE_RESULT.OK, character: cloneCharacter(character) };
@@ -84,9 +141,8 @@ class MemoryRepository extends SessionRepository {
     return cloneCharacter(account.characters.find((character) => character?.characterId === characterId) || null);
   }
 
-  // WS14 repository boundary. The full production world snapshot is owned by the
-  // persistence/world integration layer; this development repository exposes only
-  // the identity fields required for beginSelectedCharacter().
+  // WS14 repository boundary. The in-memory fixture mirrors the full world
+  // snapshot shape required by the verified 1298 MYINFO encoder.
   async getCharacterForWorld(accountId, characterId) {
     return this.getCharacter(accountId, characterId);
   }
@@ -115,6 +171,10 @@ function cloneCharacter(character) {
     equipment: Object.fromEntries(
       Object.entries(character.equipment || {}).map(([key, value]) => [key, { ...value }]),
     ),
+    skills: Array.isArray(character.skills) ? [...character.skills] : [],
+    protocolItems: Array.isArray(character.protocolItems) ? character.protocolItems.map((item) => ({ ...item })) : [],
+    visibleEquipment: Array.isArray(character.visibleEquipment) ? character.visibleEquipment.map((item) => ({ ...item })) : [],
+    clan: character.clan ? { ...character.clan } : null,
   };
 }
 
