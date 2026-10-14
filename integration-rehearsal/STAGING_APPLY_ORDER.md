@@ -131,8 +131,10 @@ python3 tools/patch_openko_browser_auth_probe.py
 python3 tools/ws04_character/patch_character_client.py
 python3 tools/ws04_character/patch_frame_capture.py
 python3 tools/ws05_moradon/patch_moradon_client.py
-python3 tools/ws01_runtime/prepare_browser_source.py --source openko --assets ko-assets
+python3 tools/ws01_runtime/prepare_browser_source.py
 ```
+
+`tools/ws01_runtime/prepare_browser_source.py` intentionally uses the fixed temporary checkout paths `openko/...` and `ko-assets/...`; it takes no CLI path arguments.
 
 `openko-web/index.html` from WS01 remains the canonical package index; do not replace it with a launcher mock or Three.js client.
 
