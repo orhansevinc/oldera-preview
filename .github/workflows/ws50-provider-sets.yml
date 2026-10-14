@@ -35,40 +35,77 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Fetch exact pinned Moradon SMD authority
+        run: |
+          set -euo pipefail
+          SMD="$RUNNER_TEMP/moradon_0826.smd"
+          curl --fail --location --silent --show-error \
+            "https://raw.githubusercontent.com/Open-KO/KnightOnline/7d6cf81093e142c928c2ac9510512b2b182178b5/assets/Server/MAP/moradon_0826.smd" \
+            --output "$SMD"
+          python3 - "$SMD" <<'PY'
+          import hashlib
+          import pathlib
+          import sys
+          p = pathlib.Path(sys.argv[1])
+          data = p.read_bytes()
+          assert len(data) == 786000, len(data)
+          actual = hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
+          assert actual == "cf47772b8e42a8bad71032419f47978c8bbd6142", actual
+          print("WS50_MORADON_SMD_IDENTITY PASS", actual, len(data))
+          PY
+          echo "WS50_MORADON_SMD=$SMD" >> "$GITHUB_ENV"
+
       - name: Validate immutable provider-set schema, hashes and lineage
         run: |
           python3 tools/ws50_integration/provider_sets.py validate \
             release/sets/ws50/B0.json \
             release/sets/ws50/C1.json \
             release/sets/ws50/C2.json \
-            release/sets/ws50/C3.json
+            release/sets/ws50/C3.json \
+            release/sets/ws50/C4.json
 
       - name: Verify exact provider SHA evidence
         run: |
           mkdir -p "$RUNNER_TEMP/ws50-provider-set-evidence"
-          for set in B0 C1 C2 C3; do
+          for set in B0 C1 C2 C3 C4; do
             python3 tools/ws50_integration/provider_sets.py verify-git \
               --manifest "release/sets/ws50/${set}.json" \
               --repo "$GITHUB_WORKSPACE" \
               --output "$RUNNER_TEMP/ws50-provider-set-evidence/${set}-sha-evidence.json"
           done
 
-      - name: Record drift without mutating C3
+      - name: Record drift without mutating C4
         run: |
           python3 tools/ws50_integration/provider_sets.py drift \
-            --manifest release/sets/ws50/C3.json \
+            --manifest release/sets/ws50/C4.json \
             --repo "$GITHUB_WORKSPACE" \
-            --output "$RUNNER_TEMP/ws50-provider-set-evidence/C3-drift.json"
+            --output "$RUNNER_TEMP/ws50-provider-set-evidence/C4-drift.json"
 
-      - name: Reproduce exact C1, C2 and C3 candidate ladder
+      - name: Reproduce exact C1 through C4 candidate ladder
         run: |
           set -euo pipefail
-          for set in C1 C2 C3; do
+          for set in C1 C2 C3 C4; do
             python3 tools/ws50_integration/visibility_candidate.py \
               --repo "$GITHUB_WORKSPACE" \
               --manifest "release/sets/ws50/${set}.json" \
               --output "$RUNNER_TEMP/ws50-provider-set-evidence"
           done
+
+      - name: Assert C4 fail-closed first blocker and closed historical authorities
+        run: |
+          python3 - "$RUNNER_TEMP/ws50-provider-set-evidence/C4-receipt.json" <<'PY'
+          import json
+          import pathlib
+          import sys
+          r = json.loads(pathlib.Path(sys.argv[1]).read_text())
+          assert r["candidate_result"] == "BLOCKED"
+          assert r["protocol_checks"]["NPC_REGION_BODY_AUTHORITY"] == "CLOSED"
+          assert r["composition_checks"]["WORLD_TERRAIN_HEIGHT_AUTHORITY"] == "CLOSED"
+          assert r["contract_checks"]["first_blocker"] == "MOB_RUNTIME_NETWORK_IDENTITY_AUTHORITY"
+          assert r["contract_checks"]["ws50_invented_runtime_id"] is False
+          assert r["browser_gate_ready_for_ws10"] is False
+          print("WS50_C4_FAIL_CLOSED PASS", r["immutable_key"])
+          PY
 
       - name: Publish candidate summary
         if: always()
