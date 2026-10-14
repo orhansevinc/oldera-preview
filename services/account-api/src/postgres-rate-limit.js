@@ -76,8 +76,8 @@ export class PostgresRateLimitStore {
   }
 
   async ready() {
-    const { rows } = await this.pool.query(`SELECT to_regclass('oldko.account_rate_limits') AS relation`);
-    if (rows[0]?.relation !== 'oldko.account_rate_limits') throw new Error('oldko.account_rate_limits migration is missing');
+    const { rows } = await this.pool.query(`SELECT to_regclass('oldko.account_rate_limits') IS NOT NULL AS present`);
+    if (rows[0]?.present !== true) throw new Error('oldko.account_rate_limits migration is missing');
     await this.pool.query('SELECT 1');
     return true;
   }
