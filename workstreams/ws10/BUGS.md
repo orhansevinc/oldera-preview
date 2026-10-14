@@ -1,38 +1,33 @@
-# WS10 integration findings
+WS10
 
-WS10 does not fix product defects. It records reproducible failures and leaves ownership with the relevant workstream.
+# Integration findings
 
-## BUG-001 — M12 Character selectable has no end-to-end proof
+WS10 does not fix product/provider defects. It records reproducible failures and leaves ownership with the relevant workstream.
 
-- **Milestone:** M12 (blocks M13-M16)
-- **Reproduce:** Run the WS10 client harness against current `openko-browser-port`; complete login -> server list -> version 1298 -> game login -> Nation Select -> Character Select -> Character Create.
-- **Expected:** Create a character through the real protocol, refresh/list it, and prove the character is selectable.
-- **Actual:** Current proven path reaches the real Character Create scene, but no create-success/list-refresh/selectability evidence is available. WS10 therefore fails M12 and refuses to credit downstream world milestones.
-- **Log:** `artifacts/milestones.json`, `artifacts/console.log`, `artifacts/M11-character-create.png`.
-- **Likely responsible workstream:** WS04 Character Select/Create (or WS03 session server if the missing piece is protocol response/persistence).
+## BUG-MORADON-001 — WS05 gate compares the native 1.298 zone against wire zone `21`
 
-## BUG-002 — Browser runtime cannot open the 1298 cursor UIF
+- **Severity:** Priority-0 critical-path blocker.
+- **Blocked gate:** native Moradon zone/terrain/shape/local-player/native-GL evidence.
+- **Single owner:** **WS05**.
+- **Reproduce:** Run `.github/workflows/ws10-e2e.yml` on `ws10-qa-integration`; canonical evidence is run #16 (`38490102763`) at tested harness commit `3c22e0e6907b74651589a18818bbcc7e930698b2`.
+- **Expected:** After real `WIZ_SEL_CHAR` succeeds with server/wire zone `21`, the genuine client world transition should satisfy WS05's Moradon probes, producing zone-begin, assets-loaded, terrain-rendered, shapes-rendered, local-player-rendered and accepted non-black native GL evidence in the same run.
+- **Actual:** The integrated path successfully creates `Ws10Hero`, refreshes the occupied slot, sends real `0x04`, completes WS03 -> WS14 selection, GAMESTART/MYINFO/ZONEABILITY/region/NPC bootstrap, enters `CGameProcMain`, loads a world and fully initializes the local player. The client logs `InitZone starting (zone 210)` and loads `Zones\Moradon_xmas.gtd`; none of WS05's required zone-21 markers can fire, and the browser driver times out waiting for `WS05_GATE event=moradon-zone-begin zone=21`.
+- **Root-cause evidence:** The pinned OpenKO 1.298 `CGameProcedure::MsgRecv_CharacterSelect()` multiplies the received zone by 10 for `N3FORMAT_VER_DEFAULT >= N3FORMAT_VER_1264`, so wire `21` becomes native `210`. WS05's current browser probes hard-code `iZoneID == 21` / `m_InfoExt.iZoneCur == 21`.
+- **Artifacts:** `ws10-moradon-e2e-16` (artifact id `11862255468`), especially `browser-console.log`, `browser-result.json`, `composition-server.log`, provider test logs and build/configure logs.
+- **Resolution boundary:** WS10 will not patch WS05 or fake the missing marker. WS05 must reconcile its native-zone predicate with the pinned client and revalidate the authentic Moradon asset/render path; then WS10 reruns the integrated gate.
 
-- **Milestone:** M3 Login scene visible (non-fatal finding; the scene can still render).
-- **Reproduce:** Start the current proven `openko-browser-port` build with the canonical 1298 assets and inspect browser console output during login initialization.
-- **Expected:** Required login/runtime UI assets open without an asset resolution failure.
-- **Actual:** Runtime logs `[asset-open-fail] requested='/data/ui\\cursor.uif' resolved='/data/ui/cursor.uif'` while bringing up the real login scene.
-- **Log:** `artifacts/console.log`; also reproduced by the successful canonical OpenKO browser CI run before `login scene: CGameProcedure brought up`.
-- **Likely responsible workstream:** WS06 asset audit first; WS01 runtime/build if the asset exists but mount/case normalization is wrong.
+## Resolved historical finding — old M12 create/select gap
 
-## BUG-003 — Emscripten main-loop timing is called before a main loop exists
+The earlier WS10 `BUG-001` describing missing character create/list/select E2E evidence is **resolved by run 16**. The same real browser run proves:
 
-- **Milestone:** M1/M3 runtime initialization (non-fatal finding in the currently proven path).
-- **Reproduce:** Start the current `openko-browser-port` browser client and inspect console output immediately after the login procedure comes up.
-- **Expected:** Runtime main-loop scheduling initializes without an Emscripten API error.
-- **Actual:** Console emits `emscripten_set_main_loop_timing: Cannot set timing mode for main loop since a main loop does not exist! Call emscripten_set_main_loop first to set one up.`
-- **Log:** `artifacts/console.log`; canonical OpenKO browser CI reproduces it immediately after the login scene marker.
-- **Likely responsible workstream:** WS01 runtime/build.
+- `WIZ_NEW_CHAR (0x02)` emitted by the real client;
+- exact create success accepted;
+- refreshed occupied character list;
+- `WIZ_SEL_CHAR (0x04)` emitted by the real client;
+- successful WS03 -> WS14 handoff and world bootstrap.
 
-## Integration targets not yet classified as product bugs
+It is no longer the Moradon critical-path blocker.
 
-M17-M20 remain FAIL when no running Admin API target/restart command is supplied. Missing service evidence is deliberately not converted to PASS or SKIP. WS10 will classify concrete API/database defects only after a test target answers the contract.
+## Non-blocking historical runtime observations
 
-## Required bug format
-
-Future entries must include: milestone, reproduce, expected, actual, log/artifact, and likely responsible workstream.
+Earlier browser work recorded cursor-UI asset resolution and Emscripten main-loop timing warnings. Run 16 proceeds through login, character creation/selection and native main/world initialization despite those observations, so they are not promoted over BUG-MORADON-001 as the single current Priority-0 blocker.
