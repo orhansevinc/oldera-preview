@@ -1,0 +1,117 @@
+name: WS50 OldKOWeb Domain Live Coordinator
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ws50-integration-rehearsal]
+    paths:
+      - '.github/workflows/ws50-domain-live.yml'
+      - 'tools/ws50_integration/domain_live.py'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: oldkoweb-domain-live-20261015
+  cancel-in-progress: false
+
+env:
+  RELEASE_ID: oldkoweb-domain-live-20261015
+  WS39_SHA: 8a80a506d813dab9c6777275e3fa39c63d248992
+
+jobs:
+  owner-handoff-discovery:
+    runs-on: ubuntu-24.04
+    outputs:
+      ready: ${{ steps.discovery.outputs.ready }}
+      blocker_count: ${{ steps.discovery.outputs.blocker_count }}
+      pin_digest: ${{ steps.discovery.outputs.pin_digest }}
+    steps:
+      - name: Checkout coordinator
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch owner branches once for observation and exact source validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin '+refs/heads/*:refs/remotes/origin/*'
+
+      - name: Validate common owner handoffs without silently upgrading pins
+        id: discovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/domain-live"
+          python3 tools/ws50_integration/domain_live.py \
+            --repo "$GITHUB_WORKSPACE" \
+            --output "$RUNNER_TEMP/domain-live/domain-live-state.json" \
+            --github-output "$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/domain-live/domain-live-state.json"
+
+      - name: Record release checkpoint
+        shell: bash
+        run: |
+          {
+            echo '## OldKOWeb domain-live discovery'
+            echo "Release: $RELEASE_ID"
+            echo "Ready for exact integration candidate: ${{ steps.discovery.outputs.ready }}"
+            echo "Blockers: ${{ steps.discovery.outputs.blocker_count }}"
+            echo "Owner pin digest: ${{ steps.discovery.outputs.pin_digest }}"
+            echo 'No deployment is attempted while ready=false.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload immutable discovery evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ws50-domain-live-discovery-${{ github.run_number }}
+          path: ${{ runner.temp }}/domain-live/domain-live-state.json
+          if-no-files-found: error
+          retention-days: 30
+
+  exact-integration-contract-gate:
+    needs: owner-handoff-discovery
+    if: needs.owner-handoff-discovery.outputs.ready == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout coordinator
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch exact WS39 contract authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$WS39_SHA"
+          test "$(git rev-parse FETCH_HEAD)" = "$WS39_SHA"
+          git worktree add --detach "$RUNNER_TEMP/ws39" "$WS39_SHA"
+
+      - name: Run existing WS50 integration unit tests
+        run: python3 -m unittest discover -s tools/ws50_integration/tests -v
+
+      - name: Run existing WS39 contract suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd "$RUNNER_TEMP/ws39/contract-tests" && npm test)
+
+      - name: Stop before external gates unless owner entry points are registered
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'All owner handoffs are accepted and contract tests passed.'
+          echo 'The next gates are intentionally external-owner gates: WS10 browser, WS09 deploy, WS10 domain acceptance.'
+          echo 'They are dispatched only by the default-branch bootstrap after its reviewed PR is merged.'
+
+  blocked-checkpoint:
+    needs: owner-handoff-discovery
+    if: needs.owner-handoff-discovery.outputs.ready != 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Confirm fail-closed release state
+        run: |
+          echo "Release $RELEASE_ID remains blocked with ${{ needs.owner-handoff-discovery.outputs.blocker_count }} blocker(s)."
+          echo 'This is a successful coordinator checkpoint, not CI_VERIFIED, INTEGRATION_VERIFIED, or DOMAIN_VERIFIED.'
