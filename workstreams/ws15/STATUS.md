@@ -1,90 +1,183 @@
-# WS15
+WS15
 
-## Durum
+# STATUS — AUTHORITATIVE MULTIPLAYER MOVEMENT HARDENING
 
-TAMAMLANDI — OldKO 1298 server-side movement ve position synchronization katmanı yalnızca WS15 izinli alanlarında hazırlandı.
+## DURUM
 
-## Branch
+**READY_FOR_INTEGRATION / WS15 SCOPE PRODUCTION-GRADE**
 
-`ws15-movement-sync`
+Existing 1298 movement implementation was preserved and hardened rather than replaced. The authoritative path now covers lifecycle gating, zone-transition freeze/reset, verified 48-unit region membership, deterministic nearby recipients, dedup/order protection, immutable gameplay snapshots, reconnect/disconnect cleanup, WS47 review signals, and scale/fuzz/soak coverage.
 
-## Kapsam
+Implementation commit: `b1fee59e98a9dfa44223b090452df511c34bce76` (`ws15: harden authoritative multiplayer movement`).
 
-- Authoritative session position state (`position` + 1298 uyumlu predicted `targetPosition`)
-- Move start / periodic update / end ayrımı
-- Position, raw heading ve speed state
-- 1298 `WIZ_MOVE (0x06)` decode + server broadcast encode
-- 1298 `WIZ_ROTATE (0x09)` decode + server broadcast encode
-- X/Z/Y ve speed için `×10` wire ölçeği
-- Zone bounds validation portu
-- Speed policy + hard ceiling
-- Speed/range sanity envelope
-- NaN / Infinity / integer overflow / wire mismatch reddi
-- Invalid movement flag reddi
-- Sliding-window packet flood guard + `onFlood` hook
-- Aynı zone içindeki kayıtlı sessionlara deterministic broadcast recipient listesi
-- Disconnect state/flood cleanup
-- Teleport/warp ile normal movement ayrımı; teleport yalnızca authoritative baseline resetler, sahte `WIZ_MOVE` üretmez
-- Unit testler ve deterministic iki oyunculu simulation transcript testi
-- WS15 bağımsız GitHub Actions workflow
+GitHub Actions evidence: run `38520753108`, workflow `WS15 Movement Sync`, conclusion **success**. Both `unit` and `simulation` jobs completed successfully.
 
-## Protokol doğrulama kaynağı
+## VERIFIED 1298 SOURCE CONTRACT
 
-Referans: `ko4life-net/ko@e2028240c7cfc011264cdecbd91baee4e3cdeb29`
+Source pin used for movement semantics: Open-KO/KnightOnline `7d6cf81093e142c928c2ac9510512b2b182178b5`, version 1298.
 
-- `src/server/Ebenezer/PacketDefine.h`: `WIZ_MOVE=0x06`, `WIZ_ROTATE=0x09`, `WIZ_WARP=0x1e`.
-- `src/game/GameProcMain.cpp::MsgSend_Move`: istemci X/Z/Y ve speed değerlerini `×10` ile yollar; hareket biti `0x01`, continuous/update biti `0x02`.
-- `src/server/Ebenezer/User.cpp::MoveProcess`: speed sıfır değilken önceki `m_fWill_*` current position olur, yeni packet `m_fWill_*` target olur; server hareket packetini çevreye yayınlar.
-- `src/server/Ebenezer/User.cpp::Rotate`: heading signed short olarak alınır ve `WIZ_ROTATE` ile yayınlanır.
+Verified behavior applied:
+- `WIZ_MOVE (0x06)` payload remains x/z u16, y i16, speed u16, flag u8, scale x10.
+- moving packets keep the historical current/target behavior; stop collapses current and target to the stop coordinate.
+- `PACKET_INTERVAL_MOVE = 1.5s`; periodic client movement is sent only when the client position changed.
+- `PACKET_INTERVAL_ROTATE = 4.0s`.
+- heading is sent as `(int16)(yaw * 100)` and received as `int16 / 100`; WS15 keeps the signed wire value exact and exposes derived yaw.
+- server `VIEW_DISTANCE = 48`; movement calls region registration then region broadcast.
 
-Opcode/struct tahmini yapılmadı.
+### Coalescing decision
 
-## Test sonucu
+No additional temporal movement coalescer is enabled. The verified client already throttles continuous movement at 1.5s. WS15 instead suppresses exact duplicate broadcasts and keeps flood/order validation. This avoids inventing packet timing semantics that are not present in 1298.
 
-Local Node.js `v22.16.0`:
+## AUTHORITATIVE MOVEMENT
 
-- Syntax check: PASS
-- `npm test`: PASS
-- Test sayısı: 11
-- Passed: 11
-- Failed: 0
+Implemented:
+- stable session/entity registration with duplicate-session and active entity-id reuse rejection;
+- explicit `worldReady` state; `worldReady:false` sessions cannot move/rotate;
+- `beginZoneTransition()` freezes movement, clears moving state and drops readiness;
+- `completeZoneTransition()` performs trusted destination baseline reset and only then restores readiness;
+- server-owned `sequence` and `lastAcceptedAtMs`; no client timestamp is trusted;
+- optional monotonically increasing server/transport `receiveSequence` for stale/out-of-order rejection;
+- class/buff/debuff speed adapter via function or `getMaxSpeed()` object;
+- independent `absoluteMaxSpeed` hard ceiling retained;
+- teleport remains a trusted baseline reset and never enters speed-hack/range processing;
+- impossible/non-finite/overflow/underflow/non-tenth-unit coordinates rejected;
+- `ZoneBoundsProvider` + `MapZoneBoundsProvider` make real map data pluggable;
+- optional `terrainAuthority.validateMovement()` defines the SMD terrain/height/collision owner boundary without fabricating collision behavior;
+- reconnect snapshot/restore; disconnect removes session, entity binding, region membership and flood accounting;
+- entity id can be reused only after the old binding is cleaned up.
 
-Test edilen kritik durumlar:
+## REGION SYNC
 
-- verified 1298 packet decode/encode
-- start/update/end state transitions
-- previous-target -> current-position 1298 semantics
-- speed limit
-- range limit
-- zone bounds
-- NaN/Infinity/overflow
-- malformed flags
-- heading sync
-- same-zone broadcast
-- authorized teleport baseline reset
-- disconnect cleanup
-- flood rejection/hook
-- deterministic multi-player transcript
+Implemented verified 48-unit region cells and deterministic nearby-player visibility:
+- region-cell crossing detection;
+- enter/leave membership event via `onRegionMembership`;
+- default 3x3 neighboring-cell recipient window (radius 1);
+- same-zone + WORLD_READY + non-frozen recipient filtering;
+- lexically deterministic recipient ordering;
+- exact duplicate move/rotate broadcasts suppressed;
+- teleport/zone changes remove old region membership and register the new one.
 
-## Entegrasyon
+## GAMEPLAY READ APIs
 
-HAZIR. Başka servis değiştirilmedi. `workstreams/ws15/INTEGRATION_PATCH.md` WS14/world-session tarafının sağlayacağı interface noktalarını tanımlar.
+### WS19 authoritative distance
 
-Production entegrasyonunda gerçek map/zone validity için WS14 tarafının `zoneBounds.isValidPosition()` sağlaması ve class/buff gibi meşru hız farkları için uygun `speedPolicy()` vermesi beklenir. Bu bağımlılıklar WS15 sınırları gereği burada doğrudan uygulanmadı.
+```js
+const snapshot = movement.getEntityDistanceSnapshot(attackerEntityId, targetEntityId);
+const verdict = movement.isWithinRange({
+  sourceEntityId: attackerEntityId,
+  targetEntityId,
+  maxDistance,
+});
+```
 
-## Yasak alan kontrolü
+Distance snapshots are immutable, same-zone aware and expose horizontal + 3D distance. WS19 still owns combat resolution.
 
-Değiştirilmedi:
+### WS25 immutable pursuit position
 
-- client
-- WS03
-- WS14
-- combat
-- NPC
-- inventory
-- gateway
-- DB migration
-- admin/site
-- main
+```js
+const target = movement.getEntityPositionSnapshot(targetEntityId);
+```
 
-Main merge veya force push yapılmadı.
+The returned object and nested position objects are frozen. It exposes zone, current/target position, heading, movement state, authoritative server sequence and region.
+
+## WS03 / WS14 LIFECYCLE API
+
+Register using the real world state:
+
+```js
+movement.registerSession({
+  sessionId,
+  entityId: socketId,
+  zoneId: worldSnapshot.zoneId,
+  position: worldSnapshot.position,
+  worldReady: worldSnapshot.state === 'WORLD_READY',
+});
+```
+
+When WS14 GAMESTART phase 2 reaches `WORLD_READY`:
+
+```js
+movement.setWorldReady(sessionId, true);
+```
+
+Before a WS14 zone-change handshake:
+
+```js
+movement.beginZoneTransition(sessionId, { reason: 'ws14-zone-change' });
+```
+
+After WS14 returns to `WORLD_READY` with the trusted destination:
+
+```js
+movement.completeZoneTransition(sessionId, {
+  zoneId: worldSnapshot.zoneId,
+  position: worldSnapshot.position,
+  headingRaw,
+});
+```
+
+Packet dispatch may carry server receive ordering metadata:
+
+```js
+movement.handleMovePacket(sessionId, payload, { receiveSequence });
+movement.handleRotatePacket(sessionId, payload, { receiveSequence });
+```
+
+## SECURITY SIGNALS / WS47
+
+`onSecuritySignal` emits sanitized observation metadata only. Signal types align with WS47 review contracts:
+- `impossible_movement` for speed/range/order/flood/teleport-attempt observations;
+- `repeated_invalid_position` for impossible position observations;
+- `repeated_malformed_packet_metadata` for malformed movement/rotation metadata.
+
+`evidence.reasonCode` / `evidence.category` differentiates speed, range, teleport, order and flood. No raw packet bodies are forwarded. Trusted teleport/zone transition/reconnect restore paths are separate from suspicious movement logic.
+
+Explicit hook for an externally detected unauthorized teleport attempt:
+
+```js
+movement.signalSuspiciousTeleport(sessionId, { source: 'client-opcode' });
+```
+
+WS47 remains review-only; WS15 does not auto-ban/kick.
+
+## TEST / SIMULATION EVIDENCE
+
+GitHub Actions run `38520753108` on implementation commit `b1fee59e98a9dfa44223b090452df511c34bce76`:
+- `unit`: **success**;
+- `simulation`: **success**.
+
+Total suite: **33 passing tests** = existing 11 baseline + 22 new hardening/simulation tests.
+
+New coverage includes:
+- pre-WORLD_READY rejection;
+- zone-transition freeze/reset;
+- region crossing and cross-region broadcast correctness;
+- deterministic recipients;
+- exact movement/rotation dedup;
+- receive-order rejection;
+- speed adapter + absolute ceiling;
+- trusted teleport vs suspicious teleport hook;
+- impossible coordinate / overflow / underflow / NaN;
+- pluggable map bounds and external terrain owner;
+- verified heading raw/yaw semantics;
+- reconnect restore, disconnect cleanup and entity-id reuse;
+- WS19 immutable distance snapshot and WS25 immutable position snapshot;
+- 1,000 rapid direction changes;
+- deterministic 2 / 10 / 100-player simulations;
+- 10,001 accepted deterministic movement packets;
+- 200 start/update/end fuzz cycles;
+- 1,000 malformed payload fuzz cases;
+- 500-packet flood soak (450 rejected after configured 50-packet window allowance);
+- 5,000 register/disconnect churn cycles with zero remaining session/entity/region state;
+- browser-style fixture: `world-register -> move -> rotate -> region-change -> stop -> teleport -> disconnect`.
+
+## BLOCKERS / EXTERNAL OWNERS
+
+No WS15-internal blocker remains.
+
+Production composition still requires external owners to wire their real implementations:
+1. WS14/WS03 must call the lifecycle methods at their canonical WORLD_READY / zone-transition boundaries.
+2. Real SMD/map service must provide `ZoneBoundsProvider` and, if collision/height validation is required, `terrainAuthority`; WS15 intentionally does not invent collision data.
+3. Character/class/buff service must supply the production `speedPolicy` adapter.
+4. WS47 integration must map WS15 observation metadata to the actual character subject/correlation id before `AntiCheatSignalEngine.record()`.
+5. WS19/WS25 should consume the immutable APIs above rather than maintaining competing coordinate authority.
