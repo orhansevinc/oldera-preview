@@ -14,14 +14,14 @@
     "source_commit": "5f9a4f0ccd3d7d06e8b407bfca35266f1b2d3516",
     "handoff_commit": "8370de2ebfdfd319cf8a719da79cbdef9853fd2f"
   },
-  "observed_owner_heads": {
+  "observed_owner_heads_at_run_38654219214": {
     "WEBSITE": "8370de2ebfdfd319cf8a719da79cbdef9853fd2f",
     "WS13": "1ef67bd7c0c98a588bce4db6c0f1305b820af008",
     "WS07": "1ae85c96319cbab11648a91ed28300e17d4c607f",
     "WS03": "7c5f5f3584e7d3621aa5a318ad65c011bd77276f",
-    "WS08": "239cdacf0fb6bacde5017fb3b787451595a3be0d",
-    "WS09": "8c2624ec5f6f473cbb609d3cbd17406dce9bb225",
-    "WS10": "33bfef078f20bf4e97611f906fcc6ec7fd7fc277"
+    "WS08": "ada41bacbcf7defd91d6c554c481012207859ccf",
+    "WS09": "32533e31dd7b87f98d4ff97061cd2b24ee7e8a7d",
+    "WS10": "acecfe107d88c6bed8e2189068a3d4adac5d0b14"
   },
   "pin_policy": "Observed branch heads are discovery only. Release pins come exclusively from validated coordination/handoffs/domain-live/<OWNER>.json source_commit fields.",
   "accepted_owner_pins": {},
@@ -42,15 +42,31 @@
       "artifact_id": 11916143558,
       "digest": "sha256:dace8c076b51eb70e4dc5196830655a32af17156ee04877402e080faa2a3e3ca",
       "state": "READY_FOR_AUTHORIZED_HOST_TRANSFER"
+    },
+    "domain_live_discovery": {
+      "workflow_run_id": 38654219214,
+      "tested_sha": "396a765384f87fd97159204fd1eefc77702e6624",
+      "artifact_id": 11935439132,
+      "artifact_digest": "sha256:4c267dc523d2d0c4057603843b086700d1ba21d6a5aa431e938e463cf576bab3",
+      "result": "SUCCESS",
+      "candidate_ready": false,
+      "blocker_count": 7
     }
   },
   "automation": {
-    "workflow": ".github/workflows/ws50-domain-live.yml",
+    "branch_workflow": ".github/workflows/ws50-domain-live.yml",
     "source_discovery": "tools/ws50_integration/domain_live.py",
-    "run_id": null,
-    "bootstrap_pr": null
+    "coordinator_source_commit": "396a765384f87fd97159204fd1eefc77702e6624",
+    "run_id": 38654219214,
+    "run_result": "SUCCESS",
+    "deployment_lock": "oldkoweb-domain-live-20261015",
+    "cancel_in_progress": false,
+    "default_branch_bootstrap_pr": 2,
+    "default_branch_bootstrap_head": "32930f4a006a51cdeca5de75935cf891739c9f5a",
+    "default_branch_bootstrap_state": "OPEN_NOT_MERGED"
   },
   "verification": {
+    "coordinator_discovery_ci_verified": true,
     "CI_VERIFIED": false,
     "INTEGRATION_VERIFIED": false,
     "DOMAIN_VERIFIED": false
@@ -58,8 +74,14 @@
   "deployment_receipt": null,
   "domain_acceptance_receipt": null,
   "blockers": [
-    {"id": "UPSTREAM_DOMAIN_LIVE_HANDOFFS_MISSING", "owner": "WEBSITE/WS13/WS07/WS03/WS08/WS09/WS10", "required_action": "Each owner must publish its common domain-live handoff on its own branch with exact tested source_commit and real Actions URL."},
-    {"id": "ACTIONS_DEFAULT_BRANCH_REGISTRATION", "owner": "WS50", "required_action": "Register the narrow domain-live dispatch entry points on default branch through a reviewed bootstrap PR; current main exposes only legacy workflows."},
+    {"id": "WEBSITE_DOMAIN_LIVE_HANDOFF_MISSING", "owner": "WEBSITE", "required_action": "Publish coordination/handoffs/domain-live/WEBSITE.json with exact tested source_commit and real Actions URL."},
+    {"id": "WS13_DOMAIN_LIVE_HANDOFF_MISSING", "owner": "WS13", "required_action": "Publish coordination/handoffs/domain-live/WS13.json with exact tested source_commit and real Actions URL."},
+    {"id": "WS07_DOMAIN_LIVE_HANDOFF_MISSING", "owner": "WS07", "required_action": "Publish coordination/handoffs/domain-live/WS07.json with exact tested source_commit and real Actions URL."},
+    {"id": "WS03_DOMAIN_LIVE_HANDOFF_MISSING", "owner": "WS03", "required_action": "Publish coordination/handoffs/domain-live/WS03.json and prove the one-Postgres composition without losing C5 NPC/mob visibility."},
+    {"id": "WS08_DOMAIN_LIVE_HANDOFF_MISSING", "owner": "WS08", "required_action": "Publish coordination/handoffs/domain-live/WS08.json with exact tested source_commit and real Actions URL."},
+    {"id": "WS09_DOMAIN_LIVE_HANDOFF_MISSING", "owner": "WS09", "required_action": "Publish coordination/handoffs/domain-live/WS09.json and a real deployment receipt after an authorized persistent host exists."},
+    {"id": "WS10_DOMAIN_LIVE_HANDOFF_MISSING", "owner": "WS10", "required_action": "Publish coordination/handoffs/domain-live/WS10.json and an exact-candidate browser/domain acceptance entry point."},
+    {"id": "ACTIONS_DEFAULT_BRANCH_REGISTRATION", "owner": "WS50", "required_action": "Review PR #2 through normal merge policy; no bypass or force merge."},
     {"id": "PERSISTENT_HOST_TARGET_MISSING", "owner": "WS09", "required_action": "Provide an authorized persistent production host target and stable endpoint."},
     {"id": "DNS_NOT_APPLIED", "owner": "WS09", "required_action": "Apply DNS only after the persistent target is verified, preserving unrelated DNS/mail/ownership records."},
     {"id": "TLS_NOT_ISSUED", "owner": "WS09", "required_action": "Issue production TLS for oldkoweb.com, play.oldkoweb.com and admin.oldkoweb.com after DNS/host readiness."}
