@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Freeze current provider heads at rehearsal start on the WS50 control base."""
+"""Freeze latest main/provider heads once and run the WS50 staging rehearsal."""
 
 import os
 from pathlib import Path
@@ -7,25 +7,11 @@ import sys
 
 import staging_candidate
 
-CONTROL_BASE = "3aeaaa3de81c8094b47de44f2c24f3c455e7fd3d"
-staging_candidate.FROZEN["MAIN"] = ("control-base", CONTROL_BASE)
-
 
 def snapshot_current_provider_refs() -> None:
-    current_main = staging_candidate.git("rev-parse", "refs/remotes/origin/main")
-    staging_candidate.run(
-        ["git", "merge-base", "--is-ancestor", CONTROL_BASE, current_main],
-        capture=False,
-    )
-    print(f"CONTROL_BASE_OK {CONTROL_BASE} current_main={current_main}")
-
-    # Provider branches may be finishing parallel control sessions while WS50
-    # runs. Snapshot each current HEAD once, then use only those exact SHAs for
-    # the disposable tree. This is the freeze; no moving branch tip is consumed
-    # after this point. WS05 is re-fetched again after the rehearsal completes.
+    # Freeze main and every provider branch exactly once at run start. After
+    # this point the disposable candidate consumes only immutable SHAs.
     for key, (branch, _previous) in list(staging_candidate.FROZEN.items()):
-        if key == "MAIN":
-            continue
         ref = f"refs/remotes/origin/{branch}"
         actual = staging_candidate.git("rev-parse", ref)
         staging_candidate.FROZEN[key] = (branch, actual)
@@ -33,7 +19,7 @@ def snapshot_current_provider_refs() -> None:
 
 
 def tolerate_noncanonical_session_log(tree: Path, out: Path) -> None:
-    """Use TCP port probes as the boot proof; container log wording is diagnostic."""
+    """Use TCP port probes as boot proof; container log wording is diagnostic."""
     try:
         original_container_checks(tree, out)
         return
@@ -76,32 +62,36 @@ staging_candidate.container_checks = tolerate_noncanonical_session_log
 
 rc = staging_candidate.main()
 
-# Inbox requirement: if WS05 moves during the rehearsal, do not report READY or
-# BLOCKED against a stale provider. Re-fetch the remote branch, then compare it
-# with the exact SHA frozen at rehearsal start.
-staging_candidate.run(
-    [
-        "git",
-        "fetch",
-        "origin",
-        "+refs/heads/ws05-moradon-world:refs/remotes/origin/ws05-moradon-world",
-    ],
-    capture=False,
-)
-latest_ws05 = staging_candidate.git("rev-parse", "refs/remotes/origin/ws05-moradon-world")
-frozen_ws05 = staging_candidate.FROZEN["WS05"][1]
-if latest_ws05 != frozen_ws05:
-    raise SystemExit(
-        f"WS05_CHANGED_DURING_REHEARSAL expected={frozen_ws05} actual={latest_ws05}"
+# Fail closed if any branch moved while the disposable rehearsal was running.
+# This guarantees that a successful artifact corresponds to the latest provider
+# snapshot that existed for the entire run, not to a mixed moving-tip set.
+end_checks = []
+for key, (branch, frozen_sha) in list(staging_candidate.FROZEN.items()):
+    staging_candidate.run(
+        [
+            "git",
+            "fetch",
+            "origin",
+            f"+refs/heads/{branch}:refs/remotes/origin/{branch}",
+        ],
+        capture=False,
     )
-print(f"WS05_END_REF_CHECK_OK {latest_ws05}")
+    latest = staging_candidate.git("rev-parse", f"refs/remotes/origin/{branch}")
+    if latest != frozen_sha:
+        raise SystemExit(
+            f"PROVIDER_CHANGED_DURING_REHEARSAL {key} {branch} expected={frozen_sha} actual={latest}"
+        )
+    line = f"END_REF_CHECK_OK {key} {branch}@{latest}"
+    end_checks.append(line)
+    print(line)
 
 out = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else None
 if out is not None:
     result = out / "result.txt"
     if result.exists():
         with result.open("a", encoding="utf-8") as fh:
-            fh.write(f"WS05_END_REF_CHECK=PASS {latest_ws05}\n")
+            for line in end_checks:
+                fh.write(line + "\n")
     tree_sha = out / "candidate-tree-sha.txt"
     if tree_sha.exists():
         print(f"CANDIDATE_TREE_SHA {tree_sha.read_text(encoding='utf-8').strip()}")
