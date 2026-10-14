@@ -214,11 +214,12 @@ class GameSession {
     try {
       return await adapter.execute({ actor: this.actorContext(), operation });
     } catch (error) {
-      this.logger('downstream_error', { owner: domainOwner(domain), code: error?.code || 'ERROR', state: this.state.phase });
-      throw new SessionError('DOWNSTREAM_DOMAIN_FAILURE', `${domain} adapter failed`, {
+      const downstreamMessage = error?.message || String(error);
+      this.logger('downstream_error', { owner: domainOwner(domain), code: error?.code || 'ERROR', state: this.state.phase, message: downstreamMessage });
+      throw new SessionError('DOWNSTREAM_DOMAIN_FAILURE', `${domain} adapter failed: ${downstreamMessage}`, {
         category: ERROR_CATEGORY.DOWNSTREAM,
         fatal: false,
-        details: { domain, downstreamCode: error?.code || null },
+        details: { domain, downstreamCode: error?.code || null, downstreamMessage },
         cause: error,
       });
     }
