@@ -2,65 +2,54 @@
 
 ## Scope
 
-WS27 owns experience accounting, level transitions, progression-related death state, respawn state, and interfaces to mob rewards, party allocation, level rewards, respawn points, and nation-point rules.
+WS27 owns XP accounting, source-faithful level transitions, progression death state, respawn request/completion state, replay/idempotency metadata and persistence snapshots.
 
-It does not implement WS19 combat, WS24 zone/nation rules, WS25 mob AI, database migrations, client code, or admin/site behavior.
+It does not own combat damage (WS19), mob lifecycle (WS25), loot generation (WS26), world spawn selection (WS14), movement implementation (WS15), nation/loyalty rules, item loss, or database schema/migrations (WS07).
 
 ## Fidelity rule
 
-Production behavior must come from verified patch data. WS27 therefore does not invent a formula or level table.
+No XP curve is invented. The production `LevelTablePort` must provide the exact verified `LEVEL_UP.RequiredExp` rows. Tests use an explicitly synthetic level table only.
 
-### Verified behavior implemented
+Pinned source provenance is recorded in `workstreams/ws27/SOURCE_PROVENANCE.md`.
 
-Historical Knight Online server source in Open-KO shows:
+## Verified source behavior represented by the runtime
 
-- negative XP is ignored below level 6;
-- a negative XP delta can reduce level when the character is above level 5;
-- NPC/monster death paths call `ExpChange(-m_iMaxExp / 100)`, i.e. one percent of the current-level XP requirement;
-- level requirements are read from a level-up table (`RequiredExp`) rather than inferred from a formula.
+- `MAX_LEVEL` is 80 in the pinned server source used by this project.
+- `ExpChange()` performs at most one level-up or one level-down per call and then returns. A very large reward can therefore leave carried XP above the next threshold; WS27 deliberately does not loop across multiple levels in one reward event.
+- Negative XP is suppressed below level 6 by `ExpChange()`.
+- Level-up conditionally grants +3 stat points and, above level 9, +2 skill points. `compute1298LevelPointRewards()` implements the source condition from caller-supplied totals instead of guessing character storage.
+- Level changes recalculate abilities/vitals and trigger a client level-change synchronization. WS27 exposes `VitalsPort` plus `progression.client_sync_required` rather than duplicating combat/stat packet ownership.
+- NPC death paths in the source contain both 1% (`maxExp / 100`) and 5% (`maxExp / 20`) XP-loss branches. WS27 never guesses which branch applies: `Verified1298PveDeathLossPolicy` requires the combat/zone adapter to supply `xpLossDivisor: 100` or `20`; otherwise the policy applies zero loss.
+- Normal respawn restores HP, leaves normal-regene MP refill unproven, resets world placement/baseline through a port, and uses verified 10-second blinking/immunity. Combat is rejected during blinking; movement is allowed after respawn.
 
-The default `Verified1298PveDeathLossPolicy` therefore implements only the conservative portion that can be defended from the checked source:
+## Deliberately UNKNOWN / adapter-owned
 
-- monster death only;
-- no XP loss below level 6;
-- one percent of the configured current-level XP cap;
-- no guessed PvP XP loss.
-
-Zone/battle exemptions are provided by the composition layer via `allowXpLoss`; WS27 does not duplicate WS24 zone constants.
-
-### Deliberately not hard-coded
-
-The following remain adapters/TODO until verified against the exact target patch:
-
-- exact 1298 level XP thresholds;
-- exact target-patch maximum level;
-- stat-point awards;
-- skill-point awards;
-- party XP split formula;
-- PvP XP-loss semantics;
-- respawn coordinates and point-selection rules;
-- nation-point gain/loss.
-
-Private-server pages frequently advertise version 1298 with a 70 cap, but that is server configuration evidence rather than sufficient proof of the original patch maximum. Modern Open-KO source also exposes a different `MAX_LEVEL`, which is another reason not to turn an era assumption into a WS27 constant.
+- Exact 1298 XP thresholds (`LEVEL_UP.RequiredExp` rows): **UNKNOWN in current WS31 catalog** -> `LevelTablePort`.
+- Exact mob -> XP reward dataset/mapping: `KillRewardPort`.
+- Exact party XP eligibility/split formula: `PartyXpPort`.
+- Combat/zone mapping to the verified 1% versus 5% death-loss branch: death context adapter.
+- Exact world respawn point selection: `RespawnPointPort` -> WS14/world.
+- HP/MP formula storage/class coefficient integration: `VitalsPort` / `RespawnVitalsPort`.
+- Loyalty/nation-point mutations: `NationPointPort` handoff.
+- Item loss: no behavior implemented; no verified rule is guessed.
 
 ## State contract
 
 ```js
 {
-  characterId: string | number,
-  level: integer,
-  experience: bigint | safe integer | nonNegativeIntegerString,
-  deathState: "alive" | "dead",
-  death: null | {
-    kind: "monster" | "player" | "unknown",
-    killerId: string | number | null,
-    zoneId: string | number | null,
-    occurredAt: string | number | null
-  }
+  characterId,
+  level,                         // 1..80
+  experience,                    // bigint in memory; signed carry is tolerated below max level
+  deathState,                    // alive | dead | respawn_requested
+  death: null | { eventId, kind, killerId, zoneId, occurredAt, xpLossDivisor },
+  respawnRequest: null | { requestId, requestedPointId, requestedAt, point },
+  immunityUntilMs: null | integer,
+  version: nonNegativeInteger,   // optimistic concurrency token
+  appliedEventIds: string[]      // replay ledger contract
 }
 ```
 
-XP is normalized to `bigint`. Unsafe JavaScript numbers are rejected instead of silently rounding.
+`experience` is serialized to decimal string in persistence snapshots. Unsafe JavaScript numeric XP input is rejected.
 
 ## Required ports
 
@@ -68,22 +57,50 @@ XP is normalized to `bigint`. Unsafe JavaScript numbers are rejected instead of 
 
 ```js
 {
-  getMaxLevel(): number,
-  getLevelXpCap(level): bigint | number | string
+  getMaxLevel(): 80,
+  getLevelXpCap(level): bigint | safeInteger | decimalString
 }
 ```
 
-The production implementation must provide verified 1298 data. `getLevelXpCap(level)` is the current level's XP progress cap.
+The service rejects a max level other than the verified 80. The threshold rows themselves remain external until a verified dataset is supplied.
+
+### KillRewardPort
+
+```js
+{
+  resolveXp(killEvent): bigint | safeInteger | decimalString
+}
+```
+
+`killEvent.eventId` is mandatory and becomes the idempotency boundary. This is designed to consume the stable mob-death event identity exposed by WS25/WS26 without treating WS26 loot data as an XP table.
 
 ### LevelRewardPort
 
 ```js
 {
-  onLevelUp({ characterId, fromLevel, toLevel, source, metadata }): any
+  onLevelUp({ characterId, fromLevel, toLevel, source, metadata, pointAward }): any
 }
 ```
 
-WS27 emits each level transition. The owning stat/skill domain applies verified rewards.
+`pointAward` is populated when the caller supplies `metadata.pointSnapshot` / `awardMonsterKill(..., { pointSnapshot })`:
+
+```js
+{
+  unspentStatPoints,
+  baseStatTotal,
+  skillPointTotal
+}
+```
+
+### VitalsPort
+
+```js
+{
+  recalculateOnLevelChange({ characterId, fromLevel, toLevel, levelUp, state, source, metadata }): any
+}
+```
+
+The pinned source recalculates max HP/MP using class coefficients, stats, item/buff modifiers and then synchronizes the client. Those formulas belong behind this port because WS27 does not own those inputs.
 
 ### PartyXpPort
 
@@ -93,7 +110,7 @@ WS27 emits each level transition. The owning stat/skill domain applies verified 
 }
 ```
 
-Every supplied party member must receive exactly one allocation. Missing or duplicate allocations fail closed.
+Exactly one allocation per supplied member is required; duplicates/missing rows fail closed.
 
 ### RespawnPointPort
 
@@ -103,7 +120,27 @@ Every supplied party member must receive exactly one allocation. Missing or dupl
 }
 ```
 
-WS27 changes dead -> alive and emits the returned point. World/movement code performs the actual relocation.
+WS14/world owns authoritative spawn selection.
+
+### RespawnVitalsPort
+
+```js
+{
+  restoreOnRespawn({ characterId, state, point, rule }): any
+}
+```
+
+For normal respawn, WS27 publishes `rule: { hp: 'restore_to_max', mp: 'preserve_for_normal_regene' }`. If `maxHp` is present directly in the progression snapshot, WS27 also sets `hp = maxHp`; MP is not fabricated.
+
+### MovementBaselinePort
+
+```js
+{
+  resetOnRespawn({ characterId, point }): any
+}
+```
+
+WS15/world performs actual position/baseline mutation.
 
 ### NationPointPort (optional)
 
@@ -113,42 +150,71 @@ WS27 changes dead -> alive and emits the returned point. World/movement code per
 }
 ```
 
-This is only an integration seam. WS27 does not calculate NP.
+WS27 never calculates loyalty/nation points itself.
 
-## XP gain and overflow protection
+## XP gain semantics
 
-1. Validate level and current XP against the configured table.
-2. Normalize XP to `bigint`.
-3. Consume configured level caps one at a time.
-4. Invoke `LevelRewardPort.onLevelUp()` for every crossed level.
-5. At configured max level, saturate at that level's configured cap and emit `progression.xp_saturated` for discarded overflow.
+1. Validate source XP and state.
+2. Reject negative reward input.
+3. Add XP.
+4. If below level 80 and threshold is reached, subtract only the current threshold, level once, run reward/vitals ports, emit level/client-sync events, then stop processing further levels for that event.
+5. At level 80, clamp XP at the level-80 threshold and emit `progression.xp_saturated` for discarded overflow.
 
-## XP loss
+This intentionally differs from the previous WS27 loop that could grant multiple levels from one kill; the loop was not source-faithful.
 
-Negative XP is accepted only on an explicit authorized path. Loss can cross a level boundary. The default 1298-style death behavior cannot remove progression below level 5 because death XP loss is disabled below level 6.
+## Death lifecycle
 
-## Death and respawn
+`alive -> dead` is a single mutation. Re-delivery of the same `death.eventId` is replayed as a no-op. Any additional death delivery while already dead is also ignored so XP loss cannot be charged twice.
 
-`markDead()` records death state, obtains any XP loss from the configured policy, applies it, and optionally hands death information to the nation-point port. It does not perform combat calculations.
+Death records are persistence-visible. Nation/loyalty effects are only handed off. Item-loss behavior is absent by design.
 
-`respawn()` requires a dead character, resolves a destination through `RespawnPointPort`, transitions back to alive, and emits `progression.respawn`. It does not mutate WS14/WS15 world or movement implementations.
+## Respawn lifecycle
+
+```text
+dead -> respawn_requested -> alive(blinking/immunity 10s)
+```
+
+`requestRespawn()` requires a stable `requestId`, resolves an authoritative world point and persists the pending request. Repeated requests while pending are no-ops.
+
+`completeRespawn()` applies the verified normal HP rule, calls respawn-vitals and movement-reset ports, clears death state, and starts 10-second blinking/immunity. `assertGameplayAllowed()` rejects movement/combat while dead and rejects combat (but not movement) while blinking.
+
+The convenience `respawn()` method performs request + completion sequentially.
+
+## Persistence / replay / concurrency
+
+Every mutation returns:
+
+```js
+{
+  state,
+  events,
+  persistence: {
+    expectedVersion,
+    nextVersion,
+    snapshot
+  }
+}
+```
+
+The owning WS07 adapter must persist with compare-and-swap / optimistic concurrency semantics (`WHERE version = expectedVersion` or equivalent). Two concurrent mutations computed from the same old state may both be calculated in process; only one may commit. A stale `expectedVersion` is rejected by WS27 when operating on an already advanced snapshot.
+
+Stable event IDs are recorded in `appliedEventIds` and serialized, providing replay/idempotency semantics across reconnect/restart. A production persistence implementation may move this ledger to a dedicated idempotency store without changing the WS27 event-key contract.
 
 ## Events
 
 - `progression.xp_changed`
 - `progression.xp_saturated`
+- `progression.xp_loss_suppressed`
 - `progression.level_up`
 - `progression.level_down`
+- `progression.level_mutated`
 - `progression.death`
+- `progression.death_ignored`
+- `progression.respawn_requested`
+- `progression.respawn_request_ignored`
 - `progression.respawn`
+- `progression.respawn_immunity_started`
+- `progression.movement_baseline_reset`
+- `progression.client_sync_required`
 - `progression.nation_point_handoff`
-
-## Production TODOs
-
-1. Supply the verified 1298 level table and exact target max level.
-2. Bind WS25/WS26 mob reward XP to `awardMonsterKill()`.
-3. Supply exact party XP eligibility/split behavior through `PartyXpPort`.
-4. Supply verified stat/skill reward behavior through `LevelRewardPort`.
-5. Let WS24 decide zone-specific XP-loss allowance and nation-point rules.
-6. Supply world-owned respawn point data through `RespawnPointPort`.
-7. Persist returned state atomically in the owning persistence layer; WS27 adds no DB migration.
+- `progression.replay_ignored`
