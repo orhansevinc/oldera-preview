@@ -4,113 +4,136 @@ WS25
 
 - Workstream: `WS25`
 - Branch: `ws25-mob-ai`
-- State: `MORADON MOB HEIGHT PASS / INTEGRATION-READY`
-- Scope: verified Moradon mob population + authoritative WS14 terrain/shape height materialization
+- State: `MORADON MOB VISIBILITY PROVIDER READY`
+- Scope: verified Moradon mob population + authoritative WS14 height + shared runtime identity + exact WS11 semantic visibility surface
 
 ## Result
 
-WS25 now consumes WS14 through an explicit `terrain.resolveHeight(zoneId, x, z)` dependency. It does not copy WS14 terrain/SMD logic.
+WS25 now exposes the real Moradon mob population to the WS14 world/bootstrap boundary without encoding protocol bytes.
 
-For every production `dataClass=real` mob spawn:
+The provider keeps source identity and browser/runtime identity separate:
 
-1. WS25 keeps its deterministic X/Z projection inside the verified K_NPCPOS source rectangle.
-2. WS25 calls the WS14 height resolver with exactly that zone/X/Z.
-3. Only `status=authoritative` with finite `height` is accepted.
-4. No y=0, constant-Y, manual source-Y or guessed fallback exists in the production path.
-5. Initial materialization fails closed before emitting a spawn when height is not authoritative.
-6. Respawn stays despawned/deferred and retries with a fresh WS14 height resolve until authoritative.
+- source identity remains `templateId`, `groupId`, `spawnId`, `sourceRef` and the stable string `id`;
+- browser/runtime identity is an integer `runtimeId == instanceId == nid`;
+- runtime IDs are claimed once through an injected shared `runtimeIds.claim(...)` port;
+- WS25 does not own a second independent global allocator;
+- runtime IDs are checked against the current WS16/WIZ_NPC signed-16 namespace convention (`10000 <= id < 30000`, and `id <= 32767`);
+- duplicate IDs returned by the shared allocator fail closed inside WS25;
+- the same logical source slot retains the same runtime ID across corpse/despawn/respawn within the service lifecycle.
 
-## Exact authorities used by CI
+The pinned OpenKO 1298 AI server creates NPC/monster serials in stable source-load order and reuses the same entity serial across respawn. WS25 therefore claims identity once at materialization rather than reallocating on respawn. Process-restart reproducibility remains the responsibility of the shared namespace owner, with WS25 providing stable source claim order and stable source identity.
 
-- WS14 height authority: `ws14-world-session@9b82adefb05a3cca32f430e25f8a1d9109db93b2`
-- 1298 Moradon SMD authority: `Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5`, `assets/Server/MAP/moradon_0826.smd`
-- SMD git blob: `cf47772b8e42a8bad71032419f47978c8bbd6142`
-- WS31 catalog authority: `ws31-data-catalog@546d2ab62cd46a97f3385ebcddbe0c775a02c2eb`
-- WS11 visibility authority: `ws11-protocol-lab@944b6ff9b6329af29f1048a74aa6e14fca141639`
+## Collision policy
 
-## Verified Moradon regression
+Current WS16 has an internal NPC band allocator but no cross-domain global allocator. WS25 therefore consumes an injectable shared namespace port instead of duplicating WS16 allocation logic.
 
-Current WS31/WS25 slice:
+The claim request carries:
 
-- 10 verified monster templates: 750, 751, 752, 754, 755, 850, 851, 852, 853, 854;
-- 20 selected verified K_NPCPOS source rows/groups;
-- 135 deterministic runtime spawn slots;
-- deterministic X/Z stays inside source rectangle;
-- deterministic projection is not claimed to reproduce original 1298 RNG sequence.
+- namespace `KO1298_NPC`;
+- kind `mob`;
+- zone ID;
+- source identity;
+- template/group/spawn IDs;
+- source provenance.
 
-Real-SMD CI result:
+The shared owner must reserve/claim NPC and mob IDs from the same namespace. WS25 independently rejects duplicate mob claims and out-of-band/signed-16-invalid results.
 
-```text
-verified templates:       10
-verified spawn rows:      20
-deterministic slots:     135
-resolved slots:          135
-authoritative slots:     135
-terrain surface:         130
-shape surface:             5
-```
+## Exact detail semantics
 
-All 135 slots therefore materialize with real WS14 authoritative Y. No slot used fallback height.
+`detailSnapshot()` produces packet-ready semantics only; it does not serialize bytes.
 
-## Coordinate basis
+For real Moradon monsters the record exposes:
 
-Each real mob carries:
+- `runtime_id`;
+- `template_resource_id` / `pid`;
+- `npc_type`;
+- `selling_group`;
+- `scale`;
+- `weapon_1` / `weapon_2`;
+- `name`;
+- `group_nation`;
+- `level`;
+- authoritative `x/y/z`;
+- `state_gate_open`;
+- `object_type`;
+- `idk0` / `idk1`;
+- `direction`.
 
-- `spawnAnchor`: deterministic verified-rectangle X/Z + heading;
-- `spawnOrigin`: current authoritative materialization of that anchor;
-- `position`: runtime authoritative position;
-- `home`: authoritative home used by AI leash/chase/return-home.
+Static monster fields come from pinned OpenKO-db K_MONSTER rows for the 10 verified Moradon templates. `npc_type=0`, normal-object state, AI gate state and the sender `idk0/idk1=0` semantics come from pinned OpenKO server sender/AI semantics. K_NPCPOS supplies direction and spawn source identity. WS14 supplies authoritative terrain/shape Y.
 
-At spawn, `position == spawnOrigin == home` after WS14 height resolution. X/Z remain equal to `spawnAnchor`.
+The WS11 golden monster fixture is used as exact layout/semantic-family authority only. Its documented representative values are not copied into production data. In particular the golden representative `pid=750`, `scale=100`, `y=0`, `gate=1` do not replace the real Moradon provider values such as Worm `pid=700`, `scale=120` and WS14 authoritative Y / AI normal-monster gate state.
 
-At respawn, the same deterministic verified X/Z slot is retained, but WS14 is called again and the new authoritative Y is applied atomically to `position`, `spawnOrigin` and `home` before the spawn event.
+## Public visibility surface
 
-## WS15 movement boundary
+`MobService` now exposes:
 
-WS25 still emits only movement intents:
+- `getNearby({ zoneId, x, z })` using the current 48-unit, 3x3 region convention;
+- `visibilitySnapshot(...)`;
+- `detailSnapshot(...)`;
+- semantic visibility events through `visibility.onEvent` with `IN` / `OUT`.
 
-- chase;
-- return-home;
-- patrol;
-- stop;
-- no-path/stuck outcomes.
+`getNearby()` returns the integer identity aliases required by WS14 (`instanceId`, `runtimeId`, `nid`) and exact semantic aliases matching the current WS14/WS16 consumer vocabulary (`pid`, `npcType`, `sellingGroup`, `size`, `weapon1`, `weapon2`, `name`, `group`, `level`, `x/y/z`, `gateOpen`, `objectType`, `idk0`, `idk1`, `direction`). These are semantic values, not encoded packet bytes.
 
-WS15 remains the movement authority and feeds runtime positions back through `syncPosition()`. No WS15 pathfinding/movement implementation was copied.
+## IN / OUT lifecycle
 
-## WS19 combat boundary
+WS25 emits semantic visibility events only:
 
-WS25 still emits attack intents and consumes authoritative absolute HP. No WS19 damage/combat implementation was copied.
+- initial spawn / respawn -> `IN` + semantic detail snapshot;
+- corpse despawn -> `OUT` + runtime ID;
+- per-player region/visibility entry -> scoped `IN`;
+- per-player region/visibility exit -> scoped `OUT`.
 
-## Visibility protocol
+No WIZ_NPC packet bytes are produced in WS25. WS11 remains wire authority and WS14/composition remains bootstrap/lifecycle encoder owner.
 
-WS25 does not encode browser packets.
+## Authoritative height regression
 
-Current WS11 visibility authority verifies the mob/NPC visibility family (`WIZ_NPC_REGION`, `WIZ_REQ_NPCIN`, `WIZ_NPC_INOUT`, NPC detail record) and reports no remaining WS50 visibility-evidence blocker. WS25 therefore leaves protocol encoding to the WS11/composition boundary rather than adding a local encoder.
+The existing production height contract remains unchanged:
 
-Historical `WS50-C3` remains immutable and still records the blocker state that existed when C3 was frozen. This branch is for a subsequent provider-set candidate; C3 must not be mutated.
+1. deterministic X/Z is selected inside the verified K_NPCPOS source rectangle;
+2. WS25 calls `terrain.resolveHeight(zoneId, x, z)`;
+3. only `status=authoritative` with finite height is accepted;
+4. there is no y=0, constant-Y, manual fixture-Y or guessed production fallback;
+5. respawn re-resolves authoritative height before re-entering visibility.
 
-## Test / CI
+Expected Moradon regression remains:
 
-GitHub Actions run `38585109050`, job `115924879964`:
+- 10 verified monster templates;
+- 20 verified spawn rows/groups;
+- 135 real runtime slots;
+- 135/135 authoritative WS14 height resolutions.
 
-```text
-WS25 deterministic unit + lifecycle suite
-25 tests / 25 pass / 0 fail
+## Pinned authorities
 
-real WS14 SMD height integration
-1 test / 1 pass / 0 fail
-135 / 135 authoritative slots
-surface split: terrain=130, shape=5
-```
+- WS14 world/height consumer: `ws14-world-session@9b82adefb05a3cca32f430e25f8a1d9109db93b2`
+- WS11 visibility profile/golden fixture: `ws11-protocol-lab@944b6ff9b6329af29f1048a74aa6e14fca141639`
+- WS31 Moradon catalog authority: `ws31-data-catalog@546d2ab62cd46a97f3385ebcddbe0c775a02c2eb`
+- OpenKO server/client source: `Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5`
+- OpenKO-db monster/spawn data: `Open-KO/OpenKO-db@bec619466938d278339c30e5b1a4bff3c9413bab`
 
-The workflow checks out the exact WS14 provider, exact WS31 catalog provider and pinned OpenKO Moradon SMD before running the real height integration test.
+## Integration tests / CI gate
+
+The WS25 workflow pins the authorities above and verifies:
+
+- existing deterministic lifecycle/runtime regression;
+- real WS14 SMD height resolution for all 135 slots;
+- 135 unique signed-16 runtime IDs with a reserved NPC namespace slice;
+- source/runtime identity separation;
+- exact real Worm detail semantics;
+- WS11 golden monster fixture semantic-family parity without importing representative values as production data;
+- real current WS14 `WorldSessionService` consumption through `mobPort.getNearby()` and its integer `mobIdentity()` contract;
+- stable runtime ID across corpse/despawn/respawn;
+- deterministic re-claim under identical shared reservations/source ordering;
+- duplicate runtime-ID fail-closed behavior.
+
+`WS50-C3` is immutable and is not changed by this work. This WS25 HEAD is intended for a subsequent provider-set candidate.
 
 ## Handoff
 
 ```text
-requires terrain.height-authority -> WS14@9b82adefb05a3cca32f430e25f8a1d9109db93b2
-requires visibility.protocol       -> WS11@944b6ff9b6329af29f1048a74aa6e14fca141639
-requires WS31 monster catalog      -> WS31@546d2ab62cd46a97f3385ebcddbe0c775a02c2eb
+requires runtime-id.namespace       -> shared KO1298_NPC allocator owner
+requires terrain.height-authority   -> WS14@9b82adefb05a3cca32f430e25f8a1d9109db93b2
+requires visibility.protocol        -> WS11@944b6ff9b6329af29f1048a74aa6e14fca141639
+requires WS31 monster catalog       -> WS31@546d2ab62cd46a97f3385ebcddbe0c775a02c2eb
+provides WS14 mobPort.getNearby     -> integer identity + authoritative XYZ + semantic detail aliases
+provides visibility lifecycle       -> semantic IN/OUT only; no packet encoding
 ```
-
-No browser encoder, WS15 movement implementation, WS19 combat implementation, WS14 height logic copy, main merge or new workstream is part of this change.
