@@ -2,7 +2,7 @@
 
 const { AsyncLocalStorage } = require('node:async_hooks');
 const { WorldSessionService: BaseWorldSessionService } = require('./world-session-service');
-const { OPCODE, GAMESTART_PHASE, ZONE_CHANGE_PHASE, WORLD_STATE } = require('./constants');
+const { OPCODE, GAMESTART_PHASE, ZONE_CHANGE_PHASE, WORLD_STATE, ZONE } = require('./constants');
 const {
   runtimeIdOf,
   buildRegionNpcIds,
@@ -50,6 +50,7 @@ class VisibilityWorldSessionService {
     if (!options.repository) throw new Error('repository is required');
     this.repository = options.repository;
     this.mobPort = options.mobPort || {};
+    this.legacyBootstrapPort = options.bootstrapPort || null;
     this.capture = new AsyncLocalStorage();
     this.visibility = new Map();
 
@@ -78,6 +79,10 @@ class VisibilityWorldSessionService {
             const records = typeof fn === 'function' ? cloneArray(await fn.call(target, args)) : [];
             const store = this.capture.getStore();
             if (store) store.mobs = records;
+            // Moradon browser visibility is exclusively the verified 0x1C -> 0x1D
+            // family. Keep the historical adapter reachable only for the synthetic
+            // non-Moradon multi-zone regression until those zones gain authority.
+            if (this.legacyBootstrapPort && args?.zoneId !== ZONE.MORADON) return records;
             return [];
           };
         }
@@ -90,7 +95,7 @@ class VisibilityWorldSessionService {
       ...options,
       repository,
       mobPort,
-      bootstrapPort: {},
+      bootstrapPort: this.legacyBootstrapPort || {},
     });
   }
 
@@ -133,6 +138,9 @@ class VisibilityWorldSessionService {
 
     const store = { socketId, npcs: [], mobs: [] };
     const response = await this.capture.run(store, () => this.base.handleClientPacket(socketId, p));
+    const session = this.base.getSession(socketId);
+    if (this.legacyBootstrapPort && session?.zoneId !== ZONE.MORADON) return response;
+
     const state = this.#materializeVisibilityState(store.npcs, store.mobs);
     this.visibility.set(socketId, state);
     response.clientPackets = replaceBootstrapRegionPacket(response.clientPackets, state);
