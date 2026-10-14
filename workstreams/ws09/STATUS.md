@@ -1,96 +1,129 @@
 WS09
 
-# STATUS — Staging MIME Contract Finalization
+# STATUS — Ephemeral HTTPS/WSS Test-Link Publisher
 
 ## Decision
 
-**STAGING MIME CONTRACT: READY**
+**EPHEMERAL STAGING PIPELINE: READY**
+
+**EPHEMERAL TEST LINK: NOT LIVE — WAITING FOR EXACT WS10 PASS + WS50 READY HANDOFF**
 
 Branch: `ws09-production-infra`
-Implementation head validated before this closing status: `834f913c29d9678215fa00d9817ae79b12b7af2c`.
-Closing commit is the branch HEAD containing this status; the exact SHA is reported in the control-session closure message.
+Validated implementation head: `4e7c16ac7979b1a0c768f542cc7941f96172e7fb`.
+Validation: `WS09 deployment config` run #23, run id `38503743821` — **SUCCESS**.
 
-This control session is only the deployment-contract repair requested by `coordination/inbox/WS09.md`. It does not change provider/game/client code, production DNS, production certificates, or secrets.
+This is the existing WS09 control session. No new workstream was created.
 
-## Evidence consumed
+## What is implemented
 
-- `main`: `coordination/MASTER_CONTROL.md`, `BROADCAST.md`, `WORKSTREAM_REGISTRY.md`, `TASK_QUEUE.md`, `MORADON_CRITICAL_PATH.md`, and `coordination/inbox/WS09.md`.
-- WS12 `ws12-browser-launcher@77f55b2949844e0fdd279526dab0fba4e8ab4f94`: strict WS38 publication preflight requires the response Content-Type to match the manifest declaration exactly; its handoff explicitly requests WS09 to serve JS as `text/javascript; charset=utf-8`.
-- WS38 `ws38-client-content-pipeline@5f323f3cf055ba7f96d928605a2f2faf84e609cb`: `oldko1298.profile.json` declares:
-  - `KnightOnLine.js` -> `text/javascript; charset=utf-8`
-  - `KnightOnLine.wasm` -> `application/wasm`
-  - `KnightOnLine.data` -> `application/octet-stream`
-- WS50 current staging evidence branch head checked at `ws50-integration-rehearsal@94715058fdedc0a4fbab3a5f5c2ab29602fe747b`; its staging candidate report independently records the previous WS09 JS MIME mismatch as a deployment follow-up.
+### Fail-closed ephemeral publisher
 
-## Fix implemented
+`.github/workflows/ws09-ephemeral-staging.yml` is a manual publisher for a temporary no-domain staging link. It accepts only exact inputs:
 
-- `infra/nginx/mime.types`
-  - changed `.js/.mjs` from `application/javascript` to `text/javascript`;
-  - kept `.wasm = application/wasm`;
-  - kept `.data = application/octet-stream`.
-- `infra/nginx/nginx.conf`
-  - enables `charset utf-8` for `text/javascript` so the emitted header is exactly `text/javascript; charset=utf-8`;
-  - binary WASM/DATA media types are excluded from charset handling;
-  - gzip recognizes `text/javascript` while retaining compatibility with `application/javascript` from unrelated upstream responses.
-- `deploy/verify-config.sh`
-  - requires the `text/javascript js mjs` mapping;
-  - fails if legacy `application/javascript` owns `js` or `mjs` again;
-  - requires UTF-8 charset handling for `text/javascript`;
-  - keeps explicit WASM/DATA assertions.
-- `deploy/staging-smoke.sh`
-  - compares the complete response Content-Type, mirroring WS12 `strictContentType` behavior;
-  - requires JS to be exactly `text/javascript; charset=utf-8`;
-  - keeps exact WASM/DATA checks;
-  - supports an optional synthetic `.mjs` fixture for CI regression coverage.
-- `.github/workflows/ws09-deploy.yml`
-  - adds real Nginx HTTP smoke coverage for `.js`, synthetic `.mjs`, `.wasm`, and `.data` through the staging template.
+- successful WS10 Moradon E2E run id + exact head SHA;
+- explicit WS10 PASS evidence artifact name;
+- exact frozen passing client artifact name;
+- exact WS50 commit containing `integration-rehearsal/STAGING_LINK_HANDOFF.md`;
+- exact WS01/WS02/WS03/WS12/WS14/WS38 SHAs frozen by that handoff;
+- bounded keepalive duration, 5–45 minutes.
 
-## Exact staging MIME contract
+It fails before publication if any identity is stale/missing/mismatched, if WS10 did not complete with `conclusion=success`, or if WS50 is still `READY_PENDING_WS10`.
+
+### Exact passing client, no provider rebuild
+
+The publisher downloads the exact frozen WS10 `KnightOnLine.js`, `KnightOnLine.wasm`, and `KnightOnLine.data`. It does **not** rebuild or modify the passing client/provider code.
+
+Provider slices are materialized from exact WS50-frozen commits into a disposable runner composition. WS02 is built as the WebSocket gateway; WS03 + WS14 are assembled into the existing integrated session/world topology expected by `docker-compose.ws09-staging.yml`.
+
+### WS38 publication order
+
+The frozen client is staged using the exact WS38 tools from the handoff SHA, in this order:
+
+`immutable files -> manifest -> verify -> _complete -> verify -> latest.json last`
+
+Strict MIME remains:
 
 ```text
-.js   -> text/javascript; charset=utf-8
-.mjs  -> text/javascript; charset=utf-8
-.wasm -> application/wasm
-.data -> application/octet-stream
+.js/.mjs -> text/javascript; charset=utf-8
+.wasm    -> application/wasm
+.data    -> application/octet-stream
 ```
 
-This now matches the WS38 manifest contract consumed by WS12 strict publication validation.
+### Temporary HTTPS/WSS edge
 
-## Verification actually run
+The job downloads a pinned `cloudflared 2026.10.0` linux-amd64 binary and verifies its SHA-256 before use. It opens a Cloudflare Quick Tunnel to the existing WS09 staging Nginx edge.
+
+One temporary HTTPS origin serves:
+
+- `https://<temporary-host>/play-shell/`
+- `wss://<temporary-host>/auth`
+- `wss://<temporary-host>/game`
+
+No `oldkoweb.com` purchase, production DNS, production certificate, or repository secret is required.
+
+### Public acceptance gates
+
+`deploy/ephemeral-public-smoke.mjs` verifies over the actual temporary origin:
+
+- `/healthz`;
+- `/play-shell/` and staging launcher config;
+- `latest.json`, manifest identity/hash, `_complete` marker;
+- required immutable files are public with exact MIME/size/cache contract;
+- auth/game gateway health;
+- real WebSocket HTTP `101` upgrades on `/auth` and `/game` with the public HTTPS Origin.
+
+After that, the exact WS12 launcher core from the frozen WS12 SHA runs full publication preflight, including required-file body/hash and strict MIME verification. The large client bodies are therefore downloaded and hashed only once through the public tunnel; the edge smoke uses HEAD for the same large files.
+
+Only after all gates pass does the job print:
+
+`TEST_LINK=https://<temporary-host>/play-shell/`
+
+The link is ephemeral and lives only while the workflow process stays alive for the requested bounded keepalive window.
+
+## Reproducibility
+
+`workstreams/ws09/RUNBOOK.md` now contains the full `gh workflow run ws09-ephemeral-staging.yml ...` command and all required exact inputs.
+
+`workstreams/ws09/DEPENDENCY_SNAPSHOT.md` records the current upstream state and acceptance boundaries.
+
+## Verification
+
+Validated implementation head: `4e7c16ac7979b1a0c768f542cc7941f96172e7fb`.
 
 GitHub Actions:
 
 - workflow: `WS09 deployment config`
-- run: `38496243278` (run 16)
-- job: `validate` / `115632531458`
-- implementation head: `834f913c29d9678215fa00d9817ae79b12b7af2c`
-- result: **SUCCESS**
+- run number: `23`
+- run id: `38503743821`
+- conclusion: **SUCCESS**
 
-Passing steps include:
+Passing coverage includes:
 
-- static validation: PASS
-- production compose validation: PASS
-- staging compose validation: PASS
-- Nginx local template syntax: PASS
-- Nginx staging template syntax: PASS
-- **Staging WS38 and WS12 strict MIME smoke: PASS**
-- Nginx production template syntax: PASS
+- static WS09 config validation;
+- ephemeral publisher fail-closed contract assertions;
+- production compose validation;
+- staging compose validation;
+- Nginx local/staging/production template syntax;
+- real staging WS38/WS12 strict MIME smoke.
 
-The MIME smoke exercises a real Nginx container and verifies the full HTTP Content-Type values for `.js`, `.mjs`, `.wasm`, and `.data`.
+## Current upstream state at closure
 
-## Remaining gates outside this task
+- WS01 current checked head: `25c2fcd9c59e8f7a704f7d2ac0d5c331d0042ff9`; public WSS transport is ready.
+- WS12 current checked head: `77f55b2949844e0fdd279526dab0fba4e8ab4f94`.
+- WS38 current checked head: `5f323f3cf055ba7f96d928605a2f2faf84e609cb`.
+- WS50 current checked head: `bfedd39a085494f229f6d602b4bb427ce4bbc288`; `integration-rehearsal/STAGING_LINK_HANDOFF.md` is not present at the closure observation point.
+- WS10 run #25 (`38503397843`, head `419d52b363a73c8ab77ff8ad944a30968fda967d`) is still `in_progress` at the closure observation point. Previous run #24 failed and is explicitly ineligible for publication.
 
-No WS09 MIME blocker remains.
-
-This READY decision is intentionally narrow: it does not override WS50's separate public-staging blocker concerning browser-native WSS/path routing ownership, and it does not declare the project-level Moradon E2E gate passed. Those remain external acceptance/provider concerns, not permission for WS09 to modify provider code.
+Therefore WS09 does **not** claim a live TEST_LINK yet. The pipeline is ready to publish immediately once WS10 produces the exact PASS/frozen-client artifact and WS50 produces the matching READY handoff.
 
 ## Boundaries
 
 - No merge to `main`.
 - No force push.
-- No other workstream branch modified.
-- No application/provider/game/client implementation modified.
-- No production domain/DNS/certificate changed.
-- No secret added.
+- No new WS number.
+- No provider/game/client implementation modified.
+- No fake client or stale PASS artifact accepted.
+- No production DNS/certificate changed.
+- No secret committed.
 
 BU SOHBETE ARTIK GEREK VAR MI?: HAYIR
