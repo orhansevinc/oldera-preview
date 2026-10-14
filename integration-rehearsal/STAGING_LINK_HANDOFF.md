@@ -4,7 +4,7 @@
 
 **STAGING LINK CANDIDATE: READY**
 
-The latest WS50 staging-candidate rehearsal completed successfully after the canonical WS10 Moradon E2E PASS and now includes the WS09 public-smoke fix, the WS12 browser gateway-preflight hardening, and the WS01 public-staging WebSocket compatibility bridge for the canonical WS10 client artifact.
+The latest WS50 staging-candidate rehearsal completed successfully after the canonical WS10 Moradon E2E PASS and now includes the WS09 public-smoke fix, the WS12 browser gateway-preflight hardening, the WS01 public-staging WebSocket compatibility bridge, and the WS03 development/staging world-character snapshot completion required by WS14 MYINFO.
 
 ## Canonical WS10 PASS
 
@@ -33,17 +33,17 @@ The three client binaries are consumed unchanged. The public wrapper may adapt o
 ## Final WS50 staging revalidation
 
 ```text
-WS50_STAGING_RUN_ID=38509175886
-WS50_STAGING_RUN_NUMBER=33
-WS50_STAGING_JOB_ID=115673487465
+WS50_STAGING_RUN_ID=38510205667
+WS50_STAGING_RUN_NUMBER=36
+WS50_STAGING_JOB_ID=115676728639
 WS50_STAGING_RESULT=SUCCESS
 WS50_STAGING_ARTIFACT_NAME=ws50-staging-candidate
-WS50_STAGING_ARTIFACT_ID=11868812882
-WS50_STAGING_ARTIFACT_SHA256=ad4622b845f6e3393a11ba635d8781439c844814f669cab61fc2e95ef8ed9418
-CANDIDATE_TREE_SHA=cce3aee2b610a3bdbc583250a44435854c9c9b68
+WS50_STAGING_ARTIFACT_ID=11869626933
+WS50_STAGING_ARTIFACT_SHA256=b9c7f1ca3a14097faa6af385c81fcc94ea2b92d205c458d5bb0abec93bb2e32f
+CANDIDATE_TREE_SHA=d7aac0d6095d5b4eb82b352633e9988072d89a82
 ```
 
-The run reported `all_required_contracts=true` and `blocker_owner=null`, and re-fetched every provider ref at run end with exact equality.
+The run reported `all_required_contracts=true` and `blocker_owner=null`, rebuilt the integrated WS03+WS14 session-world image with the updated WS03 provider, and re-fetched every provider ref at run end with exact equality.
 
 ## Frozen provider set
 
@@ -52,10 +52,10 @@ MAIN_SHA=5715c55abd9ecb36bb32a259d045ba9ad1dc9551
 BROWSER_BASELINE_SHA=18282d0e70de7ccb30244a9f09e2b3bff3040155
 WS01_SHA=57d0aa7c6a82810d5f126bda83a368e7eb7801bb
 WS02_SHA=1738f60945b24e00bdd2266e6600b5c0cf3c64cf
-WS03_SHA=d634870bbcd2c541695516643d34e0ac119354d7
+WS03_SHA=237c4a613e94434baae656c1399cb449e7b78067
 WS04_SHA=32616b1b7ccbdc3de41c0949f182a65e03450d18
 WS05_SHA=0537c481383a69c534799b43810f35e7279c5578
-WS09_SHA=f44d8b3f630258930eba6808dbdc63a7405b799d
+WS09_SHA=b54e24956f73015df90ec68aeed50ddda9cd331e
 WS10_SNAPSHOT_SHA=4a81c6cf7e11514ca01f0730ecc57010c9ea37fb
 WS11_SHA=05562662d9d3f13a4b0500d0478e065fd802cfd0
 WS12_SHA=121bb7bdb82c364bf9459111096f5ff007873a61
@@ -66,6 +66,12 @@ OPENKO_SHA=97eb0ea20207afc0c360bfed6915113572711be3
 KO_ASSETS_SHA=2055ee6ed77f1b5cfef23832dd5bc31909e14a66
 EMSCRIPTEN_VERSION=6.0.12
 ```
+
+## Public-only disconnect fix
+
+The first public link used WS03's in-memory development repository, whose created character record stopped at basic select-screen fields. WS14's verified 1298 MYINFO encoder requires the full world snapshot after the client sends GAMESTART. The public client therefore could finish its local Moradon load/render, while the server composition threw on missing world fields and closed the game TCP/WebSocket session.
+
+WS03 commit `237c4a613e94434baae656c1399cb449e7b78067` makes the development/staging character fixture protocol-complete (HP/MP, stats, rank/title, experience, loyalty, resistances, authority, item/skill tails, etc.) without changing client binaries or 1298 packet layout. WS03 CI run `38510142572` completed SUCCESS, and this WS50 staging candidate reran the integrated provider suites and container composition successfully.
 
 ## Public test contract
 
@@ -117,7 +123,7 @@ ws10_pass_artifact_name=ws10-moradon-e2e-26
 ws10_client_artifact_name=ws10-moradon-passing-client-26
 ws01_sha=57d0aa7c6a82810d5f126bda83a368e7eb7801bb
 ws02_sha=1738f60945b24e00bdd2266e6600b5c0cf3c64cf
-ws03_sha=d634870bbcd2c541695516643d34e0ac119354d7
+ws03_sha=237c4a613e94434baae656c1399cb449e7b78067
 ws12_sha=121bb7bdb82c364bf9459111096f5ff007873a61
 ws14_sha=82cdcef40bed265ff4c4ce0fb7c8f6ad8cf2f52b
 ws38_sha=5f323f3cf055ba7f96d928605a2f2faf84e609cb
