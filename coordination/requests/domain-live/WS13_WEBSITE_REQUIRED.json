@@ -1,0 +1,45 @@
+{
+  "schema_version": "domain-live-owner-request/v1",
+  "release_id": "oldkoweb-domain-live-20261015",
+  "requester": "official-site-domain-release",
+  "owner": "WS13",
+  "owner_branch": "ws13-account-api",
+  "observed_owner_head": "1ef67bd7c0c98a588bce4db6c0f1305b820af008",
+  "related_game_authority": {
+    "owner": "WS03",
+    "branch": "ws03-ko1298-session",
+    "observed_head": "7c5f5f3584e7d3621aa5a318ad65c011bd77276f",
+    "contract": "workstreams/ws03/PRODUCTION_POSTGRES_COMPOSITION.json#credentialEnvelope"
+  },
+  "requests": [
+    {
+      "id": "WS13_SHARED_CREDENTIAL_ENVELOPE_SERVER_ENFORCEMENT",
+      "priority": "RELEASE_BLOCKER",
+      "problem": "WS03 verifies KO1298 passwords with a 12-byte wire maximum while current WS13 validation accepts 10-128 characters. Frontend-only rejection is not an authoritative production boundary.",
+      "required_change": "At register, password change, and password-reset confirm, enforce the agreed shared KO1298-compatible credential envelope server-side before hashing. The password must be evaluated exactly as submitted; do not trim, truncate, normalize, transliterate, or silently transform it. Publish the exact byte encoding/charset semantics in the WS13 contract and cover boundary tests including 9, 10, 12, 13 bytes and multibyte input.",
+      "frontend_interim": "The official website restricts newly created/replaced passwords to a conservative 10-12 printable-ASCII-character subset so each character is one byte. Existing login/current-password fields are not rewritten or truncated.",
+      "acceptance": [
+        "WS13 rejects any new credential outside the shared game-compatible byte envelope.",
+        "WS13 OpenAPI/README describe byte/charset semantics rather than only 10-128 characters.",
+        "Register -> verify -> website login -> WS03 game login succeeds with the same raw password.",
+        "No password transformation occurs in frontend, WS13, persistence, or WS03 verification."
+      ]
+    },
+    {
+      "id": "WS13_DELIVERY_OUTCOME_PRODUCTION_SIGNAL",
+      "priority": "RELEASE_BLOCKER_FOR_EMAIL_CLAIM",
+      "problem": "Current verification/reset delivery exceptions are audited but swallowed, while the public request still returns accepted. A frontend cannot truthfully distinguish successful delivery from delivery failure.",
+      "required_change": "Provide a production-safe way to establish delivery readiness/outcome without exposing reset/verification tokens or enabling account enumeration. This may be an operational readiness contract plus durable delivery queue semantics; the public response must remain enumeration-safe.",
+      "frontend_interim": "The website says only that the request was accepted and that the delivery service will send a code when the account/state matches. It never says that an email was definitely sent and never displays a token.",
+      "acceptance": [
+        "Production deployment can prove verification/reset delivery is configured and healthy.",
+        "Delivery failures are observable to operations without token leakage.",
+        "Public responses remain non-enumerating."
+      ]
+    }
+  ],
+  "files_not_owned_by_requester": [
+    "services/account-api/**",
+    "database/**"
+  ]
+}
