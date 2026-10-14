@@ -53,6 +53,13 @@ const held = async (key, ms = 90) => {
   await page.waitForTimeout(ms);
   await page.keyboard.up(key);
 };
+const heldClick = async (x, y, holdMs = 90, settleMs = 100) => {
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.waitForTimeout(holdMs);
+  await page.mouse.up();
+  await page.waitForTimeout(settleMs);
+};
 
 function ppmToPng(buffer) {
   let newlines = 0;
@@ -138,7 +145,12 @@ try {
   await page.waitForTimeout(500);
   await page.mouse.click(170, 325, { delay: 100 });
   await page.waitForTimeout(1200);
-  for (let i = 0; i < 50; i++) await page.mouse.click(925, 114);
+
+  // The native client samples mouse button state on its own frame loop. Keep each
+  // stat-increment press alive across multiple frames so every one of the ten
+  // genuine 1298 bonus points is consumed deterministically in headless CI.
+  for (let i = 0; i < 12; i++) await heldClick(925, 114, 90, 110);
+
   await page.mouse.click(510, 678, { delay: 80 });
   await page.keyboard.press('Control+A');
   await page.keyboard.type(charName, { delay: 25 });
