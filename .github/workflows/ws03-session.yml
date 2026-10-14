@@ -70,8 +70,10 @@ jobs:
           git archive "$WS31_SHA" data-catalog/generated/MORADON_PLAYABLE_COMBAT_SLICE.json | tar -x
           git archive "$WS45_SHA" services/session-ownership | tar -x
           chmod -R a-w protocol-lab services/ko1298-world services/ko1298-movement services/ko1298-npc services/ko1298-items services/ko1298-combat services/ko1298-mobs world-data/mobs workstreams/ws17/PLAYABLE_COMBAT_EQUIPMENT_CONTRACT.json workstreams/ws19/PLAYABLE_PVE_AUTHORITY.json data-catalog/generated/MORADON_PLAYABLE_COMBAT_SLICE.json services/session-ownership
-      - name: Real downstream contract composition
-        run: node --test tests/ko1298-session/*.contract.js
+      - name: Existing world movement NPC ownership composition
+        run: node --test tests/ko1298-session/composed-contracts.contract.js
+      - name: Playable combat pinned-provider composition
+        run: node --test tests/ko1298-session/combat-composition.contract.js
       - name: Upload immutable dependency report
         if: ${{ always() && hashFiles('artifacts/ws03/resolved-providers.json') != '' }}
         uses: actions/upload-artifact@v4
