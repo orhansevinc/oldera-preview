@@ -86,10 +86,14 @@ jobs:
         env:
           NODE_ENV: test
         run: node --test tests/account-api/frontend-contract.test.mjs
-      - name: Verify register verify and game hash
+      - name: Verify register and WS07 game hash
         env:
           NODE_ENV: test
-        run: node --test --test-name-pattern="register verify and WS07 game hash" tests/account-api/postgres.integration.test.mjs
+        run: node --test --test-name-pattern="register persists canonical WS07-compatible hash" tests/account-api/postgres.integration.test.mjs
+      - name: Verify account verification token
+        env:
+          NODE_ENV: test
+        run: node --test --test-name-pattern="verification confirms real action token" tests/account-api/postgres.integration.test.mjs
       - name: Verify login current logout and revocation
         env:
           NODE_ENV: test
