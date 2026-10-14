@@ -1,33 +1,40 @@
-# WS11 Status — COMPLETE
+# WS11 STATUS — KO 1298 Protocol Evidence Authority
 
-## Scope
+Status: **IMPLEMENTED — CI VERIFYING**
 
-WS11 is the independent KO1298 protocol lab and packet replay workstream. It does not implement game-server features.
+Branch: `ws11-protocol-lab`
+Base HEAD: `05562662d9d3f13a4b0500d0478e065fd802cfd0`
 
-## Completed
+## What changed
 
-- Pinned the real client reference used by `openko-browser-port`: `luisfelipe18/old-school-openko@97eb0ea20207afc0c360bfed6915113572711be3`.
-- Catalogued all top-level login and game opcodes from the inspected shared enum; unverified direction/size/layout fields are `UNKNOWN`.
-- Documented source-verified login-server -> game-server -> nation -> character -> first-zone flow.
-- Documented AA55/length/55AA framing and the JvCryption activation boundary.
-- Added raw binary fixture format, provenance manifest and a login-to-zone sequence manifest.
-- Added strict frame decoder CLI.
-- Added C2S-only TCP replay CLI with explicit login/game connection separation.
-- Added automated framing, decode, UNKNOWN-policy, manifest-integrity and byte-exact local TCP replay tests.
-- Added dedicated WS11 GitHub Actions workflow.
+WS11 now has a gameplay-focused machine-readable authority (`protocol-lab/gameplay-authority.json`), an explicit provider ownership matrix, pinned source manifest, deterministic binary golden fixtures, negative fixtures, strict gameplay frame parser/serializer, fixture validator, packet diff utility, unknown reporter, fuzz/negative tests, and expanded CI.
 
-## Write-boundary audit
+No other workstream product code is modified.
 
-WS11 changes are restricted to:
+## Evidence policy
 
-- `tools/ws11_protocol/**`
-- `protocol-lab/**`
-- `tests/protocol-lab/**`
-- `workstreams/ws11/**`
-- `.github/workflows/ws11-protocol.yml`
+Production truth precedence:
+1. exact 1298 client sender/parser,
+2. matching 1298 server sender/parser,
+3. canonical WS10 Moradon browser capture,
+4. corroborating OpenKO evidence.
 
-No application server, gateway, client/WASM, database, admin or website source is modified.
+Other protocol versions are comparative only. Unproven layout details remain `PARTIAL` / `UNKNOWN`.
 
-## Integration requirement
+## Critical blocker outcomes
 
-None. The lab is standalone and does not require another workstream to patch product code.
+- WS17 inbound base mapping resolved for `WIZ_ITEM_MOVE (0x1F)`.
+- WS19 inbound normal attack resolved for `WIZ_ATTACK (0x08)`.
+- WS19 magic family resolved for `WIZ_MAGIC_PROCESS (0x31)`, including commands 1..6 and the short Type4 duration-expired variant for command 5.
+- `WIZ_REQ_NPCIN (0x1D)` ownership collision resolved as WS14 world lifecycle + WS16 NPC-record semantics, routed/gated by WS03.
+- WS22 merchant/player-trade full subprotocol remains UNKNOWN.
+- WS26 ITEM_DROP / ITEM_GET full body remains UNKNOWN.
+- WS27 LEVEL_CHANGE remainder remains PARTIAL.
+
+## Counts
+
+The final closeout commit updates authoritative counts after CI.
+
+## Canonical capture
+
+WS10 canonical Moradon PASS remains run `38505039290`, head `f0cadfb50b5d1a36d2bfe4e5bf0a68f7c3061f41`. Its observed 0x1D request/response sequence corroborates the exact 1298 source interpretation.

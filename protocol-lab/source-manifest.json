@@ -1,0 +1,46 @@
+{
+  "format": "ko1298-protocol-source-manifest-v1",
+  "authoritative": [
+    {
+      "repo": "Open-KO/KnightOnline",
+      "commit": "7d6cf81093e142c928c2ac9510512b2b182178b5",
+      "role": "exact 1298 client/server source",
+      "paths": [
+        "src/shared/packets.h",
+        "src/Client/WarFare/PacketDef.h",
+        "src/Client/WarFare/GameProcMain.cpp",
+        "src/Client/WarFare/MagicSkillMng.cpp",
+        "src/Client/WarFare/UIInventory.cpp",
+        "src/Server/Ebenezer/User.cpp",
+        "src/Server/Ebenezer/MagicProcess.cpp",
+        "src/Server/Ebenezer/AISocket.cpp"
+      ]
+    },
+    {
+      "repo": "luisfelipe18/old-school-openko",
+      "commit": "97eb0ea20207afc0c360bfed6915113572711be3",
+      "role": "pinned 1298 corroborating client/server tree"
+    },
+    {
+      "repo": "orhansevinc/oldera-preview",
+      "commit": "f0cadfb50b5d1a36d2bfe4e5bf0a68f7c3061f41",
+      "branch": "ws10-qa-integration",
+      "role": "canonical browser Moradon PASS evidence",
+      "run_id": 38505039290
+    }
+  ],
+  "comparative_only": [
+    "1097",
+    "1098",
+    "modern KO or other-version source"
+  ],
+  "rule": "Comparative-only sources can never promote a row to VERIFIED.",
+  "downstream_evidence": [
+    {
+      "workstream": "WS31",
+      "branch": "ws31-data-catalog",
+      "head": "546d2ab62cd46a97f3385ebcddbe0c775a02c2eb",
+      "role": "current verified gameplay data catalog boundary"
+    }
+  ]
+}

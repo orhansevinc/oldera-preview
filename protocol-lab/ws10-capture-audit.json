@@ -1,0 +1,253 @@
+{
+  "format": "ws10-canonical-capture-audit-v1",
+  "run_id": 38505039290,
+  "head": "f0cadfb50b5d1a36d2bfe4e5bf0a68f7c3061f41",
+  "evidence_file": "composition-server.log",
+  "observations": [
+    {
+      "channel": "auth",
+      "direction": "C2S",
+      "opcode": "0xf5",
+      "payload_bytes": 1,
+      "status": "EXISTING_AUTH_SESSION",
+      "note": "LS_SERVERLIST"
+    },
+    {
+      "channel": "auth",
+      "direction": "S2C",
+      "opcode": "0xf5",
+      "payload_bytes": 22,
+      "status": "EXISTING_AUTH_SESSION",
+      "note": "LS_SERVERLIST"
+    },
+    {
+      "channel": "auth",
+      "direction": "C2S",
+      "opcode": "0xf3",
+      "payload_bytes": 20,
+      "status": "EXISTING_AUTH_SESSION",
+      "note": "LS_LOGIN_REQ"
+    },
+    {
+      "channel": "auth",
+      "direction": "S2C",
+      "opcode": "0xf3",
+      "payload_bytes": 2,
+      "status": "EXISTING_AUTH_SESSION",
+      "note": "LS_LOGIN_REQ"
+    },
+    {
+      "channel": "auth",
+      "direction": "C2S",
+      "opcode": "0xf6",
+      "payload_bytes": 1,
+      "status": "EXISTING_AUTH_SESSION",
+      "note": "LS_NEWS"
+    },
+    {
+      "channel": "auth",
+      "direction": "S2C",
+      "opcode": "0xf6",
+      "payload_bytes": 49,
+      "status": "EXISTING_AUTH_SESSION",
+      "note": "LS_NEWS"
+    },
+    {
+      "channel": "game",
+      "direction": "C2S",
+      "opcode": "0x2b",
+      "payload_bytes": 1,
+      "status": "EXISTING_AUTH_SESSION",
+      "note": "WIZ_VERSION_CHECK"
+    },
+    {
+      "channel": "game",
+      "direction": "S2C",
+      "opcode": "0x2b",
+      "payload_bytes": 11,
+      "status": "EXISTING_AUTH_SESSION",
+      "note": "WIZ_VERSION_CHECK"
+    },
+    {
+      "channel": "game",
+      "direction": "C2S",
+      "opcode": "0x01",
+      "payload_bytes": 20,
+      "status": "EXISTING_AUTH_SESSION",
+      "note": "WIZ_LOGIN"
+    },
+    {
+      "channel": "game",
+      "direction": "S2C",
+      "opcode": "0x01",
+      "payload_bytes": 2,
+      "status": "EXISTING_AUTH_SESSION",
+      "note": "WIZ_LOGIN"
+    },
+    {
+      "channel": "game",
+      "direction": "C2S",
+      "opcode": "0x05",
+      "payload_bytes": 2,
+      "status": "EXISTING_AUTH_SESSION",
+      "note": "WIZ_SEL_NATION"
+    },
+    {
+      "channel": "game",
+      "direction": "S2C",
+      "opcode": "0x05",
+      "payload_bytes": 2,
+      "status": "EXISTING_AUTH_SESSION",
+      "note": "WIZ_SEL_NATION"
+    },
+    {
+      "channel": "game",
+      "direction": "C2S",
+      "opcode": "0x0c",
+      "payload_bytes": 1,
+      "status": "EXISTING_AUTH_SESSION",
+      "note": "WIZ_ALLCHAR_INFO_REQ"
+    },
+    {
+      "channel": "game",
+      "direction": "S2C",
+      "opcode": "0x0c",
+      "payload_bytes": 173,
+      "status": "EXISTING_AUTH_SESSION",
+      "note": "WIZ_ALLCHAR_INFO_REQ"
+    },
+    {
+      "channel": "game",
+      "direction": "C2S",
+      "opcode": "0x02",
+      "payload_bytes": 22,
+      "status": "EXISTING_AUTH_SESSION",
+      "note": "WIZ_NEW_CHAR"
+    },
+    {
+      "channel": "game",
+      "direction": "S2C",
+      "opcode": "0x02",
+      "payload_bytes": 2,
+      "status": "EXISTING_AUTH_SESSION",
+      "note": "WIZ_NEW_CHAR"
+    },
+    {
+      "channel": "game",
+      "direction": "S2C",
+      "opcode": "0x0c",
+      "payload_bytes": 181,
+      "status": "EXISTING_AUTH_SESSION",
+      "note": "WIZ_ALLCHAR_INFO_REQ"
+    },
+    {
+      "channel": "game",
+      "direction": "C2S",
+      "opcode": "0x04",
+      "payload_bytes": 22,
+      "status": "EXISTING_AUTH_SESSION",
+      "note": "WIZ_SEL_CHAR"
+    },
+    {
+      "channel": "game",
+      "direction": "S2C",
+      "opcode": "0x04",
+      "payload_bytes": 10,
+      "status": "EXISTING_AUTH_SESSION",
+      "note": "WIZ_SEL_CHAR"
+    },
+    {
+      "channel": "game",
+      "direction": "C2S",
+      "opcode": "0x41",
+      "payload_bytes": 6,
+      "status": "UNKNOWN_LAYOUT",
+      "note": "WIZ_SPEEDHACK_CHECK observed but outside core gameplay authority"
+    },
+    {
+      "channel": "game",
+      "direction": "C2S",
+      "opcode": "0x06",
+      "payload_bytes": 10,
+      "status": "MATCH",
+      "note": "WIZ_MOVE c2s fixed"
+    },
+    {
+      "channel": "game",
+      "direction": "C2S",
+      "opcode": "0x0d",
+      "payload_bytes": 2,
+      "status": "MATCH",
+      "note": "WIZ_GAMESTART c2s phase"
+    },
+    {
+      "channel": "game",
+      "direction": "S2C",
+      "opcode": "0x0e",
+      "payload_bytes": 577,
+      "status": "PROVIDER_VERIFIED",
+      "note": "WIZ_MYINFO exact provider builder; not duplicated as full WS11 layout"
+    },
+    {
+      "channel": "game",
+      "direction": "S2C",
+      "opcode": "0x5e",
+      "payload_bytes": 7,
+      "status": "PROVIDER_VERIFIED",
+      "note": "WIZ_ZONEABILITY provider-owned world bootstrap"
+    },
+    {
+      "channel": "game",
+      "direction": "S2C",
+      "opcode": "0x15",
+      "payload_bytes": 3,
+      "status": "PROVIDER_VERIFIED",
+      "note": "WIZ_REGIONCHANGE empty/ID-list provider bootstrap"
+    },
+    {
+      "channel": "game",
+      "direction": "S2C",
+      "opcode": "0x1c",
+      "payload_bytes": 5,
+      "status": "PARTIAL",
+      "note": "WIZ_NPC_REGION provider bootstrap; variable body not fully promoted"
+    },
+    {
+      "channel": "game",
+      "direction": "S2C",
+      "opcode": "0x0d",
+      "payload_bytes": 1,
+      "status": "MATCH",
+      "note": "WIZ_GAMESTART s2c signal"
+    },
+    {
+      "channel": "game",
+      "direction": "C2S",
+      "opcode": "0x1d",
+      "payload_bytes": 5,
+      "status": "MATCH",
+      "note": "WIZ_REQ_NPCIN c2s count=1"
+    },
+    {
+      "channel": "game",
+      "direction": "S2C",
+      "opcode": "0x1d",
+      "payload_bytes": 58,
+      "status": "MATCH_VARIABLE",
+      "note": "WIZ_REQ_NPCIN s2c one NPC record; variable name body"
+    },
+    {
+      "channel": "game",
+      "direction": "S2C",
+      "opcode": "0x07",
+      "payload_bytes": "LOG_OMITTED",
+      "status": "PROVIDER_EVENT",
+      "note": "WIZ_USER_INOUT world-ready broadcast; composition log omits bytes"
+    }
+  ],
+  "authority_contradictions": [],
+  "unknown_observed_layouts": [
+    "game C2S 0x41 WIZ_SPEEDHACK_CHECK payload=6"
+  ],
+  "conclusion": "No captured packet contradicts a WS11 exact layout. 0x1D C2S 5 / S2C 58 corroborates the bidirectional request/detail family."
+}

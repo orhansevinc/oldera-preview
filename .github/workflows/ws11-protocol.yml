@@ -26,17 +26,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Regenerate fixtures and require clean tree
+      - name: Regenerate all binary fixtures and require clean tree
         shell: bash
         run: |
           set -euo pipefail
           python3 tools/ws11_protocol/generate_fixtures.py
-          git diff --exit-code -- protocol-lab/fixtures protocol-lab/login_to_zone.sequence.json
+          python3 tools/ws11_protocol/generate_gameplay_fixtures.py
+          git diff --exit-code -- \
+            protocol-lab/fixtures \
+            protocol-lab/login_to_zone.sequence.json \
+            protocol-lab/gameplay-fixtures \
+            protocol-lab/negative-fixtures
+
+      - name: Validate protocol authority and ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/ws11_protocol/validate_authority.py
+          python3 tools/ws11_protocol/fixture_validator.py
+          python3 tools/ws11_protocol/unknown_report.py > ws11-unknown-report.json
+          python3 tools/ws11_protocol/decode_gameplay.py --file protocol-lab/gameplay-fixtures/game_move_start_demo.bin --direction C2S > ws11-gameplay-pretty.json
 
       - name: Run protocol tests
         run: python3 -m unittest discover -s tests/protocol-lab -p 'test_*.py' -v
@@ -49,6 +62,16 @@ jobs:
             --file protocol-lab/fixtures/login_serverlist_request.bin \
             --channel login --direction C2S | tee ws11-decode-smoke.json
           grep -q 'LS_SERVERLIST' ws11-decode-smoke.json
+          python3 - <<'PY'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0,'tools/ws11_protocol')
+          from gameplay import decode_frame
+          raw=Path('protocol-lab/gameplay-fixtures/game_attack_normal_demo.bin').read_bytes()
+          d=decode_frame(raw,'C2S')
+          assert d['name']=='WIZ_ATTACK' and d['variant']=='c2s_normal'
+          print(d)
+          PY
 
       - name: Replay dry-run smoke
         shell: bash
