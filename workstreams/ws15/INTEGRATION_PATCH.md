@@ -1,38 +1,94 @@
-# WS15 Integration Patch
+WS15
 
-WS15 does not modify WS03, WS14, gateway, client, DB, combat, NPC, inventory, admin or website code. Integration is intentionally interface-only.
+# Integration Patch
 
-## World/session integration
-
-1. Instantiate `MovementService` once in the world process.
-2. Provide `zoneBounds.isValidPosition(zoneId, position)` from the authoritative WS14/world map layer. For production, this should use real zone/map validity rather than only an axis-aligned box.
-3. On selected-character world entry, call `registerSession({ sessionId, entityId, zoneId, position, headingRaw, maxSpeed? })` using the authoritative spawn state.
-4. When the 1298 session dispatcher receives `WIZ_MOVE (0x06)`, pass the **9-byte payload after the opcode** to `handleMovePacket(sessionId, payload)`.
-5. When it receives `WIZ_ROTATE (0x09)`, pass the **2-byte payload after the opcode** to `handleRotatePacket(sessionId, payload)`.
-6. Deliver `broadcast(event).packet` only to `event.recipients`. WS15 computes recipients strictly from registered sessions in the same `zoneId`.
-7. On disconnect, call `disconnect(sessionId)` to delete position and flood state.
-
-## Speed policy
-
-Provide `speedPolicy(state)` from world/game rules when those rules are available. WS15 also enforces `absoluteMaxSpeed` as a hard ceiling. The dynamic policy should account for legitimate class/buff/mount rules without adding combat or skill logic to WS15.
-
-## Teleport / warp distinction
-
-Do **not** feed warps into `handleMovePacket()` and do not relax movement validation to make teleports pass.
-
-- `WIZ_WARP (0x1e)` / zone transition remains owned by the world/session layer.
-- After that layer authorizes a warp and selects the destination, call `movement.teleport(sessionId, { zoneId, position, headingRaw, reason })`.
-- `teleport()` validates representability and destination bounds, resets current/target movement baseline, and emits `onTeleport`; it deliberately sends no `WIZ_MOVE` packet.
-
-This keeps speed/range anti-cheat deterministic while permitting legitimate server-authorized teleports.
-
-## Packet-flood hook
-
-`SlidingWindowFloodGuard` is included and can be replaced by any object implementing:
+## Construction
 
 ```js
-check({ sessionId, kind, nowMs }) -> { allow: boolean, reason?: string, event?: object }
-cleanup(sessionId)
+const movement = new MovementService({
+  zoneBounds: new MapZoneBoundsProvider({ getMap: (zoneId) => worldMapRegistry.get(zoneId) }),
+  speedPolicy: { getMaxSpeed: ({ state, move }) => movementStats.maxSpeedFor({ entityId: state.entityId, phase: move.phase }) },
+  terrainAuthority: { validateMovement: (request) => mapCollision.validateMovement(request) },
+  broadcast: ({ recipients, packet }) => { for (const sessionId of recipients) sessions.send(sessionId, packet); },
+  onRegionMembership: (event) => world.onMovementRegionMembership(event),
+  onSecuritySignal: (observation) => antiCheat.record({
+    ...observation,
+    subject: { kind: 'character', id: sessionCharacterId(observation.sessionId) },
+    correlationId: currentCorrelationId(observation.sessionId),
+  }),
+});
 ```
 
-Use `onFlood` on the included guard to feed metrics, logging or session enforcement without coupling those concerns into WS15.
+`terrainAuthority` is optional and owned by the real map/SMD layer. WS15 does not invent terrain height or collision rules.
+
+## WS03 + WS14 lifecycle
+
+```js
+movement.registerSession({
+  sessionId,
+  entityId: socketId,
+  zoneId: worldSnapshot.zoneId,
+  position: worldSnapshot.position,
+  headingRaw: 0,
+  worldReady: worldSnapshot.state === 'WORLD_READY',
+});
+```
+
+After WS14 GAMESTART phase 2 reaches `WORLD_READY`, call `movement.setWorldReady(sessionId, true)`.
+
+Before WS14 zone-change: `movement.beginZoneTransition(sessionId, { reason: 'ws14-zone-change' })`.
+After WS14 returns to `WORLD_READY`:
+
+```js
+movement.completeZoneTransition(sessionId, {
+  zoneId: worldSnapshot.zoneId,
+  position: { x: worldSnapshot.x, y: worldSnapshot.y, z: worldSnapshot.z },
+  headingRaw: currentHeading,
+});
+```
+
+Do not route warp/teleport through `handleMovePacket()`. Trusted teleport is a baseline reset and does not emit WIZ_MOVE.
+
+## Packet dispatch and ordering
+
+```js
+movement.handleMovePacket(sessionId, payload, { receiveSequence: connection.nextServerReceiveSequence() });
+movement.handleRotatePacket(sessionId, payload, { receiveSequence: connection.nextServerReceiveSequence() });
+```
+
+The 1298 packet has no application timestamp/sequence. `receiveSequence` is server/transport metadata; client timestamps are ignored.
+
+## WS19 authoritative range
+
+```js
+const snapshot = movement.getEntityDistanceSnapshot(attackerEntityId, targetEntityId);
+const verdict = movement.isWithinRange({ sourceEntityId: attackerEntityId, targetEntityId, maxDistance: skillOrAttackRange });
+```
+
+WS19 owns combat outcome; WS15 owns authoritative coordinate/distance snapshots.
+
+## WS25 pursuit position
+
+```js
+const target = movement.getEntityPositionSnapshot(targetEntityId);
+```
+
+This is a frozen authoritative snapshot for pursuit/aggro reads.
+
+## Reconnect / disconnect
+
+```js
+const restore = movement.createRestoreSnapshot(sessionId);
+movement.disconnect(sessionId);
+movement.restoreSession({ sessionId: newSessionId, entityId: socketId, snapshot: restore, worldReady: false });
+```
+
+The old entity binding must be cleaned before reuse; readiness is re-established by the owning world lifecycle.
+
+## WS47 observations
+
+`onSecuritySignal` receives review-only metadata using `impossible_movement`, `repeated_invalid_position`, or `repeated_malformed_packet_metadata`. Speed/range/teleport subtype is in `evidence.reasonCode/category`. No raw packet bytes are emitted.
+
+## Coalescing decision
+
+No extra temporal coalescer is enabled. Verified 1298 `PACKET_INTERVAL_MOVE` is 1.5 seconds and the client only sends periodic movement when position changed. Exact duplicate broadcasts are suppressed; valid distinct packets remain authoritative events.

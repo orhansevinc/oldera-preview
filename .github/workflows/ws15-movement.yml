@@ -20,20 +20,30 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  unit:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
+        with: { node-version: '22' }
       - name: Syntax check
         run: |
           node --check services/ko1298-movement/src/protocol.js
           node --check services/ko1298-movement/src/flood-guard.js
           node --check services/ko1298-movement/src/zone-bounds.js
+          node --check services/ko1298-movement/src/region-grid.js
           node --check services/ko1298-movement/src/movement-service.js
           node --check services/ko1298-movement/src/index.js
-      - name: Movement tests
-        run: node --test tests/ko1298-movement/*.test.js
+      - name: Unit and integration fixture tests
+        run: node --test tests/ko1298-movement/protocol.test.js tests/ko1298-movement/movement.test.js tests/ko1298-movement/production-hardening.test.js tests/ko1298-movement/browser-integration-fixture.test.js
+
+  simulation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - name: Deterministic simulation / fuzz / soak
+        run: node --test tests/ko1298-movement/deterministic-simulation.test.js tests/ko1298-movement/simulation-scale.test.js

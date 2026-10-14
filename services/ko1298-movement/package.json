@@ -1,14 +1,14 @@
 {
   "name": "@oldkoweb/ko1298-movement",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Authoritative OldKO 1298 movement and position synchronization core.",
+  "description": "Authoritative OldKO 1298 multiplayer movement, region sync and position snapshots.",
   "type": "commonjs",
   "main": "src/index.js",
   "scripts": {
-    "test": "node --test ../../tests/ko1298-movement/*.test.js"
+    "test": "npm run test:unit && npm run test:simulation",
+    "test:unit": "node --test ../../tests/ko1298-movement/protocol.test.js ../../tests/ko1298-movement/movement.test.js ../../tests/ko1298-movement/production-hardening.test.js ../../tests/ko1298-movement/browser-integration-fixture.test.js",
+    "test:simulation": "node --test ../../tests/ko1298-movement/deterministic-simulation.test.js ../../tests/ko1298-movement/simulation-scale.test.js"
   },
-  "engines": {
-    "node": ">=20"
-  }
+  "engines": { "node": ">=20" }
 }
