@@ -109,8 +109,9 @@ jobs:
         env:
           PYTHONDONTWRITEBYTECODE: '1'
         run: |
+          set -o pipefail
           rm -rf "$RUNNER_TEMP/ws50-staging-output"
-          python3 tools/ws50_integration/staging_candidate.py "$RUNNER_TEMP/ws50-staging-output" \
+          python3 tools/ws50_integration/staging_candidate_current.py "$RUNNER_TEMP/ws50-staging-output" \
             | tee "$RUNNER_TEMP/ws50-staging.log"
 
       - name: Publish staging result
