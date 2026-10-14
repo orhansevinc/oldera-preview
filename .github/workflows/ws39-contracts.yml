@@ -5,12 +5,14 @@ on:
     paths:
       - 'contracts/**'
       - 'contract-tests/**'
+      - 'release/sets/ws50/**'
       - 'workstreams/ws39/**'
       - '.github/workflows/ws39-contracts.yml'
   pull_request:
     paths:
       - 'contracts/**'
       - 'contract-tests/**'
+      - 'release/sets/ws50/**'
       - 'workstreams/ws39/**'
       - '.github/workflows/ws39-contracts.yml'
 
@@ -22,5 +24,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Validate WS39 registry and compatibility rules
+      - name: Validate WS39 registry, immutable provider sets, routing and compatibility rules
         run: node --test contract-tests/*.test.cjs

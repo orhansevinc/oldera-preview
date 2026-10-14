@@ -2,7 +2,21 @@
   "schema_version": 1,
   "milestone": "moradon-npc-mob-visibility",
   "authority_ws": "WS50",
-  "policy": "WS39 never resolves branch HEADs into an accepted integration set. Only immutable WS50 provider-set receipts may populate accepted or candidate.",
-  "accepted": {"state":"UNAVAILABLE","provider_set_id":null,"receipt":null,"reason":"No WS50 provider-set receipt covering WS03/WS14/WS15/WS16/WS25 plus WS11/WS31 authorities exists on the observed WS50 branch."},
-  "candidate": {"state":"UNAVAILABLE","provider_set_id":null,"receipt":null,"reason":"WS50 has not yet published a canonical Moradon NPC/MOB visibility candidate provider-set for WS39 to consume."}
+  "policy": "WS39 never resolves branch HEADs into accepted integration. Accepted and candidate views dereference only immutable WS50 receipts pinned by exact set ID and source commit.",
+  "source": {
+    "branch": "ws50-integration-rehearsal",
+    "exact_commit_sha": "15eb5b83bfadb7bb9ad131997730ef5adf0abcc8"
+  },
+  "accepted": {
+    "state": "AVAILABLE",
+    "provider_set_id": "WS50-B0",
+    "receipt": "release/sets/ws50/B0.json",
+    "reason": "Last accepted browser-proven baseline from immutable WS50-B0."
+  },
+  "candidate": {
+    "state": "AVAILABLE",
+    "provider_set_id": "WS50-C3",
+    "receipt": "release/sets/ws50/C3.json",
+    "reason": "Canonical Moradon NPC/MOB visibility candidate. Remains immutable and BLOCKED until WS50 creates a successor set."
+  }
 }

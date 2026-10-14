@@ -1,32 +1,44 @@
 # WS39 — Moradon NPC/MOB Visibility Coordination Pilot
 
-This directory is the minimum coordination pilot for the first playable visibility milestone. It does **not** replace `coordination/WORKSTREAM_REGISTRY.md` or the existing broad WS39 compatibility registry.
+This directory is the minimum coordination pilot for the first playable visibility milestone. It does **not** replace the broad WS39 compatibility registry and it does not change product code.
 
 ## Single sources of truth
 
-- `registry.json`: pilot ownership, real capability surfaces, authority relations, scenarios and shared type boundary.
-- `source-manifests.json`: provider/authority declarations. Source HEAD/SHA is deliberately forbidden here.
-- `provider-sets.json`: ACCEPTED and CANDIDATE identities. WS50 is the only authority allowed to populate an immutable provider-set receipt.
-- `blockers.json`: `BLOCKED_BY_CONTRACT` records. Owner inboxes are generated views; they are not separate maintained records.
-- `schema/`: minimal machine-readable schemas for registry, source handoff, CI receipt, blocker and provider-set state.
-- `tooling.cjs`: dependency discovery, impact analysis, generated owner inbox and contract fingerprint functions.
+- `registry.json`: pilot ownership, contract identities, authority relations, scenarios and the minimal shared-type boundary.
+- `source-manifests.json`: provider/authority declarations only. Source HEAD/SHA and blocker bodies are deliberately not maintained here.
+- `provider-sets.json`: WS39 view pointers to immutable WS50 receipts. ACCEPTED is exactly `WS50-B0`; CANDIDATE is exactly `WS50-C3`.
+- `release/sets/ws50/B0.json` and `C3.json`: exact WS50 receipts copied from WS50 commit `15eb5b83bfadb7bb9ad131997730ef5adf0abcc8`; discovery never re-resolves branch HEADs.
+- `blockers.json`: the single central routing source for C3 blockers. Owner inboxes are generated views.
+- `tooling.cjs`: dependency discovery, impact analysis, immutable provider coordinates, generated owner inbox and validation.
 
-A CI receipt is intentionally separate from a source manifest. It records the exact implementation SHA, provider-set ID, resolved dependencies, contract fingerprints, test/run IDs, artifacts and blockers after automation resolves the immutable composition.
+## Immutable-set rule
+
+`WS50-C3` remains historically immutable. Its three blockers remain attached to C3 even when a newer provider branch supplies evidence that could resolve one of them. Such evidence is represented as `RESOLVED_BY_PROVIDER_CANDIDATE` plus the exact provider SHA and stays `NOT_IN_WS50_C3` until WS50 creates a successor candidate.
+
+Current terrain evidence is `WS14@810a58f1bd71037597b896eac32d0139a463d227` with CI run `38576683261`; the current WS14 documentation HEAD is `9b82adefb05a3cca32f430e25f8a1d9109db93b2`.
 
 ## Discovery
 
 ```bash
 node contracts/pilot-moradon-visibility/tooling.cjs dependencies WS16
-node contracts/pilot-moradon-visibility/tooling.cjs impact npc.nearby
-node contracts/pilot-moradon-visibility/tooling.cjs inbox WS14
+node contracts/pilot-moradon-visibility/tooling.cjs dependencies WS25
+node contracts/pilot-moradon-visibility/tooling.cjs impact terrain.height-authority
+node contracts/pilot-moradon-visibility/tooling.cjs inbox WS11
+node contracts/pilot-moradon-visibility/tooling.cjs validate-routing
 ```
 
-The WS16 discovery answer includes direct world/movement capabilities, WS11 protocol requirements, WS31 data requirements, ACCEPTED/CANDIDATE provider-set identities, and open contract requests without reading all workstream status files.
+Dependency output exposes the accepted/candidate set identity, exact provider SHA, semantic-version + contract fingerprint, protocol/data authority coordinates, provider-candidate resolution evidence and central blockers without asking the user to broker workstream state.
 
-## WS50 rule
+## Blocker routing
 
-WS39 does not infer a provider-set from current branch HEADs. If WS50 has not published an immutable visibility provider-set receipt covering WS03/WS14/WS15/WS16/WS25 plus the WS11/WS31 authority snapshot, both ACCEPTED and CANDIDATE remain `UNAVAILABLE`.
+The canonical C3 blocker IDs are derived from the immutable `C3.json` receipt and must match `blockers.json` exactly:
 
-## Evidence-derived status
+- `WORLD_TERRAIN_HEIGHT_AUTHORITY` → WS14. C3 remains blocked; newer WS14 evidence is recorded as provider-candidate resolution only.
+- `NPC_REGION_BODY_AUTHORITY` → WS11.
+- `MOB_BROWSER_BOOTSTRAP_ENCODER_AUTHORITY` → WS11.
 
-The pilot is structurally ready when schemas/tests/discovery/impact pass. Product compatibility is not declared accepted until WS50 supplies the immutable provider-set receipt and the milestone blockers attached to that set are satisfied by evidence.
+No separate inbox file is maintained.
+
+## Boundary
+
+No gameplay implementation, provider branch, database/client/admin/site code or `main` merge is part of this pilot.

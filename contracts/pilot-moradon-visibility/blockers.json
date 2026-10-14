@@ -1,18 +1,71 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "provider_set_id": "WS50-C3",
+  "source_receipt": "release/sets/ws50/C3.json",
   "requests": [
     {
-      "request_id": "REQ-TERRAIN-HEIGHT-001",
+      "request_id": "WORLD_TERRAIN_HEIGHT_AUTHORITY",
       "consumer": "WS16",
       "owner": "WS14",
       "capability": "terrain.height-authority",
-      "provider_set": null,
-      "required_behavior": "Provide a source-verified Moradon terrain + shape height resolver usable by NPC placement and compatible terrain validation without guessed Y values.",
-      "current_behavior": "WS16 has the resolver port and policy but K_NPCPOS contains no Y; WS15 and WS25 also fail closed where terrain/height ownership is required.",
-      "acceptance_test": "Moradon NPC population resolves source-backed X/Z through the real height authority and produces deterministic finite Y while unresolved/missing terrain still fails closed.",
-      "milestone_impact": "Blocks canonical acceptance of MORADON NPC/MOB VISIBILITY even though registry/discovery tooling can operate.",
-      "evidence": ["workstreams/ws16/STATUS.md#Terrain-Y-evidence","workstreams/ws15/STATUS.md#BLOCKERS-EXTERNAL-OWNERS","workstreams/ws25/STATUS.md#Data-source-caveats","workstreams/ws31/STATUS.md#MORADON-SOURCE-SLICES"],
-      "state": "OPEN"
+      "provider_set": "WS50-C3",
+      "required_behavior": "Provide a source-verified Moradon terrain + shape height resolver usable by NPC and mob placement without guessed Y values.",
+      "current_behavior": "WS50-C3 is immutable and still pins WS14 c1a1d454285db02c6de0c087a2d65434bfb4593b, before the new Moradon SMD height authority.",
+      "acceptance_test": "A successor WS50 candidate pins the WS14 Moradon height provider and preserves authoritative finite Y for all verified WS16 NPC anchors and WS25 spawn samples while invalid or missing terrain fails closed.",
+      "milestone_impact": "Blocks WS50-C3 acceptance even though the authority is now implemented outside the frozen set.",
+      "evidence": [
+        "release/sets/ws50/C3.json",
+        "workstreams/ws14/STATUS.md#Moradon-height-authority",
+        "WS14 Actions run 38576683261"
+      ],
+      "state": "OPEN",
+      "set_state": "BLOCKED_IN_IMMUTABLE_SET",
+      "resolution": {
+        "status": "RESOLVED_BY_PROVIDER_CANDIDATE",
+        "provider_ws": "WS14",
+        "exact_sha": "810a58f1bd71037597b896eac32d0139a463d227",
+        "branch_head_evidence_sha": "9b82adefb05a3cca32f430e25f8a1d9109db93b2",
+        "ci_run_id": 38576683261,
+        "set_inclusion": "NOT_IN_WS50_C3"
+      }
+    },
+    {
+      "request_id": "NPC_REGION_BODY_AUTHORITY",
+      "consumer": "WS16",
+      "owner": "WS11",
+      "capability": "protocol.npc-region-body",
+      "provider_set": "WS50-C3",
+      "required_behavior": "Freeze exact 1298 WIZ_NPC_REGION body semantics and the region-to-detail request chain required for browser-visible NPC bootstrap.",
+      "current_behavior": "WS50-C3 froze the earlier WS11 authority where this boundary was blocking. Current WS11 visibility evidence reports the 0x1C region ID list as verified, but C3 is not rewritten.",
+      "acceptance_test": "WS50 successor candidate pins a WS11 authority whose exact 0x1C region-list layout and 0x1D detail recovery fixtures are GREEN and composes them with WS14/WS16.",
+      "milestone_impact": "Blocks NPC region bootstrap in immutable WS50-C3.",
+      "evidence": [
+        "release/sets/ws50/C3.json",
+        "protocol-lab/VISIBILITY_PROTOCOL_PROFILE.json#WIZ_NPC_REGION",
+        "protocol-lab/PROTOCOL_OWNER_MATRIX.json#0x1C"
+      ],
+      "state": "OPEN",
+      "set_state": "BLOCKED_IN_IMMUTABLE_SET",
+      "routing_status": "ROUTED_TO_OWNER"
+    },
+    {
+      "request_id": "MOB_BROWSER_BOOTSTRAP_ENCODER_AUTHORITY",
+      "consumer": "WS25",
+      "owner": "WS11",
+      "capability": "protocol.mob-browser-bootstrap-encoder",
+      "provider_set": "WS50-C3",
+      "required_behavior": "Freeze the exact 1298 browser-visible mob bootstrap/event encoder boundary used by WS25 domain events through the NPC/entity wire family.",
+      "current_behavior": "WS50-C3 records this as a protocol/bootstrap blocker. Current WS11 evidence maps monsters onto 0x1C/0x1D/0x0A, but WS50-C3 remains frozen and no successor composition has accepted that evidence.",
+      "acceptance_test": "WS50 successor candidate pins WS11/WS14 evidence for mob bootstrap and proves verified WS25 Moradon mobs materialize in the real browser without guessed packet layout.",
+      "milestone_impact": "Blocks mob bootstrap visibility in immutable WS50-C3.",
+      "evidence": [
+        "release/sets/ws50/C3.json",
+        "protocol-lab/VISIBILITY_PROTOCOL_PROFILE.json#monster_visibility",
+        "protocol-lab/PROTOCOL_OWNER_MATRIX.json#0x0A"
+      ],
+      "state": "OPEN",
+      "set_state": "BLOCKED_IN_IMMUTABLE_SET",
+      "routing_status": "ROUTED_TO_OWNER"
     }
   ]
 }

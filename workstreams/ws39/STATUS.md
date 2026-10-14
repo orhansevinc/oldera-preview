@@ -1,48 +1,51 @@
 # WS39 STATUS — Moradon NPC/MOB Visibility Coordination Pilot
 
-DURUM: **PILOT TOOLING READY / PRODUCT ACCEPTANCE WAITING FOR WS50 PROVIDER-SET**
+DURUM: **IMMUTABLE PROVIDER-SET COORDINATION READY / WS50-C3 BLOCKED**
 
-WS39 remains `ws39-contract-compatibility`. The previous broad 16-boundary compatibility registry remains intact; this change adds a separate minimum coordination pilot under `contracts/pilot-moradon-visibility/**` and does not change product code.
+Branch: `ws39-contract-compatibility`
 
-## Pilot milestone
+This remains the existing WS39 pilot. Product code and provider branches are unchanged.
 
-`MORADON NPC/MOB VISIBILITY`
+## Provider-set view
 
-Pilot provider chain: `WS03 -> WS14 -> WS15 -> WS16 -> WS25`.
-Authority dependencies: WS11 protocol and WS31 data.
+- ACCEPTED: `WS50-B0@sha256:57bf3e37dd4406380e35d042d3336b9bd2f9a6295ea91be7e8b835e7c94e8fda`
+- CANDIDATE: `WS50-C3@sha256:a9c808898bd1cb9f3cadfb44ddbabadaf34448f9aef0a4990ca91958053458aa`
+- Canonical WS50 source commit pinned by WS39: `15eb5b83bfadb7bb9ad131997730ef5adf0abcc8`
+- No dependency discovery path resolves latest branch HEAD.
 
-## Delivered
+## C3 blockers
 
-- machine-readable pilot ownership registry with branch, ownership paths, handoff location, provides/consumes and authority requirements;
-- source HANDOFF manifest separated from automation-produced CI receipt identity;
-- capability catalog derived from existing provider exports/behavior, with semantic version and content fingerprint separated;
-- WS11/WS31 represented as protocol/data authorities rather than ordinary runtime providers;
-- one-source `BLOCKED_BY_CONTRACT` records with generated owner inbox views;
-- WS16 dependency discovery that returns direct contracts, authority requirements, accepted/candidate provider-set identity and open requests;
-- exact pilot impact analysis for capability changes;
-- ACCEPTED and CANDIDATE modeled independently and fail-closed;
-- minimal shared visibility types only.
+Canonical blocker bodies are maintained once in `contracts/pilot-moradon-visibility/blockers.json`; the blocker ID set is checked against immutable `release/sets/ws50/C3.json`.
 
-## Provider-set status
+`WORLD_TERRAIN_HEIGHT_AUTHORITY` remains OPEN on immutable C3. New WS14 provider evidence resolves the required authority at implementation commit `810a58f1bd71037597b896eac32d0139a463d227` (CI run `38576683261`, 46/46) and current evidence/documentation HEAD `9b82adefb05a3cca32f430e25f8a1d9109db93b2`. WS39 records this only as `RESOLVED_BY_PROVIDER_CANDIDATE / NOT_IN_WS50_C3`.
 
-WS50 is the provider-set authority. At the observed WS50 state there is no immutable provider-set receipt covering the full visibility chain and both authorities. Therefore WS39 deliberately leaves both ACCEPTED and CANDIDATE unavailable and does not substitute latest branch HEADs.
+`NPC_REGION_BODY_AUTHORITY` and `MOB_BROWSER_BOOTSTRAP_ENCODER_AUTHORITY` are routed to WS11. Owner inbox output is generated from the same central blocker file; no maintained inbox copy exists.
 
-## Blocker routing
+## Discovery
 
-Canonical blocker records live only in `contracts/pilot-moradon-visibility/blockers.json`. STATUS and generated inbox output do not maintain duplicate blocker bodies.
+WS16 and WS25 discovery now returns:
+
+- exact B0/C3 set identity;
+- exact provider SHA per direct contract;
+- semantic version + contract fingerprint;
+- WS11 protocol and WS31 data authority dependencies with their set coordinates;
+- relevant central blockers;
+- provider-candidate resolution evidence where present.
+
+## Impact
+
+`terrain.height-authority` is owned by WS14. Its direct pilot consumers are WS15, WS16 and WS25, and both `moradon.npc-visibility` and `moradon.mob-visibility` scenarios are affected. Because the resolving WS14 implementation SHA is not part of immutable C3, a new WS50 candidate is required before the terrain blocker can be resolved at set level.
 
 ## Verification
 
-Run:
-
 ```bash
 node --test contract-tests/*.test.cjs
+node contracts/pilot-moradon-visibility/tooling.cjs validate-routing
 node contracts/pilot-moradon-visibility/tooling.cjs dependencies WS16
-node contracts/pilot-moradon-visibility/tooling.cjs impact npc.nearby
+node contracts/pilot-moradon-visibility/tooling.cjs dependencies WS25
+node contracts/pilot-moradon-visibility/tooling.cjs impact terrain.height-authority
 ```
-
-Success is measured by whether WS16 can discover the required world/movement/protocol/data dependencies without user mediation, and whether a WS16 capability change produces exact affected pilot consumers/scenarios. Manifest count across all 50 workstreams is not a success metric.
 
 ## Boundary
 
-No gameplay/product implementation, provider branch, database/client/admin/site code or `main` merge is part of this change.
+No product/gameplay implementation, provider branch mutation, latest-HEAD composition or `main` merge is part of this change.
