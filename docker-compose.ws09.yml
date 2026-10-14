@@ -87,26 +87,25 @@ services:
 
   admin-api:
     <<: *service-defaults
-    image: ${ADMIN_API_IMAGE:?Set ADMIN_API_IMAGE to an immutable image digest}
+    image: ${ADMIN_API_IMAGE:?Set ADMIN_API_IMAGE to the immutable WS08 production image digest}
     environment:
       NODE_ENV: production
-      HOST: 0.0.0.0
       PORT: ${ADMIN_API_PORT:-8080}
-      DATABASE_HOST: db
-      DATABASE_PORT: 5432
-      DATABASE_NAME: ${POSTGRES_DB:-oldkoweb}
-      DATABASE_USER: ${POSTGRES_USER:-oldkoweb}
-      DATABASE_PASSWORD_FILE: /run/secrets/postgres_password
-      TRUST_PROXY: "1"
-    secrets:
-      - postgres_password
+      DATABASE_URL: ${ADMIN_DATABASE_URL:?Set ADMIN_DATABASE_URL through the secure production configuration channel}
+      ADMIN_USERS_JSON: ${ADMIN_USERS_JSON:?Set ADMIN_USERS_JSON through the secure production configuration channel}
+      ADMIN_ROOT_OWNER_ID: ${ADMIN_ROOT_OWNER_ID:?Set ADMIN_ROOT_OWNER_ID through the secure production configuration channel}
+      ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET:?Set ADMIN_SESSION_SECRET through the secure production configuration channel}
+      ADMIN_ALLOWED_ORIGINS: https://admin.oldkoweb.com
+      ADMIN_REPOSITORY_MODULE: ${ADMIN_REPOSITORY_MODULE:?Set the WS07 production admin adapter module path}
+      ADMIN_RUNTIME_AUTHORITY_MODULE: ${ADMIN_RUNTIME_AUTHORITY_MODULE:?Set the WS03/WS45 production runtime authority module path}
+      ADMIN_COMMAND_BUS_MODULE: ${ADMIN_COMMAND_BUS_MODULE:?Set the WS28 production command bus module path}
     expose:
       - "${ADMIN_API_PORT:-8080}"
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:${ADMIN_API_PORT:-8080}/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:${ADMIN_API_PORT:-8080}/api/admin/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 15s
       timeout: 5s
-      retries: 5
+      retries: 8
       start_period: 20s
     depends_on:
       db:
@@ -119,7 +118,7 @@ services:
 
   session-world:
     <<: *service-defaults
-    image: ${KO_SESSION_WORLD_IMAGE:?Set KO_SESSION_WORLD_IMAGE to the immutable integrated WS03+WS14 image}
+    image: ${KO_SESSION_WORLD_IMAGE:?Set KO_SESSION_WORLD_IMAGE to the immutable WS50-selected integrated image}
     environment:
       NODE_ENV: production
       AUTH_PORT: ${AUTH_TCP_PORT:-15100}
