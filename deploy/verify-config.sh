@@ -55,6 +55,7 @@ grep -q 'proxy_pass http://gateway-game:${GATEWAY_INTERNAL_PORT}' infra/nginx/te
 grep -q 'location = /auth' infra/nginx/templates/production.conf.template
 grep -q 'location = /game' infra/nginx/templates/production.conf.template
 grep -q 'location /api/admin/' infra/nginx/templates/production.conf.template
+grep -q 'proxy_pass http://admin-api:${ADMIN_API_PORT};' infra/nginx/templates/production.conf.template
 grep -q 'max-age=31536000, immutable' infra/nginx/templates/production.conf.template
 grep -q 'no-store, max-age=0' infra/nginx/templates/production.conf.template
 ! grep -q '\${API_HOST}' infra/nginx/templates/production.conf.template
@@ -66,6 +67,12 @@ grep -q 'OLDKO_ACCOUNT_ALLOWED_ORIGINS: https://oldkoweb.com' docker-compose.ws0
 grep -q 'OLDKO_TRUST_PROXY: "1"' docker-compose.ws09.yml
 grep -q 'OLDKO_ACCOUNT_REPOSITORY_MODULE:' docker-compose.ws09.yml
 grep -q 'OLDKO_ACCOUNT_DELIVERY_WEBHOOK_URL:' docker-compose.ws09.yml
+grep -q '^  admin-api:' docker-compose.ws09.yml
+grep -q 'ADMIN_ALLOWED_ORIGINS: https://admin.oldkoweb.com' docker-compose.ws09.yml
+grep -q 'ADMIN_REPOSITORY_MODULE:' docker-compose.ws09.yml
+grep -q 'ADMIN_RUNTIME_AUTHORITY_MODULE:' docker-compose.ws09.yml
+grep -q 'ADMIN_COMMAND_BUS_MODULE:' docker-compose.ws09.yml
+grep -q '/api/admin/health' docker-compose.ws09.yml
 grep -q 'GATEWAY_MODE: auth' docker-compose.ws09.yml
 grep -q 'GATEWAY_MODE: game' docker-compose.ws09.yml
 grep -q 'WS_PATH: /auth' docker-compose.ws09.yml
