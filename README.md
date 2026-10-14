@@ -1,3 +1,3 @@
-# OldERA Preview
+# OldKOWeb Preview
 
-Temporary browser preview for the OldERA 1298 web prototype.
+Browser preview for OldKOWeb.
