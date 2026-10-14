@@ -20,7 +20,7 @@ function target(id, x, z, extra = {}) {
   return { id, zoneId: 'fixture:moradon', position: { x, y: 0, z }, ...extra };
 }
 
-function makeHarness({ definition = fixture, candidates = [], targets = [], isTargetAlive, canAggro, canAttack, visible, resolveSpawnPosition } = {}) {
+function makeHarness({ definition = fixture, candidates = [], targets = [], isTargetAlive, canAggro, canAttack, visible, resolveHeight } = {}) {
   const calls = {
     spawn: [], state: [], despawn: [], nearbySpawn: [], nearbyDespawn: [],
     chase: [], returnHome: [], stop: [], patrol: [], noPath: [], attackIntent: [], assistSignal: [],
@@ -31,7 +31,6 @@ function makeHarness({ definition = fixture, candidates = [], targets = [], isTa
     world: {
       listAggroCandidates: () => candidateList,
       getTargetSnapshot: (id) => targetMap.get(String(id)) ?? null,
-      resolveSpawnPosition: resolveSpawnPosition ?? (() => null),
       isMobVisibleToPlayer: visible ?? (() => false),
       onMobSpawn: (mob, event) => calls.spawn.push({ mob, event }),
       onMobStateChange: (mob, event) => calls.state.push({ mob, event }),
@@ -39,6 +38,9 @@ function makeHarness({ definition = fixture, candidates = [], targets = [], isTa
       onNearbyMobSpawn: (player, mob, event) => calls.nearbySpawn.push({ player, mob, event }),
       onNearbyMobDespawn: (player, mob, event) => calls.nearbyDespawn.push({ player, mob, event }),
       onAssistSignal: (signal) => calls.assistSignal.push(signal),
+    },
+    terrain: {
+      resolveHeight: resolveHeight ?? (() => null),
     },
     movement: {
       chase: (intent) => calls.chase.push(intent),
@@ -247,10 +249,10 @@ test('verified group/family assist is modeled as a source-backed world signal wi
   const firstGroup = world.spawnGroups.find((g) => g.templateId === 'ko1298:monster:750');
   const one = { ...world, spawnGroups: [{ ...firstGroup, spawns: [firstGroup.spawns[0]] }] };
   const spawn = firstGroup.spawns[0];
-  const p = { id: 'p1', zoneId: '21', position: { x: spawn.x + 1, y: 0, z: spawn.z } };
+  const p = { id: 'p1', zoneId: '21', position: { x: spawn.x + 1, y: 1, z: spawn.z } };
   const h = makeHarness({
     definition: one, candidates: [p], targets: [p],
-    resolveSpawnPosition: ({ x, z, heading }) => ({ x, y: 0, z, heading }),
+    resolveHeight: () => ({ status: 'authoritative', height: 1, surface: 'terrain', policy: 'test-authority' }),
   });
   h.service.initialize(0);
   h.service.tick(1);
@@ -260,10 +262,14 @@ test('verified group/family assist is modeled as a source-backed world signal wi
   assert.equal(h.calls.assistSignal[0].searchRange, 3);
 });
 
-test('verified Moradon loader produces 135 real instances from source rows with deterministic X/Z', () => {
+test('verified Moradon loader preserves 10 templates, 20 source rows and 135 deterministic X/Z slots', () => {
   const worldA = loadVerifiedWorldDefinition(moradonVerified);
   const worldB = loadVerifiedWorldDefinition(moradonVerified);
   const countA = worldA.spawnGroups.reduce((n, g) => n + g.spawns.length, 0);
+  assert.equal(moradonVerified.monsters.length, 10);
+  assert.equal(moradonVerified.spawnRows.length, 20);
+  assert.equal(worldA.templates.size, 10);
+  assert.equal(worldA.spawnGroups.length, 20);
   assert.equal(countA, 135);
   assert.equal(worldA.dataClass, 'real');
   assert.equal(worldA.zoneId, '21');
@@ -274,6 +280,14 @@ test('verified Moradon loader produces 135 real instances from source rows with 
   assert.equal(worldA.spawnGroups[0].spawns[0].y, null);
   assert.equal(worldA.spawnGroups[0].spawns[0].corpseDespawnMs, 30000);
   assert.equal(worldA.spawnGroups[0].spawns[0].respawnDelayMs, 30000);
+
+  for (const group of worldA.spawnGroups) {
+    for (const spawn of group.spawns) {
+      const area = spawn.sourceArea;
+      assert.ok(spawn.x >= Math.min(area.leftX, area.rightX) && spawn.x <= Math.max(area.leftX, area.rightX));
+      assert.ok(spawn.z >= Math.min(area.topZ, area.bottomZ) && spawn.z <= Math.max(area.topZ, area.bottomZ));
+    }
+  }
 });
 
 test('verified loader rejects duplicate spawn rows and wrong-zone rows', () => {
@@ -286,18 +300,98 @@ test('verified loader rejects duplicate spawn rows and wrong-zone rows', () => {
   assert.throws(() => loadVerifiedWorldDefinition(wrongZone), /does not match world zone 21/);
 });
 
-test('real spawns fail closed without terrain Y resolver and initialize with authoritative resolver', () => {
+test('real spawns fail closed unless terrain.resolveHeight is authoritative', () => {
   const world = loadVerifiedWorldDefinition(moradonVerified);
   const noResolver = makeHarness({ definition: world });
-  assert.throws(() => noResolver.service.initialize(0), /requires authoritative height\/position resolver/);
+  assert.throws(() => noResolver.service.initialize(0), /requires authoritative terrain height/);
+
+  const unresolved = makeHarness({
+    definition: world,
+    resolveHeight: () => ({ status: 'unresolved', reason: 'shape-not-ready' }),
+  });
+  assert.throws(() => unresolved.service.initialize(0), /unresolved:shape-not-ready/);
+  assert.equal(unresolved.calls.spawn.length, 0);
 
   const resolved = makeHarness({
     definition: world,
-    resolveSpawnPosition: ({ x, z, heading }) => ({ x, y: 12.5, z, heading }),
+    resolveHeight: (zoneId) => {
+      assert.equal(zoneId, 21);
+      return { status: 'authoritative', height: 12.5, surface: 'shape', policy: 'test-authority' };
+    },
   });
   const mobs = resolved.service.initialize(0);
   assert.equal(mobs.length, 135);
   assert.equal(mobs.every((m) => m.position.y === 12.5), true);
+  assert.equal(mobs.every((m) => m.home.y === 12.5), true);
+  assert.equal(mobs.every((m) => m.spawnOrigin.y === 12.5), true);
+  assert.equal(mobs.every((m) => m.position.x === m.spawnAnchor.x && m.position.z === m.spawnAnchor.z), true);
+  assert.equal(mobs.every((m) => m.heightAuthority.status === 'authoritative'), true);
+});
+
+test('real respawn keeps deterministic rectangle X/Z, re-resolves Y and defers non-authoritative height', () => {
+  const world = loadVerifiedWorldDefinition(moradonVerified);
+  const firstGroup = world.spawnGroups[0];
+  const one = { ...world, spawnGroups: [{ ...firstGroup, spawns: [firstGroup.spawns[0]] }] };
+  const answers = [
+    { status: 'authoritative', height: 10, surface: 'terrain', policy: 'test-authority' },
+    { status: 'unresolved', reason: 'temporary-height-gap' },
+    { status: 'authoritative', height: 11, surface: 'shape', policy: 'test-authority' },
+  ];
+  let calls = 0;
+  const h = makeHarness({
+    definition: one,
+    resolveHeight: () => answers[calls++],
+  });
+  const initial = h.service.initialize(0)[0];
+  const anchor = { ...initial.spawnAnchor };
+  assert.equal(initial.position.y, 10);
+  assert.deepEqual(initial.position, initial.home);
+  assert.deepEqual(initial.position, initial.spawnOrigin);
+
+  h.service.applyHealth(initial.id, 0, 1);
+  h.service.tick(2);
+  h.service.tick(30001);
+  assert.equal(h.service.get(initial.id).state, MobState.DESPAWNED);
+  h.service.tick(30002);
+  assert.equal(h.service.get(initial.id).state, MobState.DESPAWNED);
+  assert.equal(h.service.get(initial.id).spawnEpoch, 0);
+  assert.equal(h.calls.state.at(-1).event.type, 'respawn-deferred-height');
+  h.service.tick(30003);
+  const respawned = h.service.get(initial.id);
+  assert.equal(respawned.state, MobState.IDLE);
+  assert.equal(respawned.spawnEpoch, 1);
+  assert.equal(respawned.position.y, 11);
+  assert.deepEqual(respawned.position, respawned.home);
+  assert.deepEqual(respawned.position, respawned.spawnOrigin);
+  assert.deepEqual(respawned.spawnAnchor, anchor);
+  assert.equal(respawned.position.x, anchor.x);
+  assert.equal(respawned.position.z, anchor.z);
+  assert.equal(calls, 3);
+});
+
+test('real AI chase/return intents use the same authoritative home coordinate basis', () => {
+  const world = loadVerifiedWorldDefinition(moradonVerified);
+  const firstGroup = world.spawnGroups.find((g) => g.templateId === 'ko1298:monster:750');
+  const spawn = firstGroup.spawns[0];
+  const one = { ...world, spawnGroups: [{ ...firstGroup, spawns: [spawn] }] };
+  const p = { id: 'p1', zoneId: '21', position: { x: spawn.x + 2, y: 5, z: spawn.z } };
+  const h = makeHarness({
+    definition: one,
+    candidates: [p],
+    targets: [p],
+    canAttack: () => false,
+    resolveHeight: () => ({ status: 'authoritative', height: 5, surface: 'terrain', policy: 'test-authority' }),
+  });
+  h.service.initialize(0);
+  h.service.tick(1);
+  const mob = h.service.get(firstId(h.service));
+  assert.equal(mob.state, MobState.CHASING);
+  assert.deepEqual(h.calls.chase.at(-1).home, mob.home);
+  assert.deepEqual(mob.spawnOrigin, mob.home);
+  h.service.syncPosition(mob.id, { x: mob.home.x + 50, y: mob.home.y, z: mob.home.z, heading: 0 }, 2);
+  h.service.tick(3);
+  assert.equal(h.service.get(mob.id).state, MobState.RETURNING);
+  assert.deepEqual(h.calls.returnHome.at(-1).home, mob.home);
 });
 
 test('WS31 catalog loader validates canonical name/level against verified K_MONSTER stats', () => {
