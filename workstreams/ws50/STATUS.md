@@ -2,133 +2,121 @@
 
 ## Identity / scope
 
-WS50 remains the existing **integration rehearsal** workstream. This control session did not create a new workstream.
+WS50 remains the existing **integration rehearsal** workstream. No new workstream number was created.
 
-Task executed: **Moradon test-link staging integration rehearsal** from `coordination/inbox/WS50.md`.
+This control session completed the public-test staging task from `coordination/TEST_LINK_SPRINT.md` and `coordination/inbox/WS50.md` on the existing `ws50-integration-rehearsal` branch.
 
-No merge to `main`, no provider-branch write, no force push, and no provider/product implementation fix was performed.
+No merge to `main`, no provider-branch write, no force push, and no provider/product implementation change was performed.
 
 ## Decision
 
-**STAGING INTEGRATION CANDIDATE: BLOCKED**
+**STAGING LINK CANDIDATE: READY_PENDING_WS10**
 
-**Single staging-tree blocker owner: WS01.**
+The WS50-owned work is complete. The source/staging candidate passes the required integration rehearsal. The former WS01 WSS transport and WS09 strict-MIME blockers are resolved in the latest provider set.
 
-The real browser transport patch used by the current OpenKO/Emscripten line constructs only `ws://<server-ip>:<port>`. It does not provide explicit `wss://` support or `/auth` / `/game` path routing, while WS09's intended public test topology requires HTTPS/WSS with same-host `/auth` and `/game`. WS12 can resolve/probe those URLs but does not rewrite native C++ `CAPISocket` transport.
+**Single remaining release-gate owner: WS10.**
 
-WS50 therefore cannot declare the candidate publishable as the intended public HTTPS test link.
+The public test link is intentionally not released until an exact completed successful WS10 Moradon E2E run publishes explicit PASS evidence and the frozen passing `KnightOnLine.js` / `.wasm` / `.data` artifact.
 
-## Successful disposable staging rehearsal
+## Latest successful staging candidate
 
-GitHub Actions evidence:
-
-- run: `38494620556` (WS50 Integration Rehearsal run 15)
-- staging job: `115627453667`
-- result: **SUCCESS**
-- artifact: `11863028321` (`ws50-staging-candidate`)
-- artifact digest: `sha256:de96d231cac38c54361c605a9dd8bd1e71f79f494225bb70dafbb56f3c73b2ed`
-- exact disposable candidate tree: `72a72d5565b7945c9dcf8f54b4148acec31b5876`
-
-Passing checks inside that exact tree:
-
-- WS12 launcher: 11/11
-- WS02 gateway: 7/7
-- WS03 session: 10/10
-- WS14 world: 14/14
-- WS38 content pipeline: 15/15
-- WS05 Moradon static gate: 8/8
-- WS10 server/browser harness syntax: PASS
-- WS03 -> sibling `../ko1298-world` runtime require: PASS
-- WS02 Docker image build: PASS
-- integration-only WS03+WS14 Docker image build: PASS
-- auth/game TCP listener boot: PASS
-- WS09 staging compose render: PASS
-- end-of-run fresh WS05 fetch/ref equality: PASS
-
-## Exact provider freeze used by successful run
+Authoritative GitHub Actions evidence:
 
 ```text
-CONTROL_BASE 3aeaaa3de81c8094b47de44f2c24f3c455e7fd3d
+workflow: WS50 Integration Rehearsal
+run: 38503488408 (run 22)
+staging job: 115655569968
+result: SUCCESS
+artifact: ws50-staging-candidate / 11866703844
+artifact zip sha256: f6780a3ab98b5576727a420aa7c4dfaf9249221dd19e119dac6b44d9d6fadd1c
+candidate tree: 300d7e41dfb7ca84baaef0db2cef8c8a9cc1cdd6
+```
+
+All provider refs were frozen at run start and explicitly re-fetched at run end; no ref moved during the successful staging rehearsal.
+
+Exact freeze:
+
+```text
+MAIN 5715c55abd9ecb36bb32a259d045ba9ad1dc9551
 BROWSER_BASELINE openko-browser-port 18282d0e70de7ccb30244a9f09e2b3bff3040155
-WS01 ws01-runtime-build 5545df2273cda795055a611618c91b948063624f
+WS01 ws01-runtime-build 25c2fcd9c59e8f7a704f7d2ac0d5c331d0042ff9
 WS02 ws02-websocket-gateway 1738f60945b24e00bdd2266e6600b5c0cf3c64cf
 WS03 ws03-ko1298-session d634870bbcd2c541695516643d34e0ac119354d7
-WS04 ws04-character-client fffbd9372b67c2aaef600f7e50595bec7e23fe88
-WS05 ws05-moradon-world 6ca101f3390e0a0f6b056afea99b45ec8d4f67be
-WS09 ws09-production-infra afca7e7e578a81b8b5852f8a1b3d15a233348847
-WS10 ws10-qa-integration 34c551518aad87a9fd03d392f193d354483c95a0
+WS04 ws04-character-client 32616b1b7ccbdc3de41c0949f182a65e03450d18
+WS05 ws05-moradon-world 0537c481383a69c534799b43810f35e7279c5578
+WS09 ws09-production-infra bac4f9d1338e385c8aff3989becaa8ed74037b38
+WS10 ws10-qa-integration 419d52b363a73c8ab77ff8ad944a30968fda967d
+WS11 ws11-protocol-lab 05562662d9d3f13a4b0500d0478e065fd802cfd0
 WS12 ws12-browser-launcher 77f55b2949844e0fdd279526dab0fba4e8ab4f94
 WS14 ws14-world-session 82cdcef40bed265ff4c4ce0fb7c8f6ad8cf2f52b
 WS38 ws38-client-content-pipeline 5f323f3cf055ba7f96d928605a2f2faf84e609cb
+WS45 ws45-session-ownership 4a66338743553c2781c68ca84b866ff4e999c14e
 OPENKO 97eb0ea20207afc0c360bfed6915113572711be3
 KO_ASSETS 2055ee6ed77f1b5cfef23832dd5bc31909e14a66
 EMSCRIPTEN 6.0.12
 ```
 
-The control base is the WS50 inbox-assignment commit and was verified as an ancestor of the current `main` observed by the successful run (`24778282c31d3126f6fe9776359da64cb4ffdf07`). Provider refs were snapshotted once at rehearsal start and then consumed by exact SHA.
+## What the candidate proves
 
-WS05 was explicitly re-fetched at the end of the run and remained `6ca101f3390e0a0f6b056afea99b45ec8d4f67be`.
+On the exact tree above, run 22 passed:
 
-## Browser-line composition rule
+- WS01 transport tests: 9/9.
+- WS12 launcher tests: 11/11.
+- WS02 gateway tests: 7/7.
+- WS03 session tests: 10/10.
+- WS14 world tests: 14/14.
+- WS45 session-ownership tests: 16/16.
+- WS38 content-pipeline tests: 15/15.
+- WS11 protocol-lab tests: 15/15.
+- WS05 Moradon static gates: 8/8.
+- WS03 -> sibling `../ko1298-world` runtime load.
+- WS02 Docker image build.
+- integrated WS03+WS14+WS45 rehearsal image build and auth/game TCP boot probes.
+- WS09 production/staging configuration validation and staging compose render.
+- combined source contract for WS01 config-driven WSS, same-origin `/auth` + `/game`, WS12 strict publication, and WS09 exact JS/WASM/DATA MIME.
 
-Do not full-merge divergent WS01 / WS04 / WS05 browser branches. The successful WS50 tree uses narrow provider paths/scripts only, as documented in:
+The final staging contract reports `all_required_contracts=true` and `blocker_owner=null` for the WS50 composition itself.
+
+## WS10 status at close
+
+The latest completed WS10 Moradon run available before this session's close is run #24 / `38501204665`, and it is a failure. It reaches the real Moradon path through zone begin and assets loaded after the genuine large preload, but does not produce the required final PASS.
+
+The latest attempt is:
+
+```text
+run: 38503397843 (#25)
+head: 419d52b363a73c8ab77ff8ad944a30968fda967d
+message: test(ws10): harden genuine Moradon preload timing
+state at handoff preparation: IN_PROGRESS
+```
+
+Therefore WS50 correctly remains `READY_PENDING_WS10`; no exact PASS run/artifact identity is fabricated.
+
+## Handoff complete
+
+The current control session has prepared/updated:
 
 - `integration-rehearsal/STAGING_CANDIDATE.md`
 - `integration-rehearsal/STAGING_APPLY_ORDER.md`
-
-`openko-web/index.html` stays WS01 canonical. The actual OpenKO and KO1298 asset repos stay externally pinned.
-
-## WS03 / WS14 integration result
-
-The same integrated tree contains:
-
-```text
-services/ko1298-session/**
-services/ko1298-world/**
-```
-
-and directly verifies that `services/ko1298-session/server.js` can runtime-load sibling `../ko1298-world` and obtain `WorldSessionService`. The integration-only container also boots both auth and game listeners successfully.
-
-## Latest Moradon E2E prerequisite
-
-WS50 re-ran the unchanged WS10 native browser gate against corrected WS05 head during this control session.
-
-Evidence:
-
-- workflow run: `38490102763`
-- rerun job: `115625184048`
-- corrected WS05 ref in artifact: `6ca101f3390e0a0f6b056afea99b45ec8d4f67be`
-- rerun evidence artifact: `11862962736`
-
-The previous WS05 wire/native-zone defect is resolved in this rerun. The real browser reaches:
-
-```text
-zone=21 native_zone=210
-moradon-assets-loaded
-moradon-terrain-rendered
-moradon-shapes-rendered
-moradon-local-player-rendered
-```
-
-The run still does **not** produce a WS10 PASS. It fails at the next evidence step:
-
-```text
-timeout waiting for WS04_GL_CAPTURE id=1010 ok=1
-```
-
-That is an upstream Moradon evidence-gate issue, not a failure of the composed staging source tree itself. Publication remains closed until WS10 has a current PASS.
-
-## Additional deployment follow-up
-
-WS12 staging config enables strict WS38 content-type verification. WS38 declares `KnightOnLine.js` as `text/javascript; charset=utf-8`; current WS09 MIME mapping declares `.js/.mjs` as `application/javascript`. WS09 must align this deployment contract before strict publication. WS50 did not alter WS09.
-
-## Outputs added/updated in this control session
-
-- `integration-rehearsal/STAGING_CANDIDATE.md`
-- `integration-rehearsal/STAGING_APPLY_ORDER.md`
+- `integration-rehearsal/STAGING_LINK_HANDOFF.md`
 - `workstreams/ws50/STATUS.md`
 - `tools/ws50_integration/staging_candidate.py`
 - `tools/ws50_integration/staging_candidate_current.py`
-- `.github/workflows/ws50-rehearsal.yml` staging-candidate job
 
-Historical full-program rehearsal outputs remain available separately (`REHEARSAL_REPORT.md`, `SAFE_BATCHES.md`, `FAILED_BRANCHES.md`, `CONFLICTS.md`) and are not the decision source for this Moradon staging control session.
+The rehearsal harness now composes the full narrow provider order, includes WS45/WS11/WS09 deployment surfaces, validates the WSS/MIME/publication contracts, and fails closed if any frozen provider branch moves during the rehearsal.
+
+`STAGING_LINK_HANDOFF.md` contains the exact provider SHAs, launcher/static publication order, backend/session/world composition, public `/play-shell/` + `/auth` + `/game` contract, and the one-shot WS09 public smoke recipe. Its four WS10 PASS fields are deliberately `REQUIRED` until the gate succeeds.
+
+When WS10 PASS exists, this same WS50 handoff is updated with the exact successful run/head/artifact identities and changes from `READY_PENDING_WS10` to `READY`. The passing client artifact is consumed unchanged; it is not rebuilt.
+
+## Boundaries preserved
+
+- no fake HTML/iframe/Three.js client
+- no fake Moradon PASS
+- no public URL invented
+- no `main` merge
+- no provider-branch push
+- no force push
+- no new WS number
+
+**BU SOHBETE ARTIK GEREK VAR MI?: HAYIR**
