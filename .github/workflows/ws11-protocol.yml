@@ -36,10 +36,12 @@ jobs:
           set -euo pipefail
           python3 tools/ws11_protocol/generate_fixtures.py
           python3 tools/ws11_protocol/generate_gameplay_fixtures.py
+          python3 tools/ws11_protocol/generate_visibility_fixtures.py
           git diff --exit-code -- \
             protocol-lab/fixtures \
             protocol-lab/login_to_zone.sequence.json \
             protocol-lab/gameplay-fixtures \
+            protocol-lab/visibility-fixtures \
             protocol-lab/negative-fixtures
 
       - name: Validate protocol authority and ownership
@@ -47,6 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 tools/ws11_protocol/validate_authority.py
+          python3 tools/ws11_protocol/validate_visibility.py
           python3 tools/ws11_protocol/fixture_validator.py
           python3 tools/ws11_protocol/unknown_report.py > ws11-unknown-report.json
           python3 tools/ws11_protocol/decode_gameplay.py --file protocol-lab/gameplay-fixtures/game_move_start_demo.bin --direction C2S > ws11-gameplay-pretty.json
@@ -66,11 +69,16 @@ jobs:
           import sys
           from pathlib import Path
           sys.path.insert(0,'tools/ws11_protocol')
-          from gameplay import decode_frame
+          from gameplay import decode_frame, parse_frame
+          from visibility import decode_visibility_payload
           raw=Path('protocol-lab/gameplay-fixtures/game_attack_normal_demo.bin').read_bytes()
           d=decode_frame(raw,'C2S')
           assert d['name']=='WIZ_ATTACK' and d['variant']=='c2s_normal'
+          vis=parse_frame(Path('protocol-lab/visibility-fixtures/monster_in_spawn.bin').read_bytes())
+          vd=decode_visibility_payload(vis,'S2C')
+          assert vd['name']=='WIZ_NPC_INOUT' and vd['record']['npc_type']==0
           print(d)
+          print(vd)
           PY
 
       - name: Replay dry-run smoke
