@@ -1,268 +1,142 @@
 # WS50 — Staging Apply Order
 
-This is the reproducible apply/build order for the Moradon public-test candidate. It is a rehearsal recipe, **not** a merge plan into `main`.
+This is the reproducible source-composition and publication recipe for the OldKOWeb public Moradon test-link candidate. It is **not** a merge plan for `main` and it must not be used to rebuild a client after WS10 has produced a passing frozen client artifact.
 
-## 0. Freeze first
+## 0. Freeze once, then fail closed
 
-Resolve every moving provider branch once, record the exact commit SHA, and use only those SHAs afterward. Do not compose from live branch names after the freeze.
+The authoritative latest WS50 staging rehearsal is GitHub Actions run `38503488408` (WS50 Integration Rehearsal run 22), staging job `115655569968`.
 
-Successful WS50 rehearsal snapshot:
+At run start every provider ref was resolved exactly once. At run end every ref was fetched again and proved unchanged. The exact composed Git tree is:
 
 ```text
-CONTROL_BASE 3aeaaa3de81c8094b47de44f2c24f3c455e7fd3d
-BROWSER_BASELINE 18282d0e70de7ccb30244a9f09e2b3bff3040155
-WS01 5545df2273cda795055a611618c91b948063624f
-WS02 1738f60945b24e00bdd2266e6600b5c0cf3c64cf
-WS03 d634870bbcd2c541695516643d34e0ac119354d7
-WS04 fffbd9372b67c2aaef600f7e50595bec7e23fe88
-WS05 6ca101f3390e0a0f6b056afea99b45ec8d4f67be
-WS09 afca7e7e578a81b8b5852f8a1b3d15a233348847
-WS10 34c551518aad87a9fd03d392f193d354483c95a0
-WS12 77f55b2949844e0fdd279526dab0fba4e8ab4f94
-WS14 82cdcef40bed265ff4c4ce0fb7c8f6ad8cf2f52b
-WS38 5f323f3cf055ba7f96d928605a2f2faf84e609cb
+300d7e41dfb7ca84baaef0db2cef8c8a9cc1cdd6
+```
+
+Frozen refs:
+
+```text
+MAIN 5715c55abd9ecb36bb32a259d045ba9ad1dc9551
+BROWSER_BASELINE openko-browser-port 18282d0e70de7ccb30244a9f09e2b3bff3040155
+WS01 ws01-runtime-build 25c2fcd9c59e8f7a704f7d2ac0d5c331d0042ff9
+WS02 ws02-websocket-gateway 1738f60945b24e00bdd2266e6600b5c0cf3c64cf
+WS03 ws03-ko1298-session d634870bbcd2c541695516643d34e0ac119354d7
+WS04 ws04-character-client 32616b1b7ccbdc3de41c0949f182a65e03450d18
+WS05 ws05-moradon-world 0537c481383a69c534799b43810f35e7279c5578
+WS09 ws09-production-infra bac4f9d1338e385c8aff3989becaa8ed74037b38
+WS10 ws10-qa-integration 419d52b363a73c8ab77ff8ad944a30968fda967d
+WS11 ws11-protocol-lab 05562662d9d3f13a4b0500d0478e065fd802cfd0
+WS12 ws12-browser-launcher 77f55b2949844e0fdd279526dab0fba4e8ab4f94
+WS14 ws14-world-session 82cdcef40bed265ff4c4ce0fb7c8f6ad8cf2f52b
+WS38 ws38-client-content-pipeline 5f323f3cf055ba7f96d928605a2f2faf84e609cb
+WS45 ws45-session-ownership 4a66338743553c2781c68ca84b866ff4e999c14e
 OPENKO 97eb0ea20207afc0c360bfed6915113572711be3
 KO_ASSETS 2055ee6ed77f1b5cfef23832dd5bc31909e14a66
 EMSCRIPTEN 6.0.12
 ```
 
-If WS05 moves while applying this recipe, re-fetch it before any READY/PUBLISH decision and restart the freeze with the new exact provider set.
+If any provider needed by the release moves before the final READY handoff, repeat the freeze/rehearsal. Never silently mix a newer branch tip with this exact tree.
 
-## 1. Create a disposable integration tree
+## 1. Narrow source composition order
 
-Start from the exact WS50 control base in a detached worktree/clone. Do not merge or push from the provider branches.
+Start from exact `MAIN`, in a detached disposable worktree. Apply only the owned surfaces below, in this order:
 
-Copy/check out only these provider-owned paths at their frozen SHAs:
+1. `BROWSER_BASELINE` browser source-generation scripts.
+2. `WS01`: `openko-web/index.html`, `tools/ws01_runtime/**`.
+3. `WS12`: `play-shell/**`, `tools/ws12_launcher/**`, `tests/ws12-launcher/**`.
+4. `WS38`: `content-pipeline/**`, `tools/ws38_content/**`, `tests/content-pipeline/**`.
+5. `WS02`: `services/ko-gateway/**`, `tests/ko-gateway/**`.
+6. `WS03`: `services/ko1298-session/**`, `tests/ko1298-session/**`.
+7. `WS14`: `services/ko1298-world/**`, `tests/ko1298-world/**`.
+8. `WS45`: `services/session-ownership/**`, `tests/session-ownership/**`.
+9. `WS04`: `tools/ws04_character/**`.
+10. `WS05`: `tools/ws05_moradon/**`.
+11. `WS11`: `tools/ws11_protocol/**`, `protocol-lab/**`, `tests/protocol-lab/**`.
+12. `WS09`: `infra/**`, `deploy/**`, `docker-compose.ws09.yml`, `docker-compose.ws09-staging.yml`.
+13. `WS10`: `qa/**`, `tests/e2e/**` **only as QA/harness input**.
 
-```text
-openko-browser-port:
-  tools/patch_openko_browser.py
-  tools/patch_openko_browser_gateway.py
-  tools/fix_browser_server_ini_case.py
-  tools/patch_openko_browser_serverlist_probe.py
-  tools/patch_openko_browser_auth_probe.py
+Do not full-merge divergent browser branches. WS10 is never a production implementation provider in this composition.
 
-WS01:
-  openko-web/index.html
-  tools/ws01_runtime/**
+## 2. Browser source-generation order
 
-WS38:
-  content-pipeline/**
-  tools/ws38_content/**
-  tests/content-pipeline/**
-
-WS12:
-  play-shell/**
-  tools/ws12_launcher/**
-  tests/ws12-launcher/**
-
-WS02:
-  services/ko-gateway/**
-  tests/ko-gateway/**
-
-WS03:
-  services/ko1298-session/**
-  tests/ko1298-session/**
-
-WS04:
-  tools/ws04_character/**
-
-WS14:
-  services/ko1298-world/**
-  tests/ko1298-world/**
-
-WS05:
-  tools/ws05_moradon/**
-
-WS10 integration-only:
-  qa/**
-  tests/e2e/**
-```
-
-WS09 remains read-only input for compose/Nginx/publication contracts.
-
-Do **not** full-merge WS01, WS04 or WS05. Their branch ancestry is intentionally divergent; the browser build must use the narrow provider scripts/inputs above.
-
-## 2. Verify the source tree before building
-
-Run the static/unit gates in this order:
-
-```bash
-git diff --cached --check
-node tools/ws12_launcher/check-config.cjs
-node --test tests/ws12-launcher/launcher-core.test.cjs
-node --test tests/ko-gateway/gateway.test.js
-node --test tests/ko1298-session/session.test.js
-node --test tests/ko1298-world/protocol-boundary.test.js tests/ko1298-world/world-session.test.js
-python3 -m unittest discover -s tests/content-pipeline -p 'test_*.py' -v
-python3 tools/ws05_moradon/test_moradon_gate.py
-node --check qa/moradon/integration-server.cjs
-node --check qa/moradon/browser-e2e.cjs
-```
-
-Then verify the integrated CommonJS sibling boundary, not only the two services independently:
+For a source rehearsal or a WS10-controlled build, use the immutable OpenKO/KO-assets pins above and apply browser patches in this exact sequence:
 
 ```text
-services/ko1298-session/server.js
-        require('../ko1298-world')
-services/ko1298-world/index.js
-        exports WorldSessionService
+tools/patch_openko_browser.py
+tools/patch_openko_browser_gateway.py
+tools/fix_browser_server_ini_case.py
+tools/patch_openko_browser_serverlist_probe.py
+tools/patch_openko_browser_auth_probe.py
+tools/ws04_character/patch_character_client.py
+tools/ws04_character/patch_frame_capture.py
+tools/ws05_moradon/patch_moradon_client.py
+tools/ws01_runtime/prepare_browser_source.py   # LAST
 ```
 
-The WS50 successful rehearsal verified this runtime load directly.
+`prepare_browser_source.py` owns the final config-driven browser transport injection. The current WS01 contract maps AUTH `15100 -> /auth`, GAME `15001 -> /game`, upgrades HTTPS-relative endpoints to `wss://`, and fails closed on insecure `ws://` under HTTPS.
 
-## 3. Prepare the real browser client checkout
+**Release rule:** once WS10 produces the exact passing `KnightOnLine.js`, `KnightOnLine.wasm`, and `KnightOnLine.data`, WS50/WS09 must consume those files unchanged. Do not rebuild them.
 
-Use the immutable external source/assets pins:
+## 3. Required validation on the composed source tree
+
+Run the WS01 transport tests, WS12 launcher tests, WS38 manifest tests, WS02 gateway tests, WS03 session tests, WS14 world tests, WS45 ownership tests, WS11 protocol tests, WS05 Moradon static gates, WS10 harness syntax checks, and WS09 configuration validation.
+
+The run-22 candidate passed all of them, including:
 
 ```text
-OpenKO:   97eb0ea20207afc0c360bfed6915113572711be3
-ko-assets: 2055ee6ed77f1b5cfef23832dd5bc31909e14a66
+WS01 transport                  9/9 PASS
+WS12 launcher                  11/11 PASS
+WS02 gateway                    7/7 PASS
+WS03 session                   10/10 PASS
+WS14 world                     14/14 PASS
+WS45 session ownership         16/16 PASS
+WS38 content pipeline          15/15 PASS
+WS11 protocol lab              15/15 PASS
+WS05 Moradon static gate        8/8 PASS
+WS03 -> ../ko1298-world load          PASS
+WS09 production+staging config       PASS
 ```
 
-Apply browser changes to that temporary checkout in this order:
+The integrated session/world container must contain the WS03 and WS14 sibling directories together. Run 22 proved both TCP listeners are actually reachable on auth `15100` and game `15001`; TCP probes are the boot proof even if human-readable startup log wording differs.
 
-```bash
-python3 tools/patch_openko_browser.py
-python3 tools/patch_openko_browser_gateway.py
-python3 tools/fix_browser_server_ini_case.py
-python3 tools/patch_openko_browser_serverlist_probe.py
-python3 tools/patch_openko_browser_auth_probe.py
-python3 tools/ws04_character/patch_character_client.py
-python3 tools/ws04_character/patch_frame_capture.py
-python3 tools/ws05_moradon/patch_moradon_client.py
-python3 tools/ws01_runtime/prepare_browser_source.py
-```
+## 4. Gateway and same-origin edge contract
 
-`tools/ws01_runtime/prepare_browser_source.py` intentionally uses the fixed temporary checkout paths `openko/...` and `ko-assets/...`; it takes no CLI path arguments.
-
-`openko-web/index.html` from WS01 remains the canonical package index; do not replace it with a launcher mock or Three.js client.
-
-### Blocking prerequisite before public build
-
-The current `patch_openko_browser_gateway.py` must first be corrected by **WS01** so the actual native `CAPISocket` can consume staging-safe `wss://` auth/game endpoints. The current injected URL is `ws://<host>:<port>` only. WS50 must not implement that provider change.
-
-## 4. Build the real Emscripten client
-
-Use Emscripten `6.0.12` and WS01's established build contract:
-
-```bash
-emcmake cmake -S openko -B build-web -G Ninja \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_C_FLAGS='-DBOOST_HAS_PTHREADS=1' \
-  -DCMAKE_CXX_FLAGS='-DBOOST_HAS_PTHREADS=1 -DASIO_DISABLE_THREADS=1 -fexceptions' \
-  -DCMAKE_EXE_LINKER_FLAGS='-fexceptions' \
-  -DOPENKO_BUILD_CLIENT=ON \
-  -DOPENKO_CLIENT_POSIX_EXPERIMENTAL=ON \
-  -DOPENKO_BUILD_CLIENT_TOOLS=OFF \
-  -DOPENKO_BUILD_TOOLS=OFF \
-  -DOPENKO_BUILD_SERVERS=OFF \
-  -DOPENKO_BUILD_TESTS=OFF \
-  -DOPENKO_FETCH_CLIENT_ASSETS=OFF \
-  -DOPENKO_COMPILE_WARNINGS_AS_ERROR=OFF
-
-cmake --build build-web --target WarFare -j2
-```
-
-Require non-empty:
+WS02 is deployed as separate auth/game gateway instances. WS09 staging maps the same public HTTPS host to:
 
 ```text
-KnightOnLine.js
-KnightOnLine.wasm
-KnightOnLine.data
-index.html
+/play-shell/    static launcher
+/auth           WSS -> auth gateway -> session-world:15100
+/game           WSS -> game gateway -> session-world:15001
 ```
 
-## 5. Publish client content through WS38
-
-Generate/verify the versioned WS38 release, checksum manifest, `latest.json` pointer and completion marker using the frozen WS38 tools. Do not publish a partial version directory as complete.
-
-The staging launcher should consume the WS12 staging configuration pattern:
+Required public client media types are exact:
 
 ```text
-publication.latestUrl = /latest.json
-publication.requirePublicationMarker = true
-publication.verifyRequiredFiles = true
-publication.strictContentType = true
-gateway endpoints = /auth, /game
+KnightOnLine.js   text/javascript; charset=utf-8
+KnightOnLine.wasm application/wasm
+KnightOnLine.data application/octet-stream
 ```
 
-Before enabling strict publication, align the WS09 edge MIME contract with the WS38 profile for `KnightOnLine.js` (`text/javascript; charset=utf-8`). This is a WS09 deployment follow-up and must not be silently rewritten by WS50.
+Run 22 verified the WS01 WSS resolver, WS12 same-origin readiness contract, WS38 strict publication contract and latest WS09 MIME/routes together.
 
-## 6. Build server-side images
+## 5. Static client publication order
 
-### WS02 gateway
+The passing WS10 artifact is published through WS38 without rebuilding it. Use this fail-closed order:
 
-Build from repository-root context so its checked-in Dockerfile can copy `services/ko-gateway/**` correctly:
+1. copy immutable `index.html`, `KnightOnLine.js`, `KnightOnLine.wasm`, `KnightOnLine.data`, `BUILD.txt` into `/client-content/v1/<contentVersion>/`;
+2. write `manifest.json`;
+3. verify the manifest against immutable files;
+4. write `_complete.json`;
+5. verify again with the publication marker required;
+6. write `/latest.json` **last**;
+7. run WS12 strict preflight against `latest -> manifest -> _complete -> required files`.
 
-```bash
-docker build -f services/ko-gateway/Dockerfile -t <immutable-gateway-image> .
-```
+Never expose `latest.json` before the immutable release is complete.
 
-### Integrated WS03 + WS14 runtime
+## 6. Final release gate
 
-The staging server image must contain both sibling service directories in the same filesystem because WS03 loads WS14 with `require('../ko1298-world')`.
+The source/staging composition is proven. Public-link publication remains closed until an exact successful WS10 Moradon run supplies both:
 
-Integration-only Docker layout:
+- explicit Moradon E2E PASS evidence; and
+- the frozen passing client artifact containing exactly one each of `KnightOnLine.js`, `KnightOnLine.wasm`, `KnightOnLine.data`.
 
-```dockerfile
-FROM node:22-alpine
-WORKDIR /app
-COPY services/ko1298-session /app/services/ko1298-session
-COPY services/ko1298-world /app/services/ko1298-world
-CMD ["node","services/ko1298-session/server.js"]
-```
-
-Do not build an image containing only `services/ko1298-session`; that would lose the intended world-session provider at runtime.
-
-WS50 rehearsal proved both auth/game TCP listeners from this combined image.
-
-## 7. Render WS09 staging deployment
-
-Consume frozen WS09 deployment files read-only and supply immutable image references:
-
-```text
-GATEWAY_IMAGE=<immutable WS02 image>
-KO_SESSION_WORLD_IMAGE=<immutable integrated WS03+WS14 image>
-```
-
-Validate before deployment:
-
-```bash
-docker compose -f docker-compose.ws09-staging.yml config
-```
-
-The public edge is expected to expose:
-
-```text
-https://<temporary-staging-host>/play-shell/
-wss://<temporary-staging-host>/auth
-wss://<temporary-staging-host>/game
-```
-
-No purchased production domain is assumed.
-
-## 8. Final gates before a public test link
-
-A public staging publish is allowed only after all of the following are true:
-
-1. WS10 Moradon native E2E is a current PASS against the same frozen WS05/browser provider set.
-2. WS01 native C++/Emscripten transport supports the WS09 WSS auth/game staging contract.
-3. WS09/WS38/WS12 strict content-type contract is aligned.
-4. the exact client package published by WS38 is the one exercised by the launcher.
-5. WS02 `/auth` and `/game` gateways reach the integrated WS03+WS14 server image.
-6. the public HTTPS page performs a real create -> refresh -> select -> Moradon session; HTTP health/readiness probes alone do not count.
-
-### Current upstream PASS state
-
-The corrected-WS05 rerun reached native Moradon zone/assets/terrain/shapes/local-player markers but failed waiting for `WS04_GL_CAPTURE id=1010 ok=1`. Thus the WS10 PASS prerequisite is still open.
-
-## 9. Reproducibility marker
-
-For the successful WS50 rehearsal, the exact composed Git tree was:
-
-```text
-72a72d5565b7945c9dcf8f54b4148acec31b5876
-```
-
-Any provider SHA change invalidates that tree hash and requires a new freeze/rehearsal.
+At this control-session close, WS10 run `38503397843` (run 25, head `419d52b363a73c8ab77ff8ad944a30968fda967d`) is still in progress, so the current decision is `READY_PENDING_WS10`.
