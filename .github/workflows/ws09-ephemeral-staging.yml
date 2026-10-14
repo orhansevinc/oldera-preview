@@ -48,7 +48,7 @@ on:
         required: true
         type: string
       keepalive_minutes:
-        description: Minutes to keep the temporary HTTPS/WSS URL alive after all public smoke gates pass (5-45)
+        description: Minutes to keep temporary HTTPS/WSS URL alive after all public smoke gates pass (5-45)
         required: true
         default: '30'
         type: string
@@ -178,11 +178,15 @@ jobs:
             exit 1
           fi
 
-          for name in KnightOnLine.js KnightOnLine.wasm KnightOnLine.data; do
+          CLIENT_PATHS="${RUNNER_TEMP}/client-paths.env"
+          : > "$CLIENT_PATHS"
+          for spec in 'CLIENT_JS:KnightOnLine.js' 'CLIENT_WASM:KnightOnLine.wasm' 'CLIENT_DATA:KnightOnLine.data'; do
+            variable=${spec%%:*}
+            name=${spec#*:}
             mapfile -t hits < <(find "$CLIENT_ROOT" -type f -name "$name" -print)
             ((${#hits[@]} == 1)) || { echo "client artifact must contain exactly one $name; found ${#hits[@]}" >&2; exit 1; }
             test -s "${hits[0]}" || { echo "frozen client file is empty: $name" >&2; exit 1; }
-            printf '%s=%s\n' "$name" "${hits[0]}" >> "${RUNNER_TEMP}/client-paths.env"
+            printf '%s=%q\n' "$variable" "${hits[0]}" >> "$CLIENT_PATHS"
           done
 
       - name: Materialize exact provider slices from WS50 freeze
@@ -207,7 +211,6 @@ jobs:
           extract_path "$WS14_SHA" services/ko1298-world
           extract_path "$WS38_SHA" content-pipeline
           extract_path "$WS38_SHA" tools/ws38_content
-
           (cd "$ROOT" && node tools/ws12_launcher/check-config.cjs)
 
       - name: Stage exact client through WS38 immutable publication order
@@ -227,10 +230,9 @@ jobs:
           mkdir -p "$PACKAGE" "$META" "$RELEASE"
           cp -a "$ROOT/play-shell" "$STATIC/play-shell"
           cp "$STATIC/play-shell/config.staging.example.json" "$STATIC/play-shell/config.json"
-
-          cp "$KnightOnLine.js" "$PACKAGE/KnightOnLine.js"
-          cp "$KnightOnLine.wasm" "$PACKAGE/KnightOnLine.wasm"
-          cp "$KnightOnLine.data" "$PACKAGE/KnightOnLine.data"
+          cp "$CLIENT_JS" "$PACKAGE/KnightOnLine.js"
+          cp "$CLIENT_WASM" "$PACKAGE/KnightOnLine.wasm"
+          cp "$CLIENT_DATA" "$PACKAGE/KnightOnLine.data"
 
           mapfile -t index_hits < <(find "${RUNNER_TEMP}/ws10-client" -type f -name index.html -print)
           if ((${#index_hits[@]} == 1)); then
@@ -259,7 +261,7 @@ jobs:
             --latest-output "$META/latest.json" \
             --cdn-manifest-path "client-content/v1/${CONTENT_VERSION}/manifest.json")
 
-          # Exact fail-closed publication sequence: immutable files -> manifest -> verify -> _complete -> verify -> latest last.
+          # Fail-closed order: immutable files -> manifest -> verify -> _complete -> verify -> latest last.
           cp "$PACKAGE/index.html" "$PACKAGE/KnightOnLine.js" "$PACKAGE/KnightOnLine.wasm" "$PACKAGE/KnightOnLine.data" "$PACKAGE/BUILD.txt" "$RELEASE/"
           cp "$META/manifest.json" "$RELEASE/manifest.json"
           (cd "$ROOT" && python3 -m tools.ws38_content.verify_manifest \
@@ -361,14 +363,14 @@ jobs:
           set -euo pipefail
           ROOT="${RUNNER_TEMP}/composition"
           PUBLIC_ORIGIN="$PUBLIC_ORIGIN" ROOT="$ROOT" node <<'NODE'
-          const fs = require('node:fs');
           const path = require('node:path');
+          const { webcrypto } = require('node:crypto');
           const core = require(path.join(process.env.ROOT, 'play-shell/launcher-core.js'));
           (async () => {
             const raw = await fetch(`${process.env.PUBLIC_ORIGIN}/play-shell/config.json`, { cache: 'no-store' });
             if (!raw.ok) throw new Error(`config HTTP ${raw.status}`);
             const config = core.normalizeConfig(await raw.json());
-            const publication = await core.preflightPublication(config, fetch, globalThis.crypto, `${process.env.PUBLIC_ORIGIN}/play-shell/`);
+            const publication = await core.preflightPublication(config, fetch, webcrypto, `${process.env.PUBLIC_ORIGIN}/play-shell/`);
             if (!publication || !publication.entryUrl || publication.requiredFileCount < 4) throw new Error('WS12 publication preflight did not reach launcher-ready state');
             console.log(`WS12 OYNA preflight: PASS contentVersion=${publication.contentVersion} requiredFiles=${publication.requiredFileCount}`);
           })().catch(error => { console.error(error); process.exit(1); });
