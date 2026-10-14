@@ -8,6 +8,8 @@ on:
       - 'infra/nginx/**'
       - 'deploy/.env.production.example'
       - 'deploy/RELEASE.ws50-c5-ws10-38604174659.env'
+      - 'deploy/production-account-api.Dockerfile'
+      - 'deploy/migrate-production-db.sh'
       - 'deploy/ko-auth-roundtrip-smoke.mjs'
       - 'deploy/production-smoke.sh'
       - 'deploy/release-switch.sh'
@@ -22,6 +24,8 @@ on:
       - 'infra/nginx/**'
       - 'deploy/.env.production.example'
       - 'deploy/RELEASE.ws50-c5-ws10-38604174659.env'
+      - 'deploy/production-account-api.Dockerfile'
+      - 'deploy/migrate-production-db.sh'
       - 'deploy/ko-auth-roundtrip-smoke.mjs'
       - 'deploy/production-smoke.sh'
       - 'deploy/release-switch.sh'
@@ -49,9 +53,11 @@ jobs:
           sh -n deploy/release-switch.sh
           sh -n deploy/rollback-static.sh
           sh -n deploy/validate-production-env.sh
+          if test -f deploy/migrate-production-db.sh; then sh -n deploy/migrate-production-db.sh; fi
           python3 -m json.tool workstreams/ws09/DOMAIN_DEPLOYMENT.json >/dev/null
           python3 -m json.tool workstreams/ws09/DOMAIN_RELEASE_REQUESTS.json >/dev/null
-          ! grep -RIE --exclude='*.md' --exclude='*.example' '(password|token|secret)[=:][^$<{ ]{6,}' deploy workstreams/ws09 || {
+          if test -f coordination/handoffs/domain-live/WS09.json; then python3 -m json.tool coordination/handoffs/domain-live/WS09.json >/dev/null; fi
+          ! grep -RIE --exclude='*.md' --exclude='*.example' '(password|token|secret)[=:][^$<{ ]{6,}' deploy workstreams/ws09 coordination/handoffs/domain-live 2>/dev/null || {
             echo 'possible literal secret detected in WS09 production surfaces' >&2
             exit 1
           }
@@ -72,6 +78,17 @@ jobs:
           grep -Fqx 'WS10_CLIENT_ARTIFACT_DIGEST=sha256:f749750fc5bb0249a67b712bd4e1a03847773d8845fd209508b8c95f6c447a83' "$RELEASE"
           grep -Fq '"permanent_domain_ready": false' workstreams/ws09/DOMAIN_DEPLOYMENT.json
 
+      - name: Account and website authority contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fqx 'OFFICIAL_SITE_HANDOFF_COMMIT=8370de2ebfdfd319cf8a719da79cbdef9853fd2f' deploy/.env.production.example
+          grep -Fqx 'OFFICIAL_SITE_SOURCE_COMMIT=5f9a4f0ccd3d7d06e8b407bfca35266f1b2d3516' deploy/.env.production.example
+          grep -Fqx 'WS13_ACCOUNT_HEAD=1ef67bd7c0c98a588bce4db6c0f1305b820af008' deploy/.env.production.example
+          grep -Fqx 'WS13_ACCOUNT_RUN_ID=38650301600' deploy/.env.production.example
+          grep -Fqx 'WS07_ACCOUNT_COMMIT=1ae85c96319cbab11648a91ed28300e17d4c607f' deploy/.env.production.example
+          grep -Fq 'OLDKO_ACCOUNT_REPOSITORY_MODULE=/opt/oldkoweb/ws07/services/oldko-data/src/adapters/ws13-account-api.js' deploy/.env.production.example
+
       - name: Prepare production contract fixtures
         shell: bash
         run: |
@@ -89,9 +106,13 @@ jobs:
           sed -i \
             -e "s#^NGINX_IMAGE=.*#NGINX_IMAGE=$fake#" \
             -e "s#^POSTGRES_IMAGE=.*#POSTGRES_IMAGE=$fake#" \
+            -e "s#^ACCOUNT_API_IMAGE=.*#ACCOUNT_API_IMAGE=$fake#" \
             -e "s#^ADMIN_API_IMAGE=.*#ADMIN_API_IMAGE=$fake#" \
             -e "s#^GATEWAY_IMAGE=.*#GATEWAY_IMAGE=$fake#" \
             -e "s#^KO_SESSION_WORLD_IMAGE=.*#KO_SESSION_WORLD_IMAGE=$fake#" \
+            -e 's#^ACCOUNT_DATABASE_URL=.*#ACCOUNT_DATABASE_URL=postgresql://ci:ci@db:5432/oldkoweb#' \
+            -e 's#^OLDKO_ACCOUNT_DELIVERY_WEBHOOK_URL=.*#OLDKO_ACCOUNT_DELIVERY_WEBHOOK_URL=https://delivery.example.invalid/account#' \
+            -e 's#^OLDKO_ACCOUNT_DELIVERY_WEBHOOK_SECRET=.*#OLDKO_ACCOUNT_DELIVERY_WEBHOOK_SECRET=ci-placeholder-through-secure-channel#' \
             /tmp/ws09-production-ci.env
 
       - name: Production compose and env dry-run
@@ -101,7 +122,7 @@ jobs:
           docker compose --env-file /tmp/ws09-production-ci.env -f docker-compose.ws09.yml config --quiet
           sh deploy/validate-production-env.sh /tmp/ws09-production-ci.env
           if sh deploy/validate-production-env.sh deploy/.env.production.example; then
-            echo 'placeholder production env unexpectedly passed immutable image validation' >&2
+            echo 'placeholder production env unexpectedly passed immutable image/secure-input validation' >&2
             exit 1
           fi
 
@@ -110,21 +131,25 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm \
+            --add-host account-api:127.0.0.1 \
             --add-host gateway-auth:127.0.0.1 \
             --add-host gateway-game:127.0.0.1 \
             --add-host admin-api:127.0.0.1 \
             -e OFFICIAL_HOST=oldkoweb.com \
             -e PLAY_HOST=play.oldkoweb.com \
             -e ADMIN_HOST=admin.oldkoweb.com \
+            -e ACCOUNT_API_PORT=8081 \
             -e ADMIN_API_PORT=8080 \
             -e GATEWAY_INTERNAL_PORT=8080 \
-            -e 'NGINX_ENVSUBST_FILTER=^(OFFICIAL_HOST|PLAY_HOST|ADMIN_HOST|ADMIN_API_PORT|GATEWAY_INTERNAL_PORT)$' \
+            -e 'NGINX_ENVSUBST_FILTER=^(OFFICIAL_HOST|PLAY_HOST|ADMIN_HOST|ACCOUNT_API_PORT|ADMIN_API_PORT|GATEWAY_INTERNAL_PORT)$' \
             -v "$PWD/infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" \
             -v "$PWD/infra/nginx/mime.types:/etc/nginx/oldkoweb-mime.types:ro" \
             -v "$PWD/infra/nginx/templates/production.conf.template:/etc/nginx/templates/default.conf.template:ro" \
             -v "$PWD/deploy/tls:/etc/nginx/tls:ro" \
             -v "$PWD/deploy/artifacts:/srv/oldkoweb:ro" \
             nginx:stable-alpine nginx -t
+          grep -Fq 'location /api/account/' infra/nginx/templates/production.conf.template
+          grep -Fq 'proxy_pass http://account-api:${ACCOUNT_API_PORT}/;' infra/nginx/templates/production.conf.template
           grep -Fq 'location = /auth' infra/nginx/templates/production.conf.template
           grep -Fq 'location = /game' infra/nginx/templates/production.conf.template
           grep -Fq 'location /api/admin/' infra/nginx/templates/production.conf.template
