@@ -1,0 +1,64 @@
+{
+  "schema_version": "ws09-official-site-cutover/v1",
+  "date": "2026-10-15",
+  "workstream": "WS09",
+  "branch": "ws09-production-infra",
+  "scope": "official website static publication only; no gameplay provider upgrade",
+  "official_source": {
+    "branch": "official-site-domain-release",
+    "website_source_commit": "5f9a4f0ccd3d7d06e8b407bfca35266f1b2d3516",
+    "release_handoff_commit": "8370de2ebfdfd319cf8a719da79cbdef9853fd2f",
+    "handoff_path": "coordination/handoffs/official-site-release.json"
+  },
+  "publication": {
+    "provider": "GitHub Pages",
+    "source_branch": "main",
+    "source_root": "/",
+    "cname": "oldkoweb.com",
+    "cname_commit": "aeecf154086bc0e02f120703a3b8988a22d19506",
+    "publication_commit": "fa65bf6f668cd026e3f4fd65c3b324ab0759c231",
+    "pages_run_id": 38648538673,
+    "pages_result": "SUCCESS",
+    "pages_environment_url": "http://oldkoweb.com/",
+    "state": "PUBLISHED_TO_GITHUB_PAGES"
+  },
+  "publication_delta": {
+    "design_changed": false,
+    "cname_added": true,
+    "metadata_only": [
+      "description",
+      "favicon",
+      "canonical preserved",
+      "og:title",
+      "og:description",
+      "og:image",
+      "twitter:card",
+      "theme-color"
+    ]
+  },
+  "account_contract": {
+    "account_api_base": "/api/account",
+    "dashboard_authorization": "server session required via GET /v1/session/current",
+    "fake_success": false,
+    "backend_live": "NOT_VERIFIED_LIVE"
+  },
+  "play_contract": {
+    "url": "https://play.oldkoweb.com/",
+    "backend_live": "NOT_VERIFIED_LIVE",
+    "fake_success": false
+  },
+  "public_acceptance": {
+    "pages_build_deploy": "PASS",
+    "oldkoweb_https_200": "NOT_VERIFIED_EXTERNAL_DNS_TLS_BLOCKER",
+    "account_urls_https_200": "NOT_VERIFIED_EXTERNAL_DNS_TLS_BLOCKER",
+    "play_dns_tls_http": "NOT_VERIFIED_EXTERNAL_DNS_TLS_BLOCKER",
+    "no_coming_soon_on_oldkoweb_com": "NOT_PROVEN_UNTIL_EXTERNAL_DNS_CUTOVER",
+    "share_publicly": false
+  },
+  "external_blocker": {
+    "authoritative_dns_provider_access": "UNAVAILABLE_IN_THIS_SESSION",
+    "dns_mutation": "NOT_PERFORMED",
+    "reason": "GitHub Pages publication and custom-domain CNAME are configured, but the authoritative registrar/DNS zone cannot be inspected or mutated from this session. Do not guess or overwrite unrelated records.",
+    "https_note": "Pages currently reports the environment URL as http://oldkoweb.com/; HTTPS cannot be claimed until public DNS points to Pages and certificate issuance/validation succeeds."
+  }
+}
