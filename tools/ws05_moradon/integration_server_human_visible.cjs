@@ -42,7 +42,8 @@ const mobService=new ws25.MobVisibilityService(mobDefinition,{
   terrain:{resolveHeight(zoneId,x,z){return resolver.resolveHeight(Number(zoneId),x,z);}},
   runtimeIds:runtimeNamespace,
 });
-const mobPopulation=mobService.initialize(0);
+mobService.initialize(0);
+const mobPopulation=mobService.visibilitySnapshot();
 if(npcPopulation.records.length!==37) throw new Error(`expected 37 Moradon NPCs, got ${npcPopulation.records.length}`);
 if(mobPopulation.length!==135) throw new Error(`expected 135 Moradon mobs, got ${mobPopulation.length}`);
 
