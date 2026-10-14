@@ -1,4 +1,46 @@
-# OldKOWeb production runbook
+# OldKOWeb production and ephemeral-staging runbook
+
+## 0. Ephemeral HTTPS/WSS test link (no production domain)
+
+Use `.github/workflows/ws09-ephemeral-staging.yml` only after both upstream gates exist:
+
+- one exact completed **successful** WS10 `WS10 Moradon E2E Integration Gate` run with explicit Moradon E2E PASS evidence;
+- one exact WS50 commit whose `integration-rehearsal/STAGING_LINK_HANDOFF.md` says `STAGING LINK CANDIDATE: READY` and freezes the same WS10 run/artifacts plus exact WS01/WS02/WS03/WS12/WS14/WS38 SHAs.
+
+The publisher is intentionally fail-closed. `READY_PENDING_WS10`, a failed/stale WS10 run, a missing artifact, mismatched SHA, or mismatched handoff stops before public publication.
+
+Example dispatch after WS10 + WS50 have supplied the exact values:
+
+```sh
+gh workflow run ws09-ephemeral-staging.yml \
+  --repo orhansevinc/oldera-preview \
+  --ref ws09-production-infra \
+  -f ws10_run_id=<successful-run-id> \
+  -f ws10_head_sha=<40-char-ws10-sha> \
+  -f ws10_pass_artifact_name=<exact-pass-artifact> \
+  -f ws10_client_artifact_name=<exact-frozen-client-artifact> \
+  -f ws50_handoff_ref=<40-char-ws50-handoff-sha> \
+  -f ws01_sha=<40-char-sha> \
+  -f ws02_sha=<40-char-sha> \
+  -f ws03_sha=<40-char-sha> \
+  -f ws12_sha=<40-char-sha> \
+  -f ws14_sha=<40-char-sha> \
+  -f ws38_sha=<40-char-sha> \
+  -f keepalive_minutes=30
+```
+
+The job performs these gates before it prints any link:
+
+1. validates exact WS10 run conclusion/branch/head and artifact identities;
+2. validates the exact WS50 READY handoff and its frozen provider identities;
+3. consumes the frozen `KnightOnLine.js`, `KnightOnLine.wasm`, and `KnightOnLine.data` without rebuilding them;
+4. composes WS02 gateway + integrated WS03/WS14 runtime from exact handoff SHAs;
+5. stages the exact client through WS38 in `immutable files -> manifest -> verify -> _complete -> verify -> latest last` order;
+6. starts one same-origin WS09 edge and a pinned Cloudflare Quick Tunnel;
+7. verifies public HTTPS, WS38 identity/marker, strict MIME/cache headers, `wss://<host>/auth`, `wss://<host>/game`, and the exact WS12 publication preflight;
+8. only then prints `TEST_LINK=https://<temporary-host>/play-shell/` in the job log and summary.
+
+The temporary URL exists only while the workflow process is alive. `keepalive_minutes` is deliberately bounded to 5–45 minutes; re-run the workflow for a fresh link. This flow does not require `oldkoweb.com`, DNS changes, production TLS certificates, or repository secrets.
 
 ## 1. Prepare host
 
