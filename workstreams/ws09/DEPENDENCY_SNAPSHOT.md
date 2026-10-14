@@ -6,7 +6,8 @@ WS09
 
 - Workstream: `WS09`
 - Branch: `ws09-production-infra`
-- Ephemeral publisher implementation head before this snapshot: `4e7c16ac7979b1a0c768f542cc7941f96172e7fb`
+- Current branch-native publisher implementation validated at `75078d2d6f1251ac3e5b0160769de84088ff1d4e`.
+- Validation: `WS09 deployment config` run #27 / `38504031520` — **SUCCESS**.
 - Owned surfaces used: `infra/**`, `deploy/**`, `workstreams/ws09/**`, `.github/workflows/ws09-*.yml`, existing `docker-compose.ws09-staging.yml`.
 - No provider/game/client implementation was modified.
 
@@ -20,7 +21,7 @@ WS09
 
 ### WS10 — real Moradon acceptance + frozen passing client
 
-- Latest observed run while this snapshot was written: `WS10 Moradon E2E Integration Gate` run #25, run id `38503397843`, head `419d52b363a73c8ab77ff8ad944a30968fda967d`, still `in_progress` at the observation point.
+- Latest observed run while this snapshot was refreshed: `WS10 Moradon E2E Integration Gate` run #25, run id `38503397843`, head `419d52b363a73c8ab77ff8ad944a30968fda967d`, still `in_progress` at the observation point.
 - Previous run #24 (`38501204665`, head `b11929915d881e046ff50aa34695c9da70a5480a`) completed with `failure`; its artifact must not be used as a PASS release.
 - Ephemeral publisher requires an exact **completed successful** WS10 Moradon E2E run, exact head SHA, explicit PASS evidence artifact, and exact frozen client artifact containing one non-empty `KnightOnLine.js`, `.wasm`, and `.data`.
 - Stale/failed runs or artifacts fail closed before any public publication.
@@ -52,7 +53,16 @@ WS09
 
 Workflow: `.github/workflows/ws09-ephemeral-staging.yml`
 
-The workflow:
+Current branch-only activation path (no main merge needed):
+
+1. copy `workstreams/ws09/EPHEMERAL_REQUEST.example.json` to `workstreams/ws09/EPHEMERAL_REQUEST.json`;
+2. fill it only with the exact WS10 PASS/run/artifact values and WS50 READY handoff/frozen SHAs;
+3. commit/push that request to `ws09-production-infra`;
+4. the publisher's `push` path starts automatically.
+
+`workflow_dispatch` inputs are also kept for environments where GitHub exposes this workflow through manual dispatch from the repository default branch.
+
+The publisher:
 
 1. verifies exact WS10 successful run identity and exact live artifacts through GitHub Actions metadata;
 2. verifies exact WS50 READY handoff and all frozen identities;
@@ -69,9 +79,9 @@ Public edge smoke intentionally uses HEAD for large immutable files. Exact WS12 
 
 ## CURRENT DECISION
 
-- `EPHEMERAL STAGING PIPELINE`: implementation ready, validation finishing on WS09 Actions.
+- `EPHEMERAL STAGING PIPELINE`: **READY**.
 - `EPHEMERAL TEST LINK`: **NOT LIVE / NOT CLAIMED** because an exact successful WS10 PASS artifact and exact WS50 READY handoff are not both available at this snapshot point.
-- No production domain, DNS, production certificate, or repository secret is required by this path.
+- No production domain, DNS, production certificate, repository secret, or main merge is required to trigger the branch-native path.
 
 ## BOUNDARIES
 
