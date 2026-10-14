@@ -43,9 +43,7 @@ jobs:
             "https://raw.githubusercontent.com/Open-KO/KnightOnline/7d6cf81093e142c928c2ac9510512b2b182178b5/assets/Server/MAP/moradon_0826.smd" \
             --output "$SMD"
           python3 - "$SMD" <<'PY'
-          import hashlib
-          import pathlib
-          import sys
+          import hashlib, pathlib, sys
           p = pathlib.Path(sys.argv[1])
           data = p.read_bytes()
           assert len(data) == 786000, len(data)
@@ -62,41 +60,40 @@ jobs:
             release/sets/ws50/C1.json \
             release/sets/ws50/C2.json \
             release/sets/ws50/C3.json \
-            release/sets/ws50/C4.json
+            release/sets/ws50/C4.json \
+            release/sets/ws50/C5.json
 
       - name: Verify exact provider SHA evidence
         run: |
           mkdir -p "$RUNNER_TEMP/ws50-provider-set-evidence"
-          for set in B0 C1 C2 C3 C4; do
+          for set in B0 C1 C2 C3 C4 C5; do
             python3 tools/ws50_integration/provider_sets.py verify-git \
               --manifest "release/sets/ws50/${set}.json" \
               --repo "$GITHUB_WORKSPACE" \
               --output "$RUNNER_TEMP/ws50-provider-set-evidence/${set}-sha-evidence.json"
           done
 
-      - name: Record drift without mutating C4
+      - name: Record drift without mutating C5
         run: |
           python3 tools/ws50_integration/provider_sets.py drift \
-            --manifest release/sets/ws50/C4.json \
+            --manifest release/sets/ws50/C5.json \
             --repo "$GITHUB_WORKSPACE" \
-            --output "$RUNNER_TEMP/ws50-provider-set-evidence/C4-drift.json"
+            --output "$RUNNER_TEMP/ws50-provider-set-evidence/C5-drift.json"
 
-      - name: Reproduce exact C1 through C4 candidate ladder
+      - name: Reproduce exact C1 through C5 candidate ladder
         run: |
           set -euo pipefail
-          for set in C1 C2 C3 C4; do
+          for set in C1 C2 C3 C4 C5; do
             python3 tools/ws50_integration/visibility_candidate.py \
               --repo "$GITHUB_WORKSPACE" \
               --manifest "release/sets/ws50/${set}.json" \
               --output "$RUNNER_TEMP/ws50-provider-set-evidence"
           done
 
-      - name: Assert C4 fail-closed first blocker and closed historical authorities
+      - name: Assert historical C4 fail-closed boundary
         run: |
           python3 - "$RUNNER_TEMP/ws50-provider-set-evidence/WS50-C4-receipt.json" <<'PY'
-          import json
-          import pathlib
-          import sys
+          import json, pathlib, sys
           r = json.loads(pathlib.Path(sys.argv[1]).read_text())
           assert r["candidate_result"] == "BLOCKED"
           assert r["protocol_checks"]["NPC_REGION_BODY_AUTHORITY"] == "CLOSED"
@@ -105,6 +102,29 @@ jobs:
           assert r["contract_checks"]["ws50_invented_runtime_id"] is False
           assert r["browser_gate_ready_for_ws10"] is False
           print("WS50_C4_FAIL_CLOSED PASS", r["immutable_key"])
+          PY
+
+      - name: Assert C5 real visibility composition is downstream-ready
+        run: |
+          python3 - "$RUNNER_TEMP/ws50-provider-set-evidence/WS50-C5-receipt.json" <<'PY'
+          import json, pathlib, sys
+          r = json.loads(pathlib.Path(sys.argv[1]).read_text())
+          assert r["candidate_result"] == "PASS"
+          assert r["protocol_checks"]["NPC_REGION_BODY_AUTHORITY"] == "CLOSED"
+          assert r["composition_checks"]["WORLD_TERRAIN_HEIGHT_AUTHORITY"] == "CLOSED"
+          assert r["composition_checks"]["real_ws14_ws16_ws25_visibility_composition"] == "PASS"
+          assert r["composition_checks"]["runtime_id_cross_domain_collision"] == 0
+          assert r["composition_checks"]["combined_0x1C"] == "PASS"
+          assert r["composition_checks"]["mixed_0x1D_detail_recovery"] == "PASS"
+          assert r["composition_checks"]["npc_mob_0x0A_inout"] == "PASS"
+          assert r["contract_checks"]["first_blocker"] is None
+          assert r["contract_checks"]["ws25_snapshot_has_integer_runtime_identity"] is True
+          assert r["contract_checks"]["ws50_invented_runtime_id"] is False
+          assert r["parent_blocker_closure"]["MOB_RUNTIME_NETWORK_IDENTITY_AUTHORITY"]["status"] == "CLOSED"
+          assert r["parent_blocker_closure"]["MOB_BROWSER_BOOTSTRAP_ENCODER_AUTHORITY"]["status"] == "CLOSED"
+          assert r["readiness"]["COMPOSITION_READY"] == "READY"
+          assert r["browser_gate_ready_for_ws10"] is True
+          print("WS50_C5_VISIBILITY_READY PASS", r["immutable_key"])
           PY
 
       - name: Publish candidate summary
