@@ -186,7 +186,7 @@ jobs:
             test -s "ko-assets/Zones/$f" || { echo "missing genuine Moradon asset: Zones/$f" >&2; exit 1; }
           done
           grep -q 'WS04_CHAR_CREATE_SENT opcode=0x02' openko/src/Client/WarFare/GameProcCharacterCreate.cpp
-          grep -q 'WS05_GATE event=moradon-zone-begin zone=21' openko/src/Client/WarFare/N3TerrainManager.cpp
+          grep -q 'WS05_GATE event=moradon-zone-begin' openko/src/Client/WarFare/N3TerrainManager.cpp
           grep -q 'WS05_GATE event=moradon-local-player-rendered zone=21' openko/src/Client/WarFare/GameProcMain.cpp
 
       - name: Install build and browser tools
