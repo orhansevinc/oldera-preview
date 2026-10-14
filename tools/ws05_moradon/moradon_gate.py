@@ -4,15 +4,17 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import re
-import sys
+
+MORADON_WIRE_ZONE_ID = 21
+MORADON_NATIVE_ZONE_ID = 210
 
 REQUIRED = (
     "WS04_CHAR_SELECT_RESPONSE success=1",
-    "WS05_GATE event=moradon-zone-begin zone=21",
-    "WS05_GATE event=moradon-assets-loaded zone=21",
-    "WS05_GATE event=moradon-terrain-rendered zone=21",
-    "WS05_GATE event=moradon-shapes-rendered zone=21",
-    "WS05_GATE event=moradon-local-player-rendered zone=21",
+    "WS05_GATE event=moradon-zone-begin zone=21 native_zone=210",
+    "WS05_GATE event=moradon-assets-loaded zone=21 native_zone=210",
+    "WS05_GATE event=moradon-terrain-rendered zone=21 native_zone=210",
+    "WS05_GATE event=moradon-shapes-rendered zone=21 native_zone=210",
+    "WS05_GATE event=moradon-local-player-rendered zone=21 native_zone=210",
     "WS05_MORADON_VISUAL_OK source=pre-swap-gl",
 )
 
@@ -26,7 +28,8 @@ FORBIDDEN = (
 )
 
 ZONE_BEGIN_RE = re.compile(
-    r"WS05_GATE event=moradon-zone-begin zone=21 "
+    rf"WS05_GATE event=moradon-zone-begin zone={MORADON_WIRE_ZONE_ID} "
+    rf"native_zone={MORADON_NATIVE_ZONE_ID} "
     r"terrain='([^']+)' colormap='([^']+)' objects='([^']+)'"
 )
 

@@ -4,12 +4,16 @@
 The script edits only the temporary OpenKO checkout used by CI. It does not
 change packet semantics, server behavior, world placement, render decisions, or
 desktop builds. Browser-only probes observe the real world loader/render path.
+
+KO 1.298 keeps Moradon as wire/server zone 21, while the pinned native client
+multiplies the selected-character zone by 10 and enters the world as zone 210.
 """
 from pathlib import Path
 import subprocess
 import sys
 
-MORADON_ZONE_ID = 21
+MORADON_WIRE_ZONE_ID = 21
+MORADON_NATIVE_ZONE_ID = 210
 WORLD_ASSET_DIRS = ("DTex", "Item", "Misc", "Object", "Zones", "fx")
 MORADON_ZONE_FILES = ("moradon.gtd", "moradon.opd", "moradon.tct")
 
@@ -82,8 +86,8 @@ def patch_tree(repo_root: Path = Path(".")) -> None:
 \t}
 
 #ifdef __EMSCRIPTEN__
-\tif (iZoneID == 21)
-\t\tspdlog::info("WS05_GATE event=moradon-zone-begin zone={} terrain='{}' colormap='{}' objects='{}'",
+\tif (iZoneID == 210)
+\t\tspdlog::info("WS05_GATE event=moradon-zone-begin zone=21 native_zone={} terrain='{}' colormap='{}' objects='{}'",
 \t\t\tiZoneID, pZone->szTerrainFN, pZone->szColorMapFN, pZone->szObjectPostDataFN);
 #endif
 
@@ -93,8 +97,8 @@ def patch_tree(repo_root: Path = Path(".")) -> None:
 
         anchor = "\tm_pShapes->LoadFromFile(pZone->szObjectPostDataFN); // 오브젝트 데이터 로드..\n"
         probe = anchor + """#ifdef __EMSCRIPTEN__
-\tif (iZoneID == 21)
-\t\tspdlog::info("WS05_GATE event=moradon-assets-loaded zone=21");
+\tif (iZoneID == 210)
+\t\tspdlog::info("WS05_GATE event=moradon-assets-loaded zone=21 native_zone={}", iZoneID);
 #endif
 """
         s = replace_once(s, anchor, probe, "Moradon asset load probe")
@@ -112,10 +116,10 @@ def patch_tree(repo_root: Path = Path(".")) -> None:
 \t\tm_pTerrain->Render();
 #ifdef __EMSCRIPTEN__
 \t\tstatic bool ws05TerrainRendered = false;
-\t\tif (!ws05TerrainRendered && s_pPlayer != nullptr && s_pPlayer->m_InfoExt.iZoneCur == 21)
+\t\tif (!ws05TerrainRendered && s_pPlayer != nullptr && s_pPlayer->m_InfoExt.iZoneCur == 210)
 \t\t{
 \t\t\tws05TerrainRendered = true;
-\t\t\tspdlog::info("WS05_GATE event=moradon-terrain-rendered zone=21");
+\t\t\tspdlog::info("WS05_GATE event=moradon-terrain-rendered zone=21 native_zone={}", s_pPlayer->m_InfoExt.iZoneCur);
 \t\t}
 #endif
 \t}
@@ -136,10 +140,10 @@ def patch_tree(repo_root: Path = Path(".")) -> None:
 \t\tm_pShapes->Render();
 #ifdef __EMSCRIPTEN__
 \t\tstatic bool ws05ShapesRendered = false;
-\t\tif (!ws05ShapesRendered && s_pPlayer != nullptr && s_pPlayer->m_InfoExt.iZoneCur == 21)
+\t\tif (!ws05ShapesRendered && s_pPlayer != nullptr && s_pPlayer->m_InfoExt.iZoneCur == 210)
 \t\t{
 \t\t\tws05ShapesRendered = true;
-\t\t\tspdlog::info("WS05_GATE event=moradon-shapes-rendered zone=21");
+\t\t\tspdlog::info("WS05_GATE event=moradon-shapes-rendered zone=21 native_zone={}", s_pPlayer->m_InfoExt.iZoneCur);
 \t\t}
 #endif
 \t}
@@ -157,10 +161,10 @@ def patch_tree(repo_root: Path = Path(".")) -> None:
 """
     render_probe = render_anchor + """#ifdef __EMSCRIPTEN__
 \tstatic bool ws05LocalPlayerRendered = false;
-\tif (!ws05LocalPlayerRendered && s_pPlayer != nullptr && s_pPlayer->m_InfoExt.iZoneCur == 21)
+\tif (!ws05LocalPlayerRendered && s_pPlayer != nullptr && s_pPlayer->m_InfoExt.iZoneCur == 210)
 \t{
 \t\tws05LocalPlayerRendered = true;
-\t\tspdlog::info("WS05_GATE event=moradon-local-player-rendered zone=21");
+\t\tspdlog::info("WS05_GATE event=moradon-local-player-rendered zone=21 native_zone={}", s_pPlayer->m_InfoExt.iZoneCur);
 \t}
 #endif
 """
@@ -168,7 +172,10 @@ def patch_tree(repo_root: Path = Path(".")) -> None:
         s = replace_once(s, render_anchor, render_probe, "Moradon local-player render probe")
     main.write_text(s, encoding="utf-8")
 
-    print("WS05 Moradon instrumentation applied: authentic assets + native world/render probes")
+    print(
+        "WS05 Moradon instrumentation applied: authentic assets + native world/render probes "
+        f"(wire zone {MORADON_WIRE_ZONE_ID}, native zone {MORADON_NATIVE_ZONE_ID})"
+    )
 
 
 if __name__ == "__main__":
