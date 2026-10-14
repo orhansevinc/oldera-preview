@@ -1,6 +1,6 @@
 'use strict';
 
-const { PacketWriter, assertIntegerRange } = require('./packet-writer');
+const { PacketWriter } = require('./packet-writer');
 const { OPCODE } = require('./constants');
 
 const NPC_INOUT = Object.freeze({ IN: 0x01, OUT: 0x02 });
@@ -64,8 +64,6 @@ function latin1Name(value) {
   return bytes;
 }
 
-// Exact 1298 CNpc::GetNpcInfo quirk: cast/truncate the semantic coordinate first,
-// then multiply by 10. This is intentionally not Math.trunc(value * 10).
 function quantizeNpcCoord(value, { signed = false, label }) {
   finite(value, label);
   const encoded = Math.trunc(value) * 10;
@@ -98,7 +96,7 @@ function canonicalNpcDetailRecord(record) {
     objectType: integer(required(pick(detail, record, 'objectType'), 'objectType'), 0, 0xff, 'objectType'),
     clientIdk0: integer(pick(detail, record, 'clientIdk0', 'idk0') ?? 0, I16_MIN, I16_MAX, 'clientIdk0'),
     clientIdk1: integer(pick(detail, record, 'clientIdk1', 'idk1') ?? 0, I16_MIN, I16_MAX, 'clientIdk1'),
-    direction: integer(required(pick(detail, record, 'direction'), 'direction'), 0, 0xff, 'direction'),
+    direction: integer(pick(detail, record, 'direction') ?? 0, 0, 0xff, 'direction'),
   };
   latin1Name(canonical.name);
   quantizeNpcCoord(canonical.x, { label: 'x' });
@@ -174,10 +172,7 @@ function buildSurroundingNpcs(records = []) {
 }
 
 function buildNpcIn(record) {
-  return Buffer.concat([
-    Buffer.from([OPCODE.NPC_INOUT, NPC_INOUT.IN]),
-    encodeNpcDetailRecord(record),
-  ]);
+  return Buffer.concat([Buffer.from([OPCODE.NPC_INOUT, NPC_INOUT.IN]), encodeNpcDetailRecord(record)]);
 }
 
 function buildNpcOut(runtimeId) {
