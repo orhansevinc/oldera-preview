@@ -47,7 +47,8 @@ test('one PostgreSQL row powers WS13 register/verify/login and WS03 KO1298 auth 
     });
 
     const username = 'WebHero';
-    const password = 'Strong!Pass2026';
+    const password = 'Ko!Pass2026';
+    assert.ok(Buffer.byteLength(password, 'latin1') <= 12, 'KO1298 login credential envelope permits at most 12 password bytes');
     const context = { ip: '127.0.0.1', requestId: 'ws03-one-db-e2e', userAgent: 'ws03-ci' };
 
     const registration = await website.register({

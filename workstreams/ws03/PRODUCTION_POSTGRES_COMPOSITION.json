@@ -53,5 +53,14 @@
     "flow": ["WS13 register","WS13 verify","WS13 login","same oldko.accounts row","WS03 auth","1298 version","game login","character list","character create","character select","WS14 world ready","save/load"],
     "playableCombatRegression": "existing composed-contracts + combat-composition jobs unchanged in authority/pins"
   },
-  "secrets": "No production credentials are committed. DATABASE_URL is environment-only; workflow credentials are ephemeral CI-only values."
+  "secrets": "No production credentials are committed. DATABASE_URL is environment-only; workflow credentials are ephemeral CI-only values.",
+  "credentialEnvelope": {
+    "ko1298UsernameMaxBytes": 20,
+    "ko1298PasswordMaxBytes": 12,
+    "websiteWs13PasswordPolicy": "10-128 characters",
+    "officialSiteHandoffPasswordMaxlength": 128,
+    "compatiblePasswordLength": "10-12 bytes for credentials that must authenticate through KO1298",
+    "crossWorkstreamCompatibilityRequired": true,
+    "note": "WS03 preserves verified KO1298 wire limits. WS13/official website must enforce the shared 10-12 byte password envelope before permanent deployment."
+  }
 }
