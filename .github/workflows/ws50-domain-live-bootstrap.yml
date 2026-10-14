@@ -1,0 +1,80 @@
+name: WS50 OldKOWeb Domain Live Bootstrap
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [oldkoweb-domain-live-owner-ready]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: oldkoweb-domain-live-20261015
+  cancel-in-progress: false
+
+env:
+  RELEASE_ID: oldkoweb-domain-live-20261015
+  COORDINATOR_SHA: 396a765384f87fd97159204fd1eefc77702e6624
+
+jobs:
+  discover-and-freeze:
+    runs-on: ubuntu-24.04
+    outputs:
+      ready: ${{ steps.discovery.outputs.ready }}
+      blocker_count: ${{ steps.discovery.outputs.blocker_count }}
+      pin_digest: ${{ steps.discovery.outputs.pin_digest }}
+    steps:
+      - name: Checkout exact WS50 coordinator implementation
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.COORDINATOR_SHA }}
+          fetch-depth: 0
+
+      - name: Fetch owner branches once
+        run: git fetch --no-tags origin '+refs/heads/*:refs/remotes/origin/*'
+
+      - name: Validate owner handoffs and freeze only tested source commits
+        id: discovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/domain-live"
+          python3 tools/ws50_integration/domain_live.py \
+            --repo "$GITHUB_WORKSPACE" \
+            --output "$RUNNER_TEMP/domain-live/domain-live-state.json" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Upload discovery receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: ws50-domain-live-bootstrap-${{ github.run_id }}
+          path: ${{ runner.temp }}/domain-live/domain-live-state.json
+          if-no-files-found: error
+          retention-days: 30
+
+  exact-contract-gate:
+    needs: discover-and-freeze
+    if: needs.discover-and-freeze.outputs.ready == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact WS50 coordinator implementation
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.COORDINATOR_SHA }}
+          fetch-depth: 0
+      - name: Run WS50 integration unit tests
+        run: python3 -m unittest discover -s tools/ws50_integration/tests -v
+      - name: Stop before unregistered external owner gates
+        run: |
+          echo 'Owner source pins are frozen and coordinator tests passed.'
+          echo 'WS10 browser -> WS09 deployment -> WS10 domain acceptance remain fail-closed until those owner entry points are registered on the default branch and their handoffs are accepted.'
+
+  blocked:
+    needs: discover-and-freeze
+    if: needs.discover-and-freeze.outputs.ready != 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo "Release remains blocked; blockers=${{ needs.discover-and-freeze.outputs.blocker_count }}"
+          echo 'No deployment dispatch was emitted.'
