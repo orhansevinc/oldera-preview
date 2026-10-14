@@ -2,6 +2,11 @@
 
 const { MAGIC_COMMAND } = require('./combat-protocol');
 
+function sameIdentity(left, right) {
+  if ((typeof left !== 'string' && typeof left !== 'number') || (typeof right !== 'string' && typeof right !== 'number')) return false;
+  return String(left) === String(right);
+}
+
 function createPlayableCombatSessionAdapter({ service, mobCombatPort, playerCombatPort }) {
   if (!service || typeof service.normalAttack !== 'function' || typeof service.skill !== 'function' || typeof service.resolveMobAttackIntent !== 'function') {
     throw new TypeError('WS19 PlayablePveCombatService-compatible service is required');
@@ -11,7 +16,7 @@ function createPlayableCombatSessionAdapter({ service, mobCombatPort, playerComb
 
   return Object.freeze({
     async execute({ actor, operation }) {
-      if (operation.sourceEntityId !== actor.entityId) throw new Error('session actor identity mismatch');
+      if (!sameIdentity(operation.sourceEntityId, actor.entityId)) throw new Error('session actor identity mismatch');
       if (operation.kind === 'NORMAL_ATTACK') {
         return service.normalAttack({
           sourceId: actor.entityId,
@@ -40,7 +45,7 @@ function createPlayableCombatSessionAdapter({ service, mobCombatPort, playerComb
     },
 
     async resolveMobAttackIntent({ actor, event }) {
-      if (event.targetId !== actor.entityId) {
+      if (!sameIdentity(event.targetId, actor.entityId)) {
         return Object.freeze({ ok: false, reason: 'ATTACK_INTENT_TARGET_MISMATCH', sourceId: event.runtimeId, targetId: actor.entityId });
       }
       return service.resolveMobAttackIntent(event);
