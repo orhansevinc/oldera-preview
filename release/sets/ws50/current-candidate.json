@@ -1,12 +1,1 @@
-{
-  "kind": "current_candidate_set",
-  "set_id": "WS50-C3",
-  "immutable_key": "WS50-C3@sha256:a9c808898bd1cb9f3cadfb44ddbabadaf34448f9aef0a4990ca91958053458aa",
-  "status": "BLOCKED",
-  "browser_gate_ready_for_ws10": false,
-  "blockers": [
-    "WORLD_TERRAIN_HEIGHT_AUTHORITY",
-    "NPC_REGION_BODY_AUTHORITY",
-    "MOB_BROWSER_BOOTSTRAP_ENCODER_AUTHORITY"
-  ]
-}
+{"blockers":["MOB_RUNTIME_NETWORK_IDENTITY_AUTHORITY","MOB_BROWSER_BOOTSTRAP_ENCODER_AUTHORITY"],"browser_gate_ready_for_ws10":false,"closed_from_parent":["WORLD_TERRAIN_HEIGHT_AUTHORITY","NPC_REGION_BODY_AUTHORITY"],"first_blocker":"MOB_RUNTIME_NETWORK_IDENTITY_AUTHORITY","immutable_key":"WS50-C4@sha256:9ab09b5c0e819b6379a3a9152f1e7eafd50df9eeeb3db8946638fd95008f3049","kind":"current_candidate_set","provider_snapshot_policy":"WS11/WS14/WS16/WS25 resolved once at task start; WS03/WS15/WS31/browser/runtime inherited exactly from WS50-C3","set_id":"WS50-C4","status":"BLOCKED"}
