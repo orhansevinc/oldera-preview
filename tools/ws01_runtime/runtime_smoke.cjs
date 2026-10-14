@@ -61,43 +61,79 @@ if (!chrome) {
     throw new Error(`timeout waiting for runtime log: ${needle}`);
   };
 
-  const assertGeometry = async (width, height) => {
-    await page.setViewportSize({ width, height });
+  const waitForDisplay = async (width, height, timeout = 15000) => {
     await page.waitForFunction(
-      ([w, h]) => {
-        const canvas = document.getElementById('canvas');
-        if (!canvas || canvas.width !== w || canvas.height !== h) return false;
-        const rect = canvas.getBoundingClientRect();
-        return Math.abs(rect.left) < 1
-          && Math.abs(rect.top) < 1
-          && Math.abs(rect.width - w) < 1
-          && Math.abs(rect.height - h) < 1;
+      ({ width, height }) => {
+        const m = window.Module;
+        const s = m && m.oldkoDisplayState;
+        const c = m && m.canvas;
+        return !!(s && c
+          && s.logicalWidth === width && s.logicalHeight === height
+          && s.viewportWidth === width && s.viewportHeight === height
+          && c.width === s.framebufferWidth && c.height === s.framebufferHeight
+          && c.width > 0 && c.height > 0);
       },
-      [width, height],
-      { timeout: 15000 }
+      { width, height },
+      { timeout }
     );
+  };
+
+  const inspectDisplay = async (expectedW, expectedH, label) => {
     const geometry = await page.evaluate(() => {
-      const canvas = document.getElementById('canvas');
+      const m = window.Module;
+      const canvas = m.canvas;
+      const state = m.oldkoDisplayState;
       const rect = canvas.getBoundingClientRect();
-      const diag = window.__OLDKO_DISPLAY_DIAGNOSTICS__;
-      const mapped = diag.mapPointer(rect.left + rect.width * 0.75, rect.top + rect.height * 0.25);
+      const mapped = m.oldkoMapClientPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      let glViewport = null;
+      try {
+        const gl = canvas.getContext('webgl2');
+        if (gl) glViewport = Array.from(gl.getParameter(gl.VIEWPORT));
+      } catch (_) {}
       return {
-        backingWidth: canvas.width,
-        backingHeight: canvas.height,
-        cssWidth: rect.width,
-        cssHeight: rect.height,
-        pointerX: mapped.x,
-        pointerY: mapped.y,
-        inside: mapped.inside
+        state: { ...state },
+        canvas: { width: canvas.width, height: canvas.height },
+        rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+        mapped,
+        glViewport,
+        inner: { width: innerWidth, height: innerHeight },
+        presentation: window.__OLDKO_BOOTSTRAP__ && window.__OLDKO_BOOTSTRAP__.presentation
       };
     });
-    if (geometry.backingWidth !== width || geometry.backingHeight !== height) {
-      throw new Error(`backing store mismatch ${JSON.stringify(geometry)} expected=${width}x${height}`);
+
+    if (geometry.state.logicalWidth !== expectedW || geometry.state.logicalHeight !== expectedH) {
+      throw new Error(`${label}: native logical size mismatch: ${JSON.stringify(geometry)}`);
     }
-    if (Math.abs(geometry.pointerX - width * 0.75) > 1 || Math.abs(geometry.pointerY - height * 0.25) > 1 || !geometry.inside) {
-      throw new Error(`pointer mapping mismatch ${JSON.stringify(geometry)} expected=${width}x${height}`);
+    if (geometry.state.viewportWidth !== expectedW || geometry.state.viewportHeight !== expectedH) {
+      throw new Error(`${label}: RHI viewport mismatch: ${JSON.stringify(geometry)}`);
     }
-    emit(`[display] ${width}x${height} native backing + CSS 1:1 + pointer aligned`);
+    if (geometry.canvas.width !== geometry.state.framebufferWidth
+        || geometry.canvas.height !== geometry.state.framebufferHeight) {
+      throw new Error(`${label}: canvas/backbuffer mismatch: ${JSON.stringify(geometry)}`);
+    }
+    if (!(geometry.rect.width > 0 && geometry.rect.height > 0)) {
+      throw new Error(`${label}: CSS presentation has invalid geometry: ${JSON.stringify(geometry)}`);
+    }
+
+    const backingAspect = geometry.canvas.width / geometry.canvas.height;
+    const cssAspect = geometry.rect.width / geometry.rect.height;
+    if (Math.abs(backingAspect - cssAspect) > 0.0025) {
+      throw new Error(`${label}: presentation aspect distortion detected: ${JSON.stringify(geometry)}`);
+    }
+    if (!geometry.mapped
+        || Math.abs(geometry.mapped.x - geometry.state.logicalWidth / 2) > 1.0
+        || Math.abs(geometry.mapped.y - geometry.state.logicalHeight / 2) > 1.0) {
+      throw new Error(`${label}: pointer/backing alignment mismatch: ${JSON.stringify(geometry)}`);
+    }
+    if (geometry.glViewport) {
+      const [x, y, w, h] = geometry.glViewport;
+      if (x !== 0 || y !== 0 || w !== geometry.state.framebufferWidth || h !== geometry.state.framebufferHeight) {
+        throw new Error(`${label}: WebGL viewport mismatch: ${JSON.stringify(geometry)}`);
+      }
+    }
+
+    emit(`[display:${label}] ${JSON.stringify(geometry)}`);
+    return geometry;
   };
 
   let failure = null;
@@ -113,14 +149,7 @@ if (!chrome) {
     await waitForLog('WebGL 2.0');
     await waitForLog('render backend: OpenGL');
     await waitForLog('login scene: CGameProcedure brought up');
-    await waitForLog('browser display initial: 1280x720');
-
-    for (const [width, height] of [[1280,720],[1366,768],[1600,900],[1920,1080]]) {
-      await assertGeometry(width, height);
-      if (width !== 1280 || height !== 720) {
-        await waitForLog(`browser display sync: logical ${width}x${height}`);
-      }
-    }
+    await waitForLog('OldKOWeb browser native display target: 1280x720');
 
     const state = await page.evaluate(() => window.__OLDKO_BOOTSTRAP__);
     emit(`[state] ${JSON.stringify(state)}`);
@@ -135,6 +164,48 @@ if (!chrome) {
       const status = packageResponses.get(ext);
       if (status < 200 || status >= 300) throw new Error(`KnightOnLine.${ext} returned HTTP ${status}`);
     }
+
+    // Native backing-store acceptance matrix from the WS01 inbox. Every entry
+    // must become the SDL logical size, the RHI full viewport and the real
+    // WebGL framebuffer; CSS only mirrors that aspect without distortion.
+    const matrix = [[1280,720],[1366,768],[1600,900],[1920,1080]];
+    for (const [width, height] of matrix) {
+      await page.setViewportSize({ width, height });
+      await waitForDisplay(width, height);
+      await inspectDisplay(width, height, `${width}x${height}`);
+    }
+
+    // Explicit classic fallback remains native 1024x768. On a 16:9 browser it
+    // letterboxes uniformly; no stretch/crop and pointer mapping stays exact.
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.evaluate(() => {
+      Module.oldkoDisplay.mode = 'classic';
+      dispatchEvent(new Event('resize'));
+    });
+    await waitForDisplay(1024, 768);
+    const classic = await inspectDisplay(1024, 768, 'classic-1024x768');
+    if (!(classic.rect.width < 1280 && classic.rect.height === 720)) {
+      throw new Error(`classic fallback did not preserve 4:3 letterbox presentation: ${JSON.stringify(classic)}`);
+    }
+
+    // Restore native viewport mode and prove the fullscreenchange hook reaches
+    // the same resolver/sync path. Headless CI does not claim an OS fullscreen
+    // transition; WS43 owns the final live headed fullscreen acceptance.
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.evaluate(() => {
+      Module.oldkoDisplay.mode = 'viewport';
+      dispatchEvent(new Event('resize'));
+    });
+    await waitForDisplay(1920, 1080);
+    const generationBeforeFullscreenEvent = await page.evaluate(() => Module.oldkoDisplayState.generation);
+    await page.evaluate(() => document.dispatchEvent(new Event('fullscreenchange')));
+    await page.waitForFunction(
+      before => Module.oldkoDisplayState.generation > before
+        && Module.oldkoDisplayState.lastBrowserEvent === 'fullscreenchange',
+      generationBeforeFullscreenEvent,
+      { timeout: 5000 }
+    );
+    await inspectDisplay(1920, 1080, 'fullscreenchange-path');
 
     const merged = lines.join('\n');
     const fatalPatterns = [
@@ -154,8 +225,8 @@ if (!chrome) {
       if (pattern.test(merged)) throw new Error(`fatal runtime pattern matched: ${pattern}`);
     }
 
-    emit('DISPLAY_MATRIX_OK 1280x720 1366x768 1600x900 1920x1080 native backing + pointer alignment');
-    emit('RUNTIME_OK WASM + data preload + WebGL2/OpenGL + real login bootstrap');
+    emit('DISPLAY_OK native matrix 1280x720 1366x768 1600x900 1920x1080 + classic 1024x768 fallback + pointer/RHI/WebGL alignment');
+    emit('RUNTIME_OK WASM + data preload + WebGL2/OpenGL + real login bootstrap + native dynamic display');
   } catch (err) {
     failure = err;
     emit(`RUNTIME_FAIL ${err.stack || err.message}`);

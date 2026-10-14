@@ -1,103 +1,199 @@
 (function (root) {
   'use strict';
 
-  const CLASSIC_WIDTH = 1024;
-  const CLASSIC_HEIGHT = 768;
-
-  function finitePositive(value) {
-    return Number.isFinite(value) && value > 0;
-  }
+  const DEFAULTS = Object.freeze({
+    mode: 'viewport',
+    width: 1920,
+    height: 1080,
+    fallbackWidth: 1024,
+    fallbackHeight: 768,
+    minWidth: 640,
+    minHeight: 480,
+    maxWidth: 3840,
+    maxHeight: 2160
+  });
 
   function positiveInt(value, fallback) {
     const n = Number(value);
-    return finitePositive(n) ? Math.max(1, Math.floor(n)) : fallback;
+    return Number.isFinite(n) && n > 0 ? Math.max(1, Math.round(n)) : fallback;
   }
 
-  function resolveDisplaySize(config, env) {
-    const cfg = config && typeof config === 'object' ? config : {};
-    const runtime = env && typeof env === 'object' ? env : {};
-    const fallbackWidth = positiveInt(cfg.fallbackWidth, CLASSIC_WIDTH);
-    const fallbackHeight = positiveInt(cfg.fallbackHeight, CLASSIC_HEIGHT);
-    const mode = typeof cfg.mode === 'string' ? cfg.mode.toLowerCase() : 'viewport';
+  function normalizeConfig(input) {
+    const raw = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+    const mode = raw.mode === 'fixed' || raw.mode === 'classic' || raw.mode === 'viewport'
+      ? raw.mode
+      : DEFAULTS.mode;
+    return {
+      mode,
+      width: positiveInt(raw.width, DEFAULTS.width),
+      height: positiveInt(raw.height, DEFAULTS.height),
+      fallbackWidth: positiveInt(raw.fallbackWidth, DEFAULTS.fallbackWidth),
+      fallbackHeight: positiveInt(raw.fallbackHeight, DEFAULTS.fallbackHeight),
+      minWidth: positiveInt(raw.minWidth, DEFAULTS.minWidth),
+      minHeight: positiveInt(raw.minHeight, DEFAULTS.minHeight),
+      maxWidth: positiveInt(raw.maxWidth, DEFAULTS.maxWidth),
+      maxHeight: positiveInt(raw.maxHeight, DEFAULTS.maxHeight)
+    };
+  }
 
-    if (mode === 'classic') {
-      return { width: fallbackWidth, height: fallbackHeight, mode: 'classic', source: 'fallback' };
-    }
+  function readViewport(view) {
+    if (!view || typeof view !== 'object') return { width: 0, height: 0 };
+    const vv = view.visualViewport;
+    const width = positiveInt(vv && vv.width, positiveInt(view.innerWidth, 0));
+    const height = positiveInt(vv && vv.height, positiveInt(view.innerHeight, 0));
+    return { width, height };
+  }
 
-    if (mode === 'fixed') {
+  function fitMax(width, height, maxWidth, maxHeight) {
+    const scale = Math.min(1, maxWidth / width, maxHeight / height);
+    return {
+      width: Math.max(1, Math.round(width * scale)),
+      height: Math.max(1, Math.round(height * scale))
+    };
+  }
+
+  function resolveDisplay(config, view) {
+    const cfg = normalizeConfig(config);
+    if (cfg.mode === 'classic') {
       return {
-        width: positiveInt(cfg.width, fallbackWidth),
-        height: positiveInt(cfg.height, fallbackHeight),
+        width: 1024,
+        height: 768,
+        mode: 'classic',
+        source: 'classic-4:3'
+      };
+    }
+    if (cfg.mode === 'fixed') {
+      const bounded = fitMax(cfg.width, cfg.height, cfg.maxWidth, cfg.maxHeight);
+      return {
+        width: bounded.width,
+        height: bounded.height,
         mode: 'fixed',
-        source: 'config'
+        source: 'fixed-config'
       };
     }
 
-    const vv = runtime.visualViewport;
-    const viewportWidth = vv && finitePositive(Number(vv.width)) ? Number(vv.width) : Number(runtime.innerWidth);
-    const viewportHeight = vv && finitePositive(Number(vv.height)) ? Number(vv.height) : Number(runtime.innerHeight);
+    const viewport = readViewport(view);
+    if (viewport.width < cfg.minWidth || viewport.height < cfg.minHeight) {
+      const boundedFallback = fitMax(
+        cfg.fallbackWidth,
+        cfg.fallbackHeight,
+        cfg.maxWidth,
+        cfg.maxHeight
+      );
+      return {
+        width: boundedFallback.width,
+        height: boundedFallback.height,
+        mode: 'viewport',
+        source: 'viewport-fallback'
+      };
+    }
+
+    const bounded = fitMax(viewport.width, viewport.height, cfg.maxWidth, cfg.maxHeight);
     return {
-      width: positiveInt(viewportWidth, fallbackWidth),
-      height: positiveInt(viewportHeight, fallbackHeight),
+      width: bounded.width,
+      height: bounded.height,
       mode: 'viewport',
-      source: vv && finitePositive(Number(vv.width)) && finitePositive(Number(vv.height))
-        ? 'visualViewport'
-        : (finitePositive(Number(runtime.innerWidth)) && finitePositive(Number(runtime.innerHeight)) ? 'window' : 'fallback')
+      source: 'browser-viewport'
     };
   }
 
-  function fitRect(sourceWidth, sourceHeight, viewportWidth, viewportHeight, viewportLeft, viewportTop) {
-    const sw = positiveInt(sourceWidth, 0);
-    const sh = positiveInt(sourceHeight, 0);
-    const vw = Number(viewportWidth);
-    const vh = Number(viewportHeight);
-    if (!sw || !sh || !finitePositive(vw) || !finitePositive(vh)) {
-      throw new TypeError('OldKOWeb display dimensions must be finite positive numbers');
-    }
-    const left = Number.isFinite(viewportLeft) ? viewportLeft : 0;
-    const top = Number.isFinite(viewportTop) ? viewportTop : 0;
-    const scale = Math.min(vw / sw, vh / sh);
-    const width = sw * scale;
-    const height = sh * scale;
+  function mapClientPoint(canvas, clientX, clientY, logicalWidth, logicalHeight) {
+    if (!canvas || typeof canvas.getBoundingClientRect !== 'function') return null;
+    const rect = canvas.getBoundingClientRect();
+    const width = positiveInt(logicalWidth, positiveInt(canvas.width, 0));
+    const height = positiveInt(logicalHeight, positiveInt(canvas.height, 0));
+    if (!(rect.width > 0 && rect.height > 0 && width > 0 && height > 0)) return null;
     return {
-      left: left + (vw - width) / 2,
-      top: top + (vh - height) / 2,
-      width,
-      height,
-      scale
+      x: (Number(clientX) - rect.left) * width / rect.width,
+      y: (Number(clientY) - rect.top) * height / rect.height
     };
   }
 
-  function mapClientToCanvas(clientX, clientY, rect, canvasWidth, canvasHeight) {
-    if (!rect || !finitePositive(Number(rect.width)) || !finitePositive(Number(rect.height))) {
-      throw new TypeError('OldKOWeb display requires a valid canvas CSS rect');
+  function installModuleDisplay(moduleObject, windowObject, documentObject) {
+    if (!moduleObject || typeof moduleObject !== 'object') return null;
+    const win = windowObject && typeof windowObject === 'object' ? windowObject : root;
+    const doc = documentObject && typeof documentObject === 'object'
+      ? documentObject
+      : (win && win.document ? win.document : null);
+    const state = moduleObject.oldkoDisplayState && typeof moduleObject.oldkoDisplayState === 'object'
+      ? moduleObject.oldkoDisplayState
+      : {};
+    moduleObject.oldkoDisplayState = state;
+    if (!moduleObject.oldkoDisplay || typeof moduleObject.oldkoDisplay !== 'object') {
+      moduleObject.oldkoDisplay = {};
     }
-    const cw = positiveInt(canvasWidth, 0);
-    const ch = positiveInt(canvasHeight, 0);
-    if (!cw || !ch) throw new TypeError('OldKOWeb display requires a valid canvas backing store');
-    const u = (Number(clientX) - Number(rect.left || 0)) / Number(rect.width);
-    const v = (Number(clientY) - Number(rect.top || 0)) / Number(rect.height);
-    return {
-      x: u * cw,
-      y: v * ch,
-      normalizedX: u,
-      normalizedY: v,
-      inside: u >= 0 && u <= 1 && v >= 0 && v <= 1
-    };
-  }
 
-  function installModuleResolver(moduleObject, env) {
-    if (!moduleObject || typeof moduleObject !== 'object') return;
     moduleObject.oldkoResolveDisplaySize = function () {
-      return resolveDisplaySize(moduleObject.oldkoDisplay, env || root || {});
+      const resolved = resolveDisplay(moduleObject.oldkoDisplay, win);
+      state.requestedWidth = resolved.width;
+      state.requestedHeight = resolved.height;
+      state.mode = resolved.mode;
+      state.source = resolved.source;
+      return resolved;
     };
+
+    moduleObject.oldkoMapClientPoint = function (clientX, clientY) {
+      // SDL mouse/UI coordinates are logical window points. On HiDPI displays
+      // canvas.width/height may be the larger physical framebuffer, so use the
+      // native logical geometry reported by C++ whenever it is available.
+      const logicalWidth = positiveInt(state.logicalWidth, positiveInt(state.requestedWidth, 0));
+      const logicalHeight = positiveInt(state.logicalHeight, positiveInt(state.requestedHeight, 0));
+      return mapClientPoint(moduleObject.canvas, clientX, clientY, logicalWidth, logicalHeight);
+    };
+
+    if (state.installed) {
+      moduleObject.oldkoResolveDisplaySize();
+      return state;
+    }
+    state.installed = true;
+    state.generation = 0;
+
+    const markDirty = function (reason) {
+      state.generation += 1;
+      state.lastBrowserEvent = reason;
+      moduleObject.oldkoResolveDisplaySize();
+    };
+
+    if (win && typeof win.addEventListener === 'function') {
+      win.addEventListener('resize', function () { markDirty('resize'); }, { passive: true });
+      win.addEventListener('orientationchange', function () { markDirty('orientationchange'); }, { passive: true });
+      win.addEventListener('keydown', function (event) {
+        if (!event || event.repeat || !event.altKey || (event.code !== 'Enter' && event.code !== 'NumpadEnter')) return;
+        if (!doc) return;
+        try {
+          const pending = doc.fullscreenElement
+            ? (typeof doc.exitFullscreen === 'function' ? doc.exitFullscreen() : null)
+            : (doc.documentElement && typeof doc.documentElement.requestFullscreen === 'function'
+                ? doc.documentElement.requestFullscreen()
+                : null);
+          if (pending && typeof pending.catch === 'function') {
+            pending.catch(function (error) {
+              state.fullscreenError = String(error && error.message ? error.message : error);
+            });
+          }
+        } catch (error) {
+          state.fullscreenError = String(error && error.message ? error.message : error);
+        }
+      }, true);
+    }
+
+    if (doc && typeof doc.addEventListener === 'function') {
+      doc.addEventListener('fullscreenchange', function () { markDirty('fullscreenchange'); });
+    }
+
+    if (win && win.visualViewport && typeof win.visualViewport.addEventListener === 'function') {
+      win.visualViewport.addEventListener('resize', function () { markDirty('visual-viewport-resize'); }, { passive: true });
+      win.visualViewport.addEventListener('scroll', function () { markDirty('visual-viewport-scroll'); }, { passive: true });
+    }
+
+    markDirty('install');
+    return state;
   }
 
-  const api = { resolveDisplaySize, fitRect, mapClientToCanvas, installModuleResolver };
-
+  const api = { DEFAULTS, normalizeConfig, readViewport, resolveDisplay, mapClientPoint, installModuleDisplay };
   if (root) root.OldKOWebDisplay = api;
   if (typeof Module !== 'undefined' && Module && typeof Module === 'object') {
-    installModuleResolver(Module, root);
+    installModuleDisplay(Module, root, root && root.document ? root.document : null);
   }
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
