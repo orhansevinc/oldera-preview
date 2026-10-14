@@ -2,7 +2,7 @@
 
 - Authority: `MORADON_PLAYABLE_COMBAT_SLICE`
 - Patch: `1298`
-- JSON SHA-256: `96cf090a3413687825cf0599437a3d910772c8b6e9052a9b3fd596e21e241aa2`
+- JSON SHA-256: `4ceb077ad2a766b461cb906ad468815e1c10f04cc08a4b5c5485d364eea4898e`
 - Data authority ready: `true`
 - Browser playable slice ready: `false`
 
@@ -78,10 +78,8 @@
 
 ## Integration blockers
 
-- `SKILL_ICON_BROWSER_ASSET_MISSING` (integration): Derived 101003 icon path is absent from the current real1298 preload manifest.
-- `SKILL_TABLE_BROWSER_ASSET_MISSING` (integration): Skill_Magic_Main is source-backed but absent from the current real1298 preload manifest.
-- `SKILL_TYPE1_BROWSER_ASSET_MISSING` (integration): Skill_Magic_1 is source-backed but absent from the current real1298 preload manifest.
 - `MOB_MODEL_BROWSER_ASSET_MISSING` (integration): Bandicoot NPC_Looks chain is source-backed and PID-matched, but mob_bandicoot paths are absent from the current real1298 preload manifest.
+- `SKILL_ICON_BROWSER_ASSET_MISSING` (integration): Derived 101003 icon path is absent from the current real1298 preload manifest.
 - `AUTHORITATIVE_Y_REQUIRED` (runtime): WS31 does not invent terrain Y; runtime terrain authority must resolve it.
 - `SLASH_EFFECTIVE_RANGE_UNPROVEN` (runtime): Raw valid-distance field is 0 and no exact server-side distance semantic is proven by WS31.
 - `SLASH_SERVER_COOLDOWN_POLICY_UNPROVEN` (runtime): Client 3.1s recast is exact; WS19 current server enforcement is policy-injected, not a WS31 data fact.
