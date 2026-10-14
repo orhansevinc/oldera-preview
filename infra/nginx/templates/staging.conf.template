@@ -1,0 +1,94 @@
+# Public-test/staging edge. This container intentionally terminates plain HTTP only.
+# For an Internet-facing test URL, terminate TLS/WSS at the external host/load balancer
+# and forward HTTP to this service while preserving Host and X-Forwarded-* headers.
+# No purchased production domain is assumed.
+
+server {
+    listen 80 default_server;
+    server_name ${STAGING_HOST} _;
+
+    root /srv/oldkoweb/play;
+    index index.html;
+
+    location = /healthz {
+        access_log off;
+        add_header Content-Type text/plain;
+        return 200 'ok\n';
+    }
+
+    # Launcher and mutable release pointers must never pin a stale build.
+    location = /play-shell/config.json {
+        add_header Cache-Control "no-store, max-age=0" always;
+        try_files $uri =404;
+    }
+
+    location ~* ^/(latest|rollback)\.json$ {
+        add_header Cache-Control "no-store, max-age=0" always;
+        try_files $uri =404;
+    }
+
+    # WS38 version-addressed content is immutable. MIME comes from oldkoweb-mime.types.
+    location ~* ^/client-content/v1/[^/]+/ {
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        try_files $uri =404;
+    }
+
+    # The inherited real1298 path is mutable in staging, so force revalidation.
+    location ~* ^/real1298/.*\.(wasm|data|js)$ {
+        add_header Cache-Control "no-cache, max-age=0, must-revalidate" always;
+        try_files $uri =404;
+    }
+
+    # WS02 auth gateway: browser URL is ws(s)://<staging-host>/auth.
+    location /auth {
+        proxy_pass http://gateway-auth:${GATEWAY_INTERNAL_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_buffering off;
+    }
+
+    # WS02 game gateway: browser URL is ws(s)://<staging-host>/game.
+    location /game {
+        proxy_pass http://gateway-game:${GATEWAY_INTERNAL_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_buffering off;
+    }
+
+    # Health proxies are HTTP-only smoke endpoints; they do not replace a WS E2E test.
+    location = /gateway-auth-healthz {
+        proxy_pass http://gateway-auth:${GATEWAY_INTERNAL_PORT}/healthz;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+    }
+
+    location = /gateway-game-healthz {
+        proxy_pass http://gateway-game:${GATEWAY_INTERNAL_PORT}/healthz;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+    }
+
+    location = / {
+        return 302 /play-shell/;
+    }
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}
