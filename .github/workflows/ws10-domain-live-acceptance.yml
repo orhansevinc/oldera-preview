@@ -1,0 +1,148 @@
+name: WS10 Domain Live Acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: Exact coordinated release id
+        required: true
+        default: oldkoweb-domain-live-20261015
+  push:
+    branches: [ws10-qa-integration]
+    paths:
+      - '.github/workflows/ws10-domain-live-acceptance.yml'
+      - 'qa/domain-live/**'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  OLDKO_RELEASE_ID: ${{ inputs.release_id || 'oldkoweb-domain-live-20261015' }}
+  OLDKO_HTTP_TIMEOUT_MS: '15000'
+  OLDKO_BROWSER_TIMEOUT_MS: '180000'
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout WS10 harness
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Prepare evidence directory
+        run: mkdir -p artifacts/domain-live
+
+      - name: Gate A exact release preflight
+        id: preflight
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 qa/domain-live/release-preflight.py | tee artifacts/domain-live/release-preflight.log
+
+      - name: Gate B public DNS TLS HTTP surface
+        id: live
+        shell: bash
+        run: |
+          set -o pipefail
+          node qa/domain-live/live-http-gate.mjs | tee artifacts/domain-live/live-http.log
+
+      - name: Decide whether real-browser capture can start
+        id: browser_ready
+        shell: python
+        run: |
+          import json, os
+          p='artifacts/domain-live/live-http.json'
+          d=json.load(open(p))
+          required=['dns:oldkoweb.com','dns:play.oldkoweb.com','dns:admin.oldkoweb.com','tls:oldkoweb.com','tls:play.oldkoweb.com','tls:admin.oldkoweb.com','website:homepage','play:root','admin:root']
+          checks={x['id']:x['status'] for x in d['checks']}
+          ready=all(checks.get(k)=='PASS' for k in required)
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f: f.write(f'ready={str(ready).lower()}\n')
+          print('browser_ready=',ready,checks)
+
+      - name: Install Chromium only after all three domains are reachable
+        if: steps.browser_ready.outputs.ready == 'true'
+        shell: bash
+        run: |
+          npm install --no-save playwright@1.56.1
+          npx playwright install --with-deps chromium
+
+      - name: Desktop and mobile browser capture
+        if: steps.browser_ready.outputs.ready == 'true'
+        continue-on-error: true
+        shell: bash
+        run: node qa/domain-live/browser-capture.mjs | tee artifacts/domain-live/browser-capture.log
+
+      - name: Build machine-readable WS10 result
+        if: always()
+        shell: python
+        run: |
+          import json, pathlib, os
+          root=pathlib.Path('artifacts/domain-live')
+          def read(name):
+            p=root/name
+            return json.loads(p.read_text()) if p.exists() else None
+          a=read('release-preflight.json')
+          b=read('live-http.json')
+          br=read('screenshots/browser-report.json')
+          gate_a=(a or {}).get('status','NOT_RUN')
+          gate_b=(b or {}).get('status','NOT_RUN')
+          browser='NOT_RUN'
+          if br is not None:
+            bad=[x for x in br.get('captures',[]) if x.get('error') or x.get('http_status')!=200]
+            browser='PASS' if not bad else 'FAIL'
+          mandatory=(b or {}).get('mandatory_user_flows',{})
+          blockers=[]
+          blockers += (a or {}).get('blockers',[])
+          blockers += (b or {}).get('blockers',[])
+          overall='BLOCKED'
+          if gate_a=='READY_FOR_GATE_A' and gate_b=='PARTIAL_PASS_MANDATORY_FLOWS_NOT_RUN': overall='PARTIAL_PASS_MANDATORY_FLOWS_NOT_RUN'
+          if 'FAIL' in (gate_a,gate_b,browser): overall='FAIL'
+          out={
+            'schema_version':'ws10-domain-live-acceptance/v1',
+            'release_id':os.environ.get('OLDKO_RELEASE_ID'),
+            'ws10_head':os.popen('git rev-parse HEAD').read().strip(),
+            'gate_A_pre_dns_exact_composition':gate_a,
+            'gate_B_public_domains':gate_b,
+            'browser_capture':browser,
+            'mandatory_user_flows':mandatory,
+            'historical_c5_run':{
+              'run_id':38604174659,
+              'url':'https://github.com/orhansevinc/oldera-preview/actions/runs/38604174659',
+              'scope':'preserved historical real-browser visibility proof; never substituted for Gate B'
+            },
+            'blockers':blockers,
+            'overall':overall
+          }
+          (root/'WS10.json').write_text(json.dumps(out,indent=2)+'\n')
+          print(json.dumps(out,indent=2))
+
+      - name: Write workflow summary
+        if: always()
+        shell: bash
+        run: |
+          echo '## WS10 domain-live acceptance' >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo 'This workflow separates Gate A (exact pre-DNS composition) from Gate B (real public domains).' >> "$GITHUB_STEP_SUMMARY"
+          echo 'The historical C5 run 38604174659 is evidence only and cannot satisfy Gate B.' >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          if test -f artifacts/domain-live/WS10.json; then
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat artifacts/domain-live/WS10.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload safe evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ws10-domain-live-${{ github.run_number }}
+          path: artifacts/domain-live
+          if-no-files-found: error
+          retention-days: 14
