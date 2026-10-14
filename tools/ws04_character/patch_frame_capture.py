@@ -97,7 +97,7 @@ present_anchor = """HRESULT RHIDeviceGL::Present()
 {
 \tSDL_GL_SwapWindow(m_pWindow);
 """
-present_patch = r'''#ifdef __EMSCRIPTEN__
+present_patch = '''#ifdef __EMSCRIPTEN__
 void RHIDeviceGL::WS04CaptureTimerThunk(void* userData)
 {
 \tauto* pDevice = static_cast<RHIDeviceGL*>(userData);
