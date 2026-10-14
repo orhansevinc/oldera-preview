@@ -65,7 +65,7 @@ jobs:
           grep -Fq 'TEST_LINK=$TEST_LINK' .github/workflows/ws09-ephemeral-staging.yml
 
       - name: Production compose validation
-        run: docker compose --env-file deploy/.env.example -f docker-compose.ws09.yml config --quiet
+        run: docker compose --env-file deploy/.env.production.example -f docker-compose.ws09.yml config --quiet
 
       - name: Staging compose validation
         run: docker compose --env-file deploy/.env.staging.example -f docker-compose.ws09-staging.yml config --quiet
@@ -128,18 +128,18 @@ jobs:
       - name: Nginx production template syntax
         run: |
           docker run --rm \
-            --add-host gateway:127.0.0.1 \
+            --add-host gateway-auth:127.0.0.1 \
+            --add-host gateway-game:127.0.0.1 \
             --add-host admin-api:127.0.0.1 \
             -e OFFICIAL_HOST=oldkoweb.com \
             -e PLAY_HOST=play.oldkoweb.com \
             -e ADMIN_HOST=admin.oldkoweb.com \
-            -e API_HOST=api.oldkoweb.com \
-            -e GATEWAY_HOST=gateway.oldkoweb.com \
             -e ADMIN_API_PORT=8080 \
-            -e GATEWAY_PORT=8080 \
-            -e 'NGINX_ENVSUBST_FILTER=^(OFFICIAL_HOST|PLAY_HOST|ADMIN_HOST|API_HOST|GATEWAY_HOST|ADMIN_API_PORT|GATEWAY_PORT)$' \
+            -e GATEWAY_INTERNAL_PORT=8080 \
+            -e 'NGINX_ENVSUBST_FILTER=^(OFFICIAL_HOST|PLAY_HOST|ADMIN_HOST|ADMIN_API_PORT|GATEWAY_INTERNAL_PORT)$' \
             -v "$PWD/infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" \
             -v "$PWD/infra/nginx/mime.types:/etc/nginx/oldkoweb-mime.types:ro" \
             -v "$PWD/infra/nginx/templates/production.conf.template:/etc/nginx/templates/default.conf.template:ro" \
             -v "$PWD/deploy/tls:/etc/nginx/tls:ro" \
+            -v "$PWD/deploy/artifacts:/srv/oldkoweb:ro" \
             nginx:stable-alpine nginx -t
