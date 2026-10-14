@@ -21,11 +21,50 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
+
+      - name: Checkout pinned 1298 server map authority
+        uses: actions/checkout@v4
+        with:
+          repository: Open-KO/KnightOnline
+          ref: 7d6cf81093e142c928c2ac9510512b2b182178b5
+          path: .authority/openko
+          sparse-checkout: |
+            assets/Server/MAP/moradon_0826.smd
+          sparse-checkout-cone-mode: false
+          fetch-depth: 1
+
+      - name: Checkout pinned WS16 Moradon NPC provider
+        uses: actions/checkout@v4
+        with:
+          repository: orhansevinc/oldera-preview
+          ref: 234657c1264ead6b8828425ae9e7fcdca0cca5c8
+          path: .authority/ws16
+          sparse-checkout: |
+            world-data/npc/moradon.json
+          sparse-checkout-cone-mode: false
+          fetch-depth: 1
+
+      - name: Checkout pinned WS25 Moradon mob provider
+        uses: actions/checkout@v4
+        with:
+          repository: orhansevinc/oldera-preview
+          ref: a42b489e1a17d7c2889cfd92909ddd45c65e825e
+          path: .authority/ws25
+          sparse-checkout: |
+            world-data/mobs/verified/moradon-zone21.verified.json
+          sparse-checkout-cone-mode: false
+          fetch-depth: 1
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Run WS14 tests
+
+      - name: Run WS14 tests with real height authority
+        env:
+          WS14_MORADON_SMD: ${{ github.workspace }}/.authority/openko/assets/Server/MAP/moradon_0826.smd
+          WS14_WS16_NPC_DATA: ${{ github.workspace }}/.authority/ws16/world-data/npc/moradon.json
+          WS14_WS25_MOB_DATA: ${{ github.workspace }}/.authority/ws25/world-data/mobs/verified/moradon-zone21.verified.json
         run: node --test tests/ko1298-world/*.test.js
