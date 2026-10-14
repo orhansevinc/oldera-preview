@@ -198,6 +198,15 @@ function validateWorldDefinition(raw) {
 }
 
 function createMobInstance(zoneId, group, spawn, template) {
+  const spawnAnchor = Object.freeze({
+    x: spawn.position.x,
+    z: spawn.position.z,
+    heading: spawn.position.heading,
+  });
+  const spawnOrigin = Number.isFinite(spawn.position.y)
+    ? Object.freeze({ ...spawn.position })
+    : null;
+
   return {
     id: `${group.groupId}/${spawn.spawnId}`,
     templateId: template.templateId,
@@ -210,6 +219,9 @@ function createMobInstance(zoneId, group, spawn, template) {
     maxHp: template.maxHp,
     position: { ...spawn.position },
     home: { ...spawn.position },
+    spawnAnchor,
+    spawnOrigin,
+    heightAuthority: null,
     patrolPath: spawn.patrolPath,
     sourceArea: spawn.sourceArea,
     targetId: null,
@@ -238,6 +250,9 @@ function snapshotMob(mob) {
     maxHp: mob.maxHp,
     position: Object.freeze({ ...mob.position }),
     home: Object.freeze({ ...mob.home }),
+    spawnAnchor: Object.freeze({ ...mob.spawnAnchor }),
+    spawnOrigin: mob.spawnOrigin ? Object.freeze({ ...mob.spawnOrigin }) : null,
+    heightAuthority: mob.heightAuthority ? Object.freeze({ ...mob.heightAuthority }) : null,
     targetId: mob.targetId,
     diedAt: mob.diedAt,
     corpseDespawnAt: mob.corpseDespawnAt,
