@@ -18,7 +18,13 @@ if (!chrome) {
     ]
   });
 
-  const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  // Run the real browser client at DPR=2 so CI proves that a selected
+  // 1920x1080 native target stays a 1920x1080 SDL/canvas/default framebuffer
+  // rather than being silently multiplied to 3840x2160.
+  const page = await browser.newPage({
+    viewport: { width: 1280, height: 720 },
+    deviceScaleFactor: 2
+  });
   const lines = [];
   const pageErrors = [];
   const requestFailures = [];
@@ -70,8 +76,8 @@ if (!chrome) {
         return !!(s && c
           && s.logicalWidth === width && s.logicalHeight === height
           && s.viewportWidth === width && s.viewportHeight === height
-          && c.width === s.framebufferWidth && c.height === s.framebufferHeight
-          && c.width > 0 && c.height > 0);
+          && s.framebufferWidth === width && s.framebufferHeight === height
+          && c.width === width && c.height === height);
       },
       { width, height },
       { timeout }
@@ -96,16 +102,24 @@ if (!chrome) {
         rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
         mapped,
         glViewport,
+        devicePixelRatio,
         inner: { width: innerWidth, height: innerHeight },
         presentation: window.__OLDKO_BOOTSTRAP__ && window.__OLDKO_BOOTSTRAP__.presentation
       };
     });
 
+    if (geometry.devicePixelRatio !== 2) {
+      throw new Error(`${label}: DPR=2 test precondition failed: ${JSON.stringify(geometry)}`);
+    }
     if (geometry.state.logicalWidth !== expectedW || geometry.state.logicalHeight !== expectedH) {
       throw new Error(`${label}: native logical size mismatch: ${JSON.stringify(geometry)}`);
     }
     if (geometry.state.viewportWidth !== expectedW || geometry.state.viewportHeight !== expectedH) {
       throw new Error(`${label}: RHI viewport mismatch: ${JSON.stringify(geometry)}`);
+    }
+    if (geometry.state.framebufferWidth !== expectedW || geometry.state.framebufferHeight !== expectedH
+        || geometry.canvas.width !== expectedW || geometry.canvas.height !== expectedH) {
+      throw new Error(`${label}: DPR multiplied native backing/default framebuffer: ${JSON.stringify(geometry)}`);
     }
     if (geometry.canvas.width !== geometry.state.framebufferWidth
         || geometry.canvas.height !== geometry.state.framebufferHeight) {
@@ -127,7 +141,7 @@ if (!chrome) {
     }
     if (geometry.glViewport) {
       const [x, y, w, h] = geometry.glViewport;
-      if (x !== 0 || y !== 0 || w !== geometry.state.framebufferWidth || h !== geometry.state.framebufferHeight) {
+      if (x !== 0 || y !== 0 || w !== expectedW || h !== expectedH) {
         throw new Error(`${label}: WebGL viewport mismatch: ${JSON.stringify(geometry)}`);
       }
     }
@@ -166,8 +180,8 @@ if (!chrome) {
     }
 
     // Native backing-store acceptance matrix from the WS01 inbox. Every entry
-    // must become the SDL logical size, the RHI full viewport and the real
-    // WebGL framebuffer; CSS only mirrors that aspect without distortion.
+    // must become the SDL logical size, RHI full viewport and real WebGL
+    // framebuffer even under DPR=2; CSS only mirrors that aspect.
     const matrix = [[1280,720],[1366,768],[1600,900],[1920,1080]];
     for (const [width, height] of matrix) {
       await page.setViewportSize({ width, height });
@@ -225,7 +239,7 @@ if (!chrome) {
       if (pattern.test(merged)) throw new Error(`fatal runtime pattern matched: ${pattern}`);
     }
 
-    emit('DISPLAY_OK native matrix 1280x720 1366x768 1600x900 1920x1080 + classic 1024x768 fallback + pointer/RHI/WebGL alignment');
+    emit('DISPLAY_OK native matrix 1280x720 1366x768 1600x900 1920x1080 + classic 1024x768 fallback + DPR2 + pointer/RHI/WebGL alignment');
     emit('RUNTIME_OK WASM + data preload + WebGL2/OpenGL + real login bootstrap + native dynamic display');
   } catch (err) {
     failure = err;
