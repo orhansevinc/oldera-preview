@@ -145,6 +145,14 @@ def main():
     )
     if not caspy or 13001 not in caspy["npc_template_ids"]:
         errors.append("Caspy 13001 / group 203002 invariant")
+    if caspy and not caspy["items"]:
+        caspy_unresolved = any(
+            row.get("kind") == "merchant_group_without_items"
+            and row.get("merchant_id") == 203002
+            for row in unresolved.get("rows", [])
+        )
+        if not caspy_unresolved:
+            errors.append("Caspy 203002 empty inventory must remain explicitly unresolved")
 
     for group in load("item-groups.json")["rows"]:
         for item_id in group["item_ids"]:
@@ -207,6 +215,7 @@ def main():
         "source_rows_all_matching_ids": 26,
         "spawn_groups": 20,
         "declared_population": 135,
+        "excluded_matching_source_rows": 6,
     }
     for key, expected in expected_monsters.items():
         if moradon_monsters.get(key) != expected:
