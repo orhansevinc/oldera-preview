@@ -1,51 +1,122 @@
 # WS16
 
-## Integration patch contract
+## Production integration contract
 
-WS16 does not modify WS14 world-session, WS15 movement, client, gateway, inventory or combat code. The integration point is intentionally narrow.
+WS16 owns NPC identity, verified Moradon population data, runtime NPC lifecycle/visibility and the validation boundary for NPC interaction. It does **not** copy WS14 world-session, WS22 economy, WS23 quest, WS33 Inn Storage, movement, inventory or combat business logic.
 
-### Load verified NPC data
+## Verified Moradon dataset
+
+`world-data/npc/moradon.json` is the machine-readable source of truth for this branch.
+
+- 31 unique `K_NPC` templates are cross-joined with Moradon (`ZoneID=21`) static `K_NPCPOS` rows.
+- 39 verified static spawn groups are catalogued.
+- Their `K_NPCPOS.NumNPC` total is 43.
+- 37 groups have a source-verifiable path anchor and can be materialized without inventing X/Z.
+- `16082` and `16083` have source rows with rectangles but no path point; they remain catalogued but are not materialized at an invented coordinate.
+- Runtime `instanceId` is allocated from the verified NPC band `10000..29999`; it is runtime identity, not a source template/spawn ID.
+
+The catalog pins Open-KO/OpenKO-db commit `bec619466938d278339c30e5b1a4bff3c9413bab` at top level and every template/spawn carries its exact `sourceRow`, so provenance is record-addressable without repeating the full source URL in every row.
+
+## Terrain Y port
+
+`K_NPCPOS` has no Y coordinate. The 1.298 client resolves world height from terrain and world-shape height. WS16 therefore keeps Y out of the seed and requires an injected resolver:
 
 ```js
-const fs = require('node:fs');
-const { NpcWorld, NpcInteractionRouter, resolveNpcData, encodeNpcIn, encodeNpcOut } = require('../../services/ko1298-npc');
-const doc = JSON.parse(fs.readFileSync('world-data/npc/moradon.json', 'utf8'));
-const world = new NpcWorld();
-for (const npc of resolveNpcData(doc, {
-  terrainY: ({ zoneId, x, z }) => worldSessionTerrainHeight(zoneId, x, z),
-})) world.add(npc);
+const {
+  createTerrainHeightResolver,
+  resolveNpcData,
+} = require('../../services/ko1298-npc');
+
+const terrainY = createTerrainHeightResolver({
+  terrainHeight: ({ zoneId, x, z }) => zoneTerrain.heightAt(zoneId, x, z),
+  shapeHeight: ({ zoneId, x, z }) => zoneShapes.heightAt(zoneId, x, z),
+});
+
+const npcs = resolveNpcData(doc, { terrainY });
 ```
 
-`worldSessionTerrainHeight()` is an integration placeholder name. WS14/zone ownership must provide the real map height for zone 21.
+The resolver returns the higher finite terrain/shape height, matching the verified client policy. If neither source resolves, materialization fails closed; WS16 does not write fake `y=0` data.
 
-### Character enters Moradon
+## WS14 world/session integration
 
-After the selected character has zone id and position, create the router and send `router.nearbyPacket({ zoneId, x, z })`. The client then requests unknown ids with `WIZ_REQ_NPCIN (0x1D)`.
+Create one `NpcWorld` for the authoritative world process and load resolved NPCs. WS14's repository-facing `getSurroundingNpcs({ zoneId, x, z })` can delegate to:
 
-### Route WS16 opcodes only
+```js
+npcWorld.nearby(zoneId, x, z)
+```
 
-Feed opcodes `0x1D`, `0x20` and `0x22` to `router.route(packet, session)`. If it returns `kind: 'packets'`, write each returned packet to the existing game-session socket. Do not move login/version/nation/character/world-session ownership into WS16.
+On region crossing, use `router.regionSync({ zoneId, x, z }, previousNpcIds)`. It returns deterministic `enter`, `stay`, `leave`, current `ids`, `WIZ_NPC_REGION`, IN packets and OUT packets without taking ownership of WS15 movement.
 
-### Spawn/despawn broadcast hooks
+Spawn/despawn/reload lifecycle lives in `NpcWorld`:
 
-For a static NPC becoming visible, broadcast `encodeNpcIn(npc)` to sessions whose 3x3 visibility region contains it. For removal, broadcast `encodeNpcOut(instanceId)` before removing it from `NpcWorld`. The session registry/broadcast loop belongs to world/session integration and is intentionally not implemented here.
+```text
+spawn(npc)
+despawn(instanceId)
+reloadZone(zoneId, npcs) -> { spawned, despawned, updated, unchanged }
+regionDelta(zoneId, x, z, previousIds)
+```
 
-### Movement handoff
+`reloadZone()` rejects runtime-ID duplication and is idempotent for an unchanged dataset.
 
-When WS15 changes a player's region, recompute `world.nearby(zoneId, x, z)` and diff against that session's prior visible NPC ids. Added ids use `encodeNpcIn()` or the region-id/request flow; removed ids use `encodeNpcOut()`. WS16 does not change movement or teleport logic.
+## Interaction validation boundary
 
-### Merchant and quest boundaries
+`NpcInteractionRouter` validates authoritative NPC existence, session zone, enabled/dead runtime state and distance **before** any gameplay handoff.
 
-`merchantInterface({ session, npc })` receives `sellingGroup` (203002 for Caspy) and hands off to the future merchant/inventory owner. `questInterface({ session, npc })` is the boundary for quest/talk logic. WS16 mutates neither inventory nor quest state.
+The exact 1.298 server interaction-distance constant is still unverified. Production composition must therefore inject `interactionRange` or `interactionPolicy`. With neither configured, NPC interaction fails closed with `range-policy-unconfigured`; WS16 never invents a distance constant.
 
-### First visual acceptance target
+All successful handoffs use one result envelope:
 
-1. Real 1298 client enters zone 21.
-2. Session position is close enough to Caspy's region.
-3. Server sends `WIZ_NPC_REGION`.
-4. Client requests runtime id 10000 via `WIZ_REQ_NPCIN`.
-5. WS16 sends Caspy using `sPid=22000`.
-6. Real client resolves its own 1298 model asset and renders the NPC.
-7. Clicking the NPC emits `WIZ_NPC_EVENT 0x20 + 10000` and routes to merchant interface.
+```text
+{
+  kind: 'npc-interaction',
+  status: 'handled',
+  route: 'merchant' | 'quest' | 'inn' | 'world',
+  instanceId,
+  templateSid,
+  result
+}
+```
 
-No client patch, Three.js entity, fake screenshot or guessed model id is part of this path.
+## WS22 merchant port
+
+Verified shop templates with source `sellingGroup > 0` are marked `interactionRoute: merchant` and `interactionVerified: true`. Inject:
+
+```js
+merchant: ({ session, npc, action }) => ws22Adapter.openNpcMerchant({ session, npc, action })
+```
+
+For WS22's `assertInteraction({ playerId, npcId, tx })` adapter, resolve the authoritative session for `playerId` and call WS16 `router.assertInteraction({ session, npcId })` before WS22 price/item work. Price/item ownership remains WS22/WS17.
+
+## WS33 Inn port
+
+`K_NPC` SID `12000`, `Inn hostess`, byType `31`, is verified in Moradon and marked `interactionRoute: inn`, `interactionVerified: true`.
+
+Inject the WS33 handler only at this port:
+
+```js
+inn: createInnHostessHandler({ service: innStorage })
+```
+
+WS16 does not mutate storage.
+
+## WS23 quest/event port
+
+WS16 exposes a `quest` port, but source-visible names/byType values alone are not enough to claim exact 1.298 EVT semantics. Quest/event candidates remain spawned and targetable, but are marked `interactionVerified: false` until EVT/server behavior supplies the action mapping. They fail closed with `interaction-unverified` instead of being mislabeled as production quest logic.
+
+Once verified, composition may enable that route and translate WS16's authoritative `templateSid` + verified action into WS23's `questRouter.route(...)` contract.
+
+## WS14 gate/warp port
+
+`SID 15002` is source-verified as `Aban[Battlefield Gate-keeper]`, byType `136`. WS16 exposes the `worldTransition` port but does not invent a destination or event. Its seed route remains `interactionVerified: false` until source evidence identifies the 1.298 transition action/destination. When verified, the port hands off to WS14; WS16 itself never changes zone state.
+
+## Packet ownership
+
+WS16 handles only the NPC-side 1.298 packets implemented here:
+
+- `0x0A WIZ_NPC_INOUT`
+- `0x1C WIZ_NPC_REGION`
+- `0x1D WIZ_REQ_NPCIN`
+- `0x20 WIZ_NPC_EVENT`
+- `0x22 WIZ_TARGET_HP`
+
+Malformed `0x1D/0x20/0x22` payloads are rejected without throwing through the session dispatcher. Detail and target responses are zone-scoped.

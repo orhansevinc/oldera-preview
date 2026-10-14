@@ -8,7 +8,7 @@ const {
 } = require('../../services/ko1298-npc');
 
 const caspy = {
-  instanceId: 10000, resourceId: 22000, npcType: 21, sellingGroup: 203002,
+  instanceId: 10000, templateSid: 13001, resourceId: 22000, npcType: 21, sellingGroup: 203002,
   size: 100, weapon1: 0, weapon2: 0, name: 'Caspy[Accessory]', group: 2,
   level: 50, x: 307, y: 12, z: 398, gateOpen: 1, objectType: 0, zoneId: 21,
 };
@@ -68,4 +68,11 @@ test('WIZ_TARGET_HP response follows client receive layout', () => {
   assert.equal(p.readUInt32LE(4), 30000);
   assert.equal(p.readUInt32LE(8), 30000);
   assert.equal(p.readInt16LE(12), 0);
+});
+
+test('verified parsers reject truncated and trailing payloads', () => {
+  assert.throws(() => parseNpcEventRequest(Buffer.from([0x20, 0x10])), /malformed/);
+  assert.throws(() => parseNpcEventRequest(Buffer.from([0x20, 0x10, 0x27, 0])), /malformed/);
+  assert.throws(() => parseTargetHpRequest(Buffer.from([0x22, 0x10, 0x27])), /malformed/);
+  assert.throws(() => parseNpcInRequest(Buffer.from([0x1d, 0x02, 0x00, 0x10, 0x27])), /malformed/);
 });
