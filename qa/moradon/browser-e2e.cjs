@@ -146,7 +146,13 @@ function ppmToPng(buffer) {
 const nativeCaptureId = 1010;
 async function collectNativeMoradonCapture() {
   const id = nativeCaptureId;
-  await waitWorld(`WS04_GL_CAPTURE id=${id} ok=1 source=present`);
+  const captureLine = await waitWorld(`WS04_GL_CAPTURE id=${id} ok=1`);
+  if (!captureLine.includes('source=present')) {
+    throw new Error(`native GL capture used wrong source: ${captureLine}`);
+  }
+  // Normalize the provider marker for the WS10 gate while preserving the full
+  // provider-emitted line (which may contain size/path metadata in between).
+  console.log(`[ws10-driver] WS04_GL_CAPTURE id=${id} ok=1 source=present normalized=1`);
   const ready = await page.evaluate(() => globalThis.WS04_CAPTURE_READY || 0);
   if (ready !== id) throw new Error(`native GL capture not ready: ${ready}`);
   const b64 = await page.evaluate((requestId) => {
