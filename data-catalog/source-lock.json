@@ -5,7 +5,10 @@
     "openko-server": {
       "repo": "Open-KO/KnightOnline",
       "commit": "7d6cf81093e142c928c2ac9510512b2b182178b5",
-      "role": "loader-semantics"
+      "role": "loader-semantics",
+      "files": {
+        "item_mapping": "tests/Server/Ebenezer/data/Item_test_data.h"
+      }
     },
     "openko-client-1298": {
       "repo": "Open-KO/ko-client-assets",
@@ -29,6 +32,7 @@
         "items": "ManualSetup/6_InsertData_ITEM.sql",
         "npc_drops": "ManualSetup/6_InsertData_K_NPC_ITEM.sql",
         "monster_drops": "ManualSetup/6_InsertData_K_MONSTER_ITEM.sql",
+        "item_groups": "ManualSetup/6_InsertData_MAKE_ITEM_GROUP.sql",
         "skills": "ManualSetup/6_InsertData_MAGIC.sql",
         "skill_type1": "ManualSetup/6_InsertData_MAGIC_TYPE1.sql",
         "skill_type2": "ManualSetup/6_InsertData_MAGIC_TYPE2.sql",
