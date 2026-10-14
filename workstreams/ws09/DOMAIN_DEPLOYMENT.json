@@ -1,5 +1,5 @@
 {
-  "schema_version": "ws09-domain-deployment/v2",
+  "schema_version": "ws09-domain-deployment/v3",
   "release_id": "oldkoweb-domain-live-20261015",
   "branch": "ws09-production-infra",
   "permanent_domain_ready": false,
@@ -10,26 +10,26 @@
       "static_source_commit": "5f9a4f0ccd3d7d06e8b407bfca35266f1b2d3516",
       "static_artifact": "official-site-static@5f9a4f0ccd3d7d06e8b407bfca35266f1b2d3516",
       "static_digest": "git-tree-sha1:ee3ba5bfd85ff6951017befb748b71c3e5851f97",
-      "account_proxy": "/api/account/ -> account-api",
+      "account_proxy": "/api/account/ -> account-api with /api/account stripped",
       "status": "ORIGIN_CONFIG_READY_NOT_DEPLOYED"
     },
     "play": {
       "hostname": "play.oldkoweb.com",
-      "provider_set": "WS50-C5@sha256:7ac3b8a4c06b67e52b8d18518ef8c82209a60c6101c33609a4c16e64d84f119e",
-      "ws10_run_id": 38604174659,
-      "ws10_head": "163f2ebf81e750bf746fdaa277695329a0682e22",
+      "parent_provider_set": "WS50-C5@sha256:7ac3b8a4c06b67e52b8d18518ef8c82209a60c6101c33609a4c16e64d84f119e",
+      "historical_visibility_ws10_run_id": 38604174659,
+      "historical_visibility_ws10_head": "163f2ebf81e750bf746fdaa277695329a0682e22",
       "client_artifact": "ws10-c5-visibility-passing-client-4",
       "client_artifact_id": 11915666463,
       "client_artifact_digest": "sha256:f749750fc5bb0249a67b712bd4e1a03847773d8845fd209508b8c95f6c447a83",
       "websocket_routes": ["/auth", "/game"],
-      "status": "EXACT_C5_PACKAGED_BUT_PERSISTENT_RUNTIME_NOT_ACCEPTED"
+      "status": "PARENT_C5_PACKAGED_PERSISTENT_CHILD_NOT_SELECTED_OR_ACCEPTED"
     },
     "admin": {
       "hostname": "admin.oldkoweb.com",
       "static_source_commit": "5f9a4f0ccd3d7d06e8b407bfca35266f1b2d3516",
-      "frontend_version_evidence": "admin CSS assets use ?v=10 in admin/index.html",
-      "api_proxy": "/api/admin/ -> admin-api",
-      "status": "STATIC_READY_BACKEND_BLOCKED_ON_WS08_PERSISTENCE_AND_COMMAND_BRIDGE"
+      "frontend_version_evidence": "admin/index.html references admin.css?v=10, character-control.css?v=10 and responsive-overrides.css?v=10",
+      "api_proxy": "/api/admin/ -> admin-api with /api/admin preserved",
+      "status": "STATIC_V10_AVAILABLE_PRODUCTION_FLOW_BLOCKED_ON_OWNER_ADAPTERS_AND_FRONTEND_WIRING"
     }
   },
   "account_runtime": {
@@ -47,16 +47,48 @@
     "frozen_c5_ws03": "495de481726734d85cc28b3d432835799aff7e48",
     "observed_newer_ws03_head": "7c5f5f3584e7d3621aa5a318ad65c011bd77276f",
     "observed_newer_ws03_green_run_id": 38650070368,
-    "selected_by_ws50": false,
-    "accepted_by_ws10": false,
-    "status": "BLOCKED_DO_NOT_SUBSTITUTE_NEW_WS03_INTO_OLD_C5"
+    "ws50_domain_live_source": "396a765384f87fd97159204fd1eefc77702e6624",
+    "ws50_domain_live_run_id": 38654219214,
+    "ws50_accepted_owner_pins": false,
+    "ws50_child_candidate": null,
+    "ws50_integration_verified": false,
+    "status": "BLOCKED_DO_NOT_SUBSTITUTE_NEW_WS03_INTO_PARENT_C5"
   },
   "admin_runtime": {
-    "ws08_head": "239cdacf0fb6bacde5017fb3b787451595a3be0d",
-    "production_repository": "UNRESOLVED_WS07_BACKED_ADAPTER",
-    "real_command_bridge": "UNRESOLVED",
-    "memory_repository_allowed_in_production": false,
-    "status": "BLOCKED"
+    "ws08_handoff_commit": "1e3316727b079fbb03cbd9b09b257c1a0eb64f71",
+    "ws08_source_commit": "97771268f37735e6ebaad9ed48a6927438f65f59",
+    "ws08_green_run_id": 38654675678,
+    "production_memory_fallback_allowed": false,
+    "required_repository_module": "ADMIN_REPOSITORY_MODULE createAdminRepository({env})",
+    "required_runtime_module": "ADMIN_RUNTIME_AUTHORITY_MODULE createAdminRuntimeAuthority({env})",
+    "required_command_module": "ADMIN_COMMAND_BUS_MODULE createAdminCommandBus({env})",
+    "unresolved_owner_inputs": [
+      "WS07 admin persistent repository/session/outbox adapter",
+      "WS03/WS45 authoritative runtime adapter",
+      "WS28 real downstream command composition",
+      "official-site admin-v10 CSRF/idempotency/expectedVersion/capability/status wiring"
+    ],
+    "status": "BLOCKED_EXTERNAL_ADAPTERS_FRONTEND_WIRING"
+  },
+  "public_domain_probe": {
+    "authority": "WS10 domain-live acceptance run 38654558721",
+    "ws10_source_commit": "c3f25fd365d06f331daf33c965d99c4fc21fc8b0",
+    "ws10_handoff_head": "a0ae49f05c76c6eab1dd8c60ca17ffec67d50bf2",
+    "workflow_conclusion": "SUCCESS",
+    "acceptance_overall": "BLOCKED",
+    "artifact_id": 11935968878,
+    "artifact_digest": "sha256:1c6ee2c0903e54f13dbc76c4a8f7f3f1c2f966a51e16a61f85fa75178b30aa22",
+    "dns": {
+      "oldkoweb.com": "93.89.226.17",
+      "play.oldkoweb.com": "93.89.226.17",
+      "admin.oldkoweb.com": "93.89.226.17"
+    },
+    "tls_443": {
+      "oldkoweb.com": "ECONNREFUSED",
+      "play.oldkoweb.com": "ECONNREFUSED",
+      "admin.oldkoweb.com": "ECONNREFUSED"
+    },
+    "browser_gates": "NOT_RUN_TLS_PREREQUISITE_FAILED"
   },
   "infrastructure": {
     "compose": "docker-compose.ws09.yml",
@@ -67,9 +99,11 @@
     "backup": "deploy/backup-db.sh",
     "restore": "deploy/restore-db.sh",
     "migration": "deploy/migrate-production-db.sh requires verified gzip backup",
-    "host_target": "NOT_AUTHORIZED_OR_PROVISIONED",
-    "dns_zone_access": "NOT_AVAILABLE_TO_WS09_EXECUTION_CONTEXT",
-    "tls": "NOT_ISSUED_FOR_TARGET_ORIGIN",
+    "host_target": "NO_AUTHORIZED_LONG_RUNNING_ORIGIN_CONNECTED_TO_WS09",
+    "observed_public_ip": "93.89.226.17",
+    "observed_public_ip_accepted_as_origin": false,
+    "dns_zone_provider_access": "NOT_AVAILABLE_TO_WS09_EXECUTION_CONTEXT",
+    "tls": "NOT_SERVING_ON_PUBLIC_HOSTNAMES",
     "production_secret_store": "NOT_AVAILABLE_TO_WS09_EXECUTION_CONTEXT"
   },
   "durable_candidate": {
@@ -78,51 +112,57 @@
     "release_type": "prerelease",
     "explicitly_live": false,
     "contains": [
-      "exact WS50-C5 browser client and WS38 manifest",
+      "exact parent WS50-C5 browser client and WS38 manifest",
       "exact approved official website",
-      "exact admin v10 static tree",
+      "admin v10 static tree from approved source",
       "exact WS13 plus WS07 production account image tar",
-      "frozen C5 gateway/session image tars",
+      "parent C5 gateway/session image tars",
       "Nginx/PostgreSQL base image digest snapshot",
       "Compose/Nginx/backup/migration/smoke/rollback tooling",
       "SHA256SUMS"
-    ]
+    ],
+    "note": "A persistence-capable gameplay image cannot be promoted until WS50 selects and WS10 accepts the exact child candidate."
   },
   "blocking_inputs": [
     {
-      "id": "PERSISTENT_HOST_TARGET",
+      "id": "PERSISTENT_HOST_AND_SECURE_CONFIG_ACCESS",
       "owner": "WS09_EXTERNAL_INFRA",
-      "detail": "No authorized long-running Linux host with stable public IPv4 and secure deployment configuration channel is connected."
+      "detail": "Authorize a long-running Linux origin with stable public IPv4, Docker/Compose and secure deployment/secret configuration access. The currently resolving 93.89.226.17 is not accepted as the release origin because WS10 sees 443 refused and WS09 has no deployment receipt for it."
     },
     {
       "id": "DNS_ZONE_ACCESS",
       "owner": "WS09_EXTERNAL_DNS",
-      "detail": "Authoritative zone cannot be read/snapshotted/mutated from the current execution context; no DNS write is permitted without a verified origin IP."
+      "detail": "Authoritative zone access is not connected, so WS09 cannot snapshot or safely change apex/play/admin while preserving nameserver/MX/TXT/mail/ownership records."
     },
     {
       "id": "ACCOUNT_DELIVERY_SECRET_CONFIG",
       "owner": "WS09_EXTERNAL_MAIL_DELIVERY",
-      "detail": "WS13 production requires a real HTTPS verification/password-reset delivery webhook URL and secret from the secure production configuration channel."
+      "detail": "WS13 production requires a real HTTPS verification/password-reset delivery webhook URL and secret through the secure production configuration channel."
     },
     {
-      "id": "ADMIN_PERSISTENT_BACKEND",
-      "owner": "WS08_WITH_WS07_AND_GAME_BRIDGE",
-      "detail": "WS08 has not supplied the production PostgreSQL repository adapter and real game command bridge; MemoryAdminRepository is forbidden for production."
+      "id": "ADMIN_PRODUCTION_ADAPTERS_AND_FRONTEND",
+      "owner": "WS07_WS03_WS45_WS28_OFFICIAL_SITE",
+      "detail": "WS08 production boundaries are implemented, but its persistent repository, runtime authority, downstream command bus composition and required admin-v10 frontend security/concurrency wiring are not yet supplied."
     },
     {
       "id": "PERSISTENT_GAME_CHILD_ACCEPTANCE",
       "owner": "WS50_THEN_WS10",
-      "detail": "The newer WS03 PostgreSQL composition is not in frozen C5. WS50 must select an immutable child and WS10 must accept that exact child before WS09 can publish it."
+      "detail": "The newer WS03 PostgreSQL composition is outside parent C5. WS50 still has no accepted owner pins/child candidate and WS10 has not accepted a persistence-capable exact child."
+    },
+    {
+      "id": "MISSING_DOMAIN_LIVE_OWNER_HANDOFFS",
+      "owner": "WEBSITE_WS13_WS07_WS03",
+      "detail": "WS50/WS10 domain-live coordinator evidence still requires exact tested domain-live handoffs for these owners before integration verification can become authoritative."
     }
   ],
   "acceptance": {
     "dns_cutover": "NOT_RUN",
-    "tls_https": "NOT_RUN",
+    "tls_https": "BLOCKED_443_REFUSED",
     "account_live_e2e": "NOT_RUN",
     "game_live_e2e": "NOT_RUN",
     "admin_live_e2e": "NOT_RUN",
     "restart_persistence": "NOT_RUN",
     "application_rollback": "NOT_RUN",
-    "final_ws10_domain_gate": "NOT_RUN"
+    "final_ws10_domain_gate": "BLOCKED_RUN_38654558721"
   }
 }
