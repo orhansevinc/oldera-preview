@@ -1,20 +1,12 @@
-name: WS49 Deterministic Gameplay Scenarios
+name: WS49 Immutable Moradon Visibility Gate
 
 on:
   workflow_dispatch:
   push:
     branches: [ws49-test-scenarios]
     paths:
-      - "test-scenarios/**"
-      - "packages/oldko-test-fixtures/**"
-      - "tests/test-fixtures/**"
-      - "workstreams/ws49/**"
-      - ".github/workflows/ws49-fixtures.yml"
-  pull_request:
-    paths:
-      - "test-scenarios/**"
-      - "packages/oldko-test-fixtures/**"
-      - "tests/test-fixtures/**"
+      - "test-scenarios/gameplay/prepare-immutable-ws50-set.mjs"
+      - "test-scenarios/gameplay/visibility-c5-gate.cjs"
       - "workstreams/ws49/**"
       - ".github/workflows/ws49-fixtures.yml"
 
@@ -24,7 +16,7 @@ permissions:
 jobs:
   deterministic-gameplay:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,35 +24,83 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Validate deterministic fixture standard
+
+      - name: Stage exact immutable WS50-C5 providers
+        run: node test-scenarios/gameplay/prepare-immutable-ws50-set.mjs "$RUNNER_TEMP/ws49-c5"
+
+      - name: Fetch exact pinned Moradon SMD authority
+        run: |
+          set -euo pipefail
+          SMD="$RUNNER_TEMP/moradon_0826.smd"
+          curl --fail --location --silent --show-error \
+            "https://raw.githubusercontent.com/Open-KO/KnightOnline/7d6cf81093e142c928c2ac9510512b2b182178b5/assets/Server/MAP/moradon_0826.smd" \
+            --output "$SMD"
+          python3 - "$SMD" <<'PY'
+          import hashlib, pathlib, sys
+          p = pathlib.Path(sys.argv[1]); data = p.read_bytes()
+          assert len(data) == 786000, len(data)
+          actual = hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
+          assert actual == "cf47772b8e42a8bad71032419f47978c8bbd6142", actual
+          print("WS49_MORADON_SMD_IDENTITY PASS", actual, len(data))
+          PY
+          echo "WS49_MORADON_SMD=$SMD" >> "$GITHUB_ENV"
+
+      - name: Scenario A login-world-ready regression on exact C5
+        run: node --test "$RUNNER_TEMP/ws49-c5/tests/ko1298-session/"*.test.js "$RUNNER_TEMP/ws49-c5/tests/ko1298-session/composed-contracts.contract.js"
+
+      - name: Scenario B movement regression on exact C5
+        run: node --test "$RUNNER_TEMP/ws49-c5/tests/ko1298-movement/"*.test.js
+
+      - name: Re-run exact real provider visibility composition
         env:
-          NODE_ENV: test
-        run: node --test tests/test-fixtures/*.test.mjs
-      - name: Stage exact provider HEADs
-        run: node test-scenarios/gameplay/prepare-current-providers.mjs "$RUNNER_TEMP/ws49-providers"
-      - name: Run deterministic gameplay scenarios
+          WS14_MORADON_SMD: ${{ env.WS49_MORADON_SMD }}
+          WS14_WS11_VISIBILITY_FIXTURES: ${{ runner.temp }}/ws49-c5/protocol-lab/visibility-fixtures
+          WS14_WS16_PROVIDER_ROOT: ${{ runner.temp }}/ws49-c5
+          WS14_WS16_NPC_DATA: ${{ runner.temp }}/ws49-c5/world-data/npc/moradon.json
+          WS14_WS25_PROVIDER_ROOT: ${{ runner.temp }}/ws49-c5
+          WS14_WS25_MOB_DATA: ${{ runner.temp }}/ws49-c5/world-data/mobs/verified/moradon-zone21.verified.json
+          WS14_WS11_PROVIDER_SHA: 944b6ff9b6329af29f1048a74aa6e14fca141639
+          WS14_WS16_PROVIDER_SHA: 5ed48ff32187000312652838674388df52fc3fb7
+          WS14_WS25_PROVIDER_SHA: 13c9bafe287b250d56b52f19e97a02e7ef18e6e5
+          WS14_WS31_PROVIDER_SHA: 546d2ab62cd46a97f3385ebcddbe0c775a02c2eb
+        run: node --test "$RUNNER_TEMP/ws49-c5/tests/ko1298-world/visibility-provider-composition.test.js"
+
+      - name: Deterministic Moradon visibility scenarios
         run: |
-          node test-scenarios/gameplay/run-gameplay-scenarios.mjs \
-            --provider-root "$RUNNER_TEMP/ws49-providers" \
-            --output artifacts/ws49
-      - name: Reconcile current provider capabilities
+          node test-scenarios/gameplay/visibility-c5-gate.cjs \
+            "$RUNNER_TEMP/ws49-c5" \
+            artifacts/ws49/c5-visibility-gate.json
+
+      - name: Assert evidence is tied to exact provider-set
         run: |
-          node test-scenarios/gameplay/reconcile-current-results.mjs \
-            --provider-root "$RUNNER_TEMP/ws49-providers" \
-            --output artifacts/ws49
-      - name: Normalize current provider blockers
-        run: node test-scenarios/gameplay/normalize-current-blockers.mjs --output artifacts/ws49
-      - name: Publish human-readable summary
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const r = JSON.parse(fs.readFileSync('artifacts/ws49/c5-visibility-gate.json', 'utf8'));
+          const key = 'WS50-C5@sha256:7ac3b8a4c06b67e52b8d18518ef8c82209a60c6101c33609a4c16e64d84f119e';
+          if (r.provider_set !== key || r.result !== 'PASS' || !r.real_providers || r.synthetic_substitute) process.exit(1);
+          for (const [name, ok] of Object.entries(r.acceptance)) {
+            if (ok !== true) throw new Error(`acceptance failed: ${name}`);
+          }
+          console.log('WS49_EXACT_PROVIDER_SET_GATE PASS', key);
+          NODE
+          cp "$RUNNER_TEMP/ws49-c5/ws49-provider-stage.json" artifacts/ws49/provider-stage.json
+          cp "$RUNNER_TEMP/ws49-c5/ws50-provider-set.json" artifacts/ws49/ws50-provider-set.json
+
+      - name: Publish summary
         if: always()
         run: |
-          if [ -f artifacts/ws49/integration-report.md ]; then
-            cat artifacts/ws49/integration-report.md >> "$GITHUB_STEP_SUMMARY"
+          if [ -f artifacts/ws49/c5-visibility-gate.json ]; then
+            echo '### WS49 C5 Moradon visibility gate' >> "$GITHUB_STEP_SUMMARY"
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat artifacts/ws49/c5-visibility-gate.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
           fi
-      - name: Upload WS49 integration artifacts
+
+      - name: Upload WS49 evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ws49-integration-report
+          name: ws49-c5-moradon-visibility
           path: artifacts/ws49/
           if-no-files-found: error
           retention-days: 14
