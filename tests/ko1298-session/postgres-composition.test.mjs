@@ -96,6 +96,9 @@ test('one PostgreSQL row powers website account state, KO1298 auth, persistent c
     assert.equal(serverList[0], LOGIN.SERVER_LIST);
     assert.equal(serverList[1], 1);
 
+    // This job isolates one-database identity/persistence. Production itself fails closed
+    // without WS16; the real provider API and browser-render gates are separate WS03/WS10 checks.
+    gameRepository.setNpcWorld({ nearby: () => [] });
     const world = new WorldSessionService({ repository: gameRepository });
     const game = new GameSession(gameRepository, { socketId: 777, worldSession: world });
 
