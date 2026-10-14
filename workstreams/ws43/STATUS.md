@@ -1,57 +1,89 @@
 WS43
 
-# STATUS
+# STATUS — Live Fullscreen / Display Compatibility
 
-## Workstream state
+## Decision
 
-DURUM: TAMAMLANDI
+**DISPLAY FULLSCREEN: READY**
 
-BRANCH: `ws43-client-display-compat`
+Branch: `ws43-client-display-compat`
 
-## Delivered
+WS43 does not claim true native widescreen pixels. It provides the correct fullscreen/browser presentation layer and an exact native backing-store contract to WS01.
 
-- `tools/ws43_display/display-compat.js`
-  - real Emscripten canvas compatibility shim,
-  - aspect-preserving viewport fit,
-  - centered letterboxing,
-  - resize / fullscreen / visual viewport listeners,
-  - native canvas backing-store preservation,
-  - diagnostic mouse coordinate mapping.
-- `tests/display-compat/geometry.test.cjs`
-  - deterministic 1024x768, 1280x720, 1366x768, 1920x1080 geometry checks,
-  - portrait resize, DPI invariant, pointer alignment, invalid geometry checks.
-- `tests/display-compat/display-compat.spec.cjs`
-  - Playwright checks against the real `openko-web/index.html` Emscripten canvas,
-  - high DPI, resize, fullscreen event path, screenshot/JSON artifact generation.
-- `tests/display-compat/artifacts/README.md`
-  - test artifact contract.
-- `.github/workflows/ws43-display.yml`
-  - unit + Chromium compatibility CI and artifact upload.
-- `workstreams/ws43/DISPLAY_MATRIX.md`
-  - compatibility and live-state matrix.
-- `workstreams/ws43/INTEGRATION_PATCH.md`
-  - minimal shared-source activation request.
+## Black-bar root cause — confirmed
 
-## Test verdict
+The black side bars are caused by the real client's native 4:3 backing surface, not by a missing CSS `width:100%` rule:
 
-Overall: PARTIAL
+- canonical WS10 Moradon PASS run #26 captured a genuine native GL framebuffer of `1024x768`;
+- current WS01 browser preparation verifies the Emscripten client still uses width `1024`;
+- the baseline browser patch sets Emscripten view options to `1024x768`;
+- the canonical WS01 entry page creates a `1024x768` canvas/stage;
+- the latest public staging observation shows the expected centered 4:3 canvas with black side bars in a 16:9 viewport.
 
-- Pure geometry / pointer tests: PASS locally.
-- JavaScript syntax validation: PASS locally.
-- Playwright CI: supplied and designed to exercise the real Emscripten entry page; final remote CI execution is external to this commit operation.
-- Login / nation / character / HUD / inventory / dialog state-specific visual validation: PENDING LIVE SESSION because those states require a live 1298 server/session.
-- Actual browser-toolbar zoom and headed native fullscreen: integration acceptance checks; automation covers equivalent viewport behavior and fullscreen reflow path without claiming headless API behavior as production proof.
+At 1920x1080, aspect-preserving maximum fit is exactly 1440x1080 with 240 px bars on both sides, using 75% of viewport area. Removing those bars while retaining a 1024x768 framebuffer would require distortion or crop, both forbidden.
 
-## Boundary compliance
+## WS43 implementation
 
-- No classic KO UI was recreated in HTML.
-- No modern UI was added.
-- No UI asset was modified.
-- No gameplay, admin, site, backend, renderer, or shared client source was modified.
-- No main merge or force push.
+`tools/ws43_display/display-compat.js` now:
 
-## Integration status
+- preserves native `canvas.width` / `canvas.height` as the sole backing-store source of truth;
+- neutralizes the canonical page's legacy `#stage` transform on every reflow, preventing double scaling after resize;
+- fits the real Emscripten canvas maximally into `visualViewport`/window while preserving aspect;
+- supports resize, orientation, fullscreen and visual viewport changes;
+- keeps DPR out of native KO logical dimensions;
+- leaves real Emscripten pointer events untouched and exposes diagnostic native-coordinate mapping;
+- exposes root-document `requestFullscreen()` / `exitFullscreen()` so integration can enter fullscreen from a real user gesture without relying on fullscreen-UA stretching of the canvas.
 
-ENTEGRASYON: Koşullu
+No fake HUD, HTML recreation, renderer replacement, crop or stretch is introduced.
 
-Reason: production activation requires the shared `openko-web/index.html` owner to include the WS43 compatibility script as documented in `INTEGRATION_PATCH.md`, followed by the live-state acceptance run.
+## Test coverage added
+
+Unit/browser coverage now includes:
+
+- 1024x768;
+- 1280x720;
+- 1366x768;
+- 1600x900;
+- 1920x1080;
+- 1440x900 (16:10);
+- DPR 2;
+- resize after legacy stage scaling;
+- fullscreen enter/exit event path;
+- center and four-corner pointer mapping;
+- exact 75% 1920x1080 coverage for fixed 1024x768 backing;
+- zero-bar geometry for matching native 16:9 and 16:10 backing stores.
+
+## WS01 exact handoff
+
+Added `workstreams/ws43/WS01_WIDESCREEN_CONTRACT.md`.
+
+The contract requires WS01 to replace the unconditional browser 1024x768 native view with a config-driven native backing path, while retaining 1024x768 fallback. Required true-widescreen matrix is `1280x720`, `1366x768`, `1600x900`, `1920x1080`.
+
+Native invariants include:
+
+- SDL window/drawable, Emscripten canvas backing, native view options and GL framebuffer agree;
+- resize/fullscreen produces native SDL size events/state changes;
+- GL viewport/scissor follows the new drawable size;
+- authentic UIF layout and native hit testing remain aligned;
+- WS43 JavaScript never mutates backing size to fake widescreen.
+
+## Integrated live acceptance
+
+Final post-WS01 acceptance remains:
+
+`login -> character -> Moradon HUD -> inventory/dialog -> edge clicks -> resize -> fullscreen -> exit fullscreen`
+
+The current public 1024x768 staging state is accepted only as correct 4:3 letterbox behavior. True zero-bar 16:9 acceptance is downstream of the WS01 native change and must be proven with a real native framebuffer at the new size.
+
+## Boundaries
+
+- no provider/game/network logic modified;
+- no shared `openko-web/index.html` modified by WS43;
+- no other workstream branch modified;
+- no main merge;
+- no force push;
+- no new workstream number.
+
+`DISPLAY FULLSCREEN: READY`
+
+BU SOHBETE ARTIK GEREK VAR MI?: HAYIR

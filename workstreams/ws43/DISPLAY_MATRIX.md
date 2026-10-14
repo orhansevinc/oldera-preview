@@ -1,61 +1,66 @@
 WS43
 
-# DISPLAY_MATRIX
+# DISPLAY MATRIX — live fullscreen / widescreen acceptance
 
-## Scope and compatibility contract
+## Proven cause of the black bars
 
-WS43 targets only the real Emscripten canvas exposed by `openko-web/index.html` and loaded by `KnightOnLine.js`. It does not use or modify HTML/Three.js reconstructions of the KO interface.
+The current real browser client is native 4:3, not native widescreen.
 
-The compatibility rule is intentionally conservative:
+Three independent pieces of repository evidence agree:
 
-1. Preserve the native canvas backing-store (`canvas.width` x `canvas.height`) selected by the real client.
-2. Fit that backing-store into the browser viewport with the same aspect ratio.
-3. Center the fitted canvas and use black letterboxing when viewport and client aspect ratios differ.
-4. Never multiply the backing-store by `devicePixelRatio`; DPI changes physical pixels, not the N3/UIF coordinate system.
-5. Keep mouse mapping proportional to the visible CSS rectangle so the displayed button and the backing-store hit coordinate stay aligned.
+1. Canonical WS10 Moradon PASS run #26 measured the genuine native GL framebuffer as `1024x768`.
+2. The current WS01 browser source preparation explicitly requires the Emscripten game options to contain `iViewWidth = 1024`, and the baseline browser patch sets `iViewHeight = 768` as well.
+3. The current canonical `openko-web/index.html` creates a `1024x768` canvas and legacy `1024x768` stage.
 
-The runtime shim dynamically reads the actual backing-store. The 1024x768 values below are a reference calculation for the classic 4:3 client surface, not a forced replacement resolution.
+Therefore a modern 16:9 viewport cannot be filled by this backing store without one of three things: preserve aspect and letterbox, stretch/distort, or crop. WS43 accepts only the first. Stretch/crop/fake HTML UI remain forbidden.
 
-## Reference 1024x768 backing-store geometry
+The latest public staging observation — real 1298 canvas centered with black side bars — is exactly consistent with this native 4:3 source surface; it is not evidence of a CSS-only defect.
 
-| Browser viewport | Canvas CSS box | Letterbox | Automated geometry |
-| --- | --- | --- | --- |
-| 1024x768 | 1024x768 @ (0, 0) | none | PASS |
-| 1280x720 | 960x720 @ (160, 0) | 160 px left/right | PASS |
-| 1366x768 | 1024x768 @ (171, 0) | 171 px left/right | PASS |
-| 1920x1080 | 1440x1080 @ (240, 0) | 240 px left/right | PASS |
+## Reference geometry with current 1024x768 backing store
 
-## Compatibility matrix
+| Browser viewport | Aspect | Canvas CSS box | Unavoidable bars | Viewport coverage |
+| --- | --- | --- | --- | --- |
+| 1024x768 | 4:3 | 1024x768 @ (0, 0) | none | 100% |
+| 1280x720 | 16:9 | 960x720 @ (160, 0) | 160 px left/right | 75% |
+| 1366x768 | ~16:9 | 1024x768 @ (171, 0) | 171 px left/right | ~74.96% |
+| 1600x900 | 16:9 | 1200x900 @ (200, 0) | 200 px left/right | 75% |
+| 1920x1080 | 16:9 | 1440x1080 @ (240, 0) | 240 px left/right | 75% |
+| 1440x900 | 16:10 | 1200x900 @ (120, 0) | 120 px left/right | 83.33% |
+
+This is maximum viewport use possible from a 4:3 native image while preserving every source pixel and the classic KO aspect ratio.
+
+## WS43 browser/display acceptance
 
 | Case | Automated coverage | Status | Notes |
 | --- | --- | --- | --- |
-| 1024x768 | unit + Playwright | PASS | Native aspect is preserved. |
-| 1280x720 | unit + Playwright | PASS | Horizontal letterboxing for 4:3 backing-store. |
-| 1366x768 | unit + Playwright | PASS | Horizontal letterboxing for 4:3 backing-store. |
-| 1920x1080 | unit + Playwright | PASS | Horizontal letterboxing for 4:3 backing-store. |
-| High DPI (DPR 2) | Playwright + invariant | PASS | CSS fit ignores DPR and does not mutate backing-store size. |
-| Browser zoom | reduced CSS viewport simulation | PARTIAL | Layout behavior is covered; Chromium toolbar Ctrl+/Ctrl- zoom must be checked manually in an integrated build. |
-| Window resize | Playwright | PASS | `resize` / `visualViewport.resize` reflow while preserving aspect. |
-| Fullscreen | Playwright event path + optional API attempt | PARTIAL | Event/reflow path is covered. Headless browser may reject native fullscreen; integrated headed run remains required. |
-| Fullscreen exit | Playwright event path | PASS | Reflow is reversible and state returns to non-fullscreen. |
-| Canvas aspect ratio | unit + Playwright | PASS | CSS aspect tracks native backing-store aspect. |
-| Letterboxing | unit + Playwright | PASS | Centered black bars; no stretch/crop. |
-| Mouse coordinate alignment | unit + Playwright center mapping | PASS | Client coordinates derive from visible CSS rect and native backing size. |
+| 1024x768 | unit + Playwright | PASS target | No bars at native aspect. |
+| 1280x720 | unit + Playwright | PASS target | Correct 4:3 letterbox. |
+| 1366x768 | unit + Playwright | PASS target | Correct 4:3 letterbox. |
+| 1600x900 | unit + Playwright | PASS target | Correct 4:3 letterbox. |
+| 1920x1080 | unit + Playwright | PASS target | 240 px symmetric bars; 75% coverage. |
+| 1440x900 16:10 | unit + Playwright | PASS target | 120 px symmetric bars. |
+| DPR 2 | Playwright + invariant | PASS target | DPR does not mutate native backing dimensions. |
+| Window resize | Playwright | PASS target | Legacy `#stage` transform is re-neutralized; no double CSS scaling. |
+| `visualViewport` | runtime listener | PASS target | Offset/size are used when available. |
+| Fullscreen enter/exit | Playwright API path | PASS target | Root fullscreen preserves native aspect; no canvas UA stretching dependency. |
+| Pointer center + corners | unit + Playwright | PASS target | CSS-to-backing mapping stays aligned. |
+| Matching native 16:9 backing | unit geometry | PASS target | Matching 1280x720 / 1366x768 / 1600x900 / 1920x1080 removes bars with scale=1. |
+| Matching native 16:10 backing | unit geometry | PASS target | 1440x900 removes bars with scale=1. |
 
-## Real UI state checks
+## Live acceptance sequence
 
-These states require a live 1298 session/server path to reach the actual rendered screens. WS43 does not fabricate state screenshots or substitute DOM mockups.
+After WS01 consumes the native backing-store contract, the integrated real-client acceptance is:
 
-| UI state | Geometry protection | Visual/state-specific verdict |
-| --- | --- | --- |
-| Login UI | compatibility shim applies | PENDING LIVE SESSION |
-| Nation select | compatibility shim applies | PENDING LIVE SESSION |
-| Character select | compatibility shim applies | PENDING LIVE SESSION |
-| In-game HUD | compatibility shim applies | PENDING LIVE SESSION |
-| Inventory UI accessibility | compatibility shim applies | PENDING LIVE SESSION |
-| Dialog clipping | compatibility shim applies | PENDING LIVE SESSION |
-| Button image/hitbox match | pointer math covered | PENDING LIVE SESSION |
+`login -> character -> Moradon HUD -> inventory/dialog -> edge clicks -> resize -> browser fullscreen -> exit fullscreen`
 
-## Evidence
+Required observations:
 
-`tests/display-compat/display-compat.spec.cjs` always opens `openko-web/index.html`, asserts `#canvas` and the `KnightOnLine.js` script are present, injects only the WS43 compatibility shim, and produces PNG/JSON evidence under `tests/display-compat/artifacts/`.
+- the real native KO UI is present; no HTML replacement;
+- Moradon world fills the native backing surface;
+- inventory/dialog remains fully visible;
+- center plus four edge/corner clicks land on the rendered native coordinates;
+- resize/fullscreen never introduces non-uniform scale;
+- fullscreen exit returns to the prior window geometry;
+- `canvas.width/canvas.height`, SDL/native view size and GL default framebuffer agree after every native size change.
+
+Until WS01 changes the native backing store, the correct acceptance result on widescreen is symmetric black bars, not a stretched or cropped fake widescreen image.

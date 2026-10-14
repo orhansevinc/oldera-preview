@@ -9,7 +9,9 @@ const matrix = [
   { name: '1024x768', width: 1024, height: 768, dpr: 1 },
   { name: '1280x720', width: 1280, height: 720, dpr: 1 },
   { name: '1366x768', width: 1366, height: 768, dpr: 1 },
+  { name: '1600x900', width: 1600, height: 900, dpr: 1 },
   { name: '1920x1080', width: 1920, height: 1080, dpr: 1 },
+  { name: '1440x900-16x10', width: 1440, height: 900, dpr: 1 },
   { name: '1280x720-high-dpi', width: 1280, height: 720, dpr: 2 },
   { name: 'zoom-125-equivalent-1024x576', width: 1024, height: 576, dpr: 1 }
 ];
@@ -41,7 +43,19 @@ async function diagnostics(page) {
     const snap = instance.snapshot();
     const rect = instance.canvas.getBoundingClientRect();
     const center = instance.mapPointer(rect.left + rect.width / 2, rect.top + rect.height / 2);
-    return { ...snap, centerMapping: center };
+    const corners = [
+      instance.mapPointer(rect.left, rect.top),
+      instance.mapPointer(rect.right, rect.top),
+      instance.mapPointer(rect.left, rect.bottom),
+      instance.mapPointer(rect.right, rect.bottom)
+    ];
+    return {
+      ...snap,
+      centerMapping: center,
+      cornerMappings: corners,
+      requestFullscreenAvailable: typeof instance.requestFullscreen === 'function',
+      exitFullscreenAvailable: typeof instance.exitFullscreen === 'function'
+    };
   });
 }
 
@@ -63,7 +77,21 @@ for (const entry of matrix) {
     expect(diag.centerMapping.x).toBeCloseTo(diag.backing.width / 2, 4);
     expect(diag.centerMapping.y).toBeCloseTo(diag.backing.height / 2, 4);
     expect(diag.centerMapping.inside).toBe(true);
+    expect(diag.cornerMappings[0].x).toBeCloseTo(0, 4);
+    expect(diag.cornerMappings[0].y).toBeCloseTo(0, 4);
+    expect(diag.cornerMappings[3].x).toBeCloseTo(diag.backing.width, 4);
+    expect(diag.cornerMappings[3].y).toBeCloseTo(diag.backing.height, 4);
     expect(diag.devicePixelRatio).toBe(entry.dpr);
+    expect(diag.stageTransform).toBe('none');
+    expect(diag.requestFullscreenAvailable).toBe(true);
+    expect(diag.exitFullscreenAvailable).toBe(true);
+
+    if (entry.name === '1920x1080' && diag.backing.width === 1024 && diag.backing.height === 768) {
+      expect(diag.letterbox.left).toBeCloseTo(240, 4);
+      expect(diag.letterbox.right).toBeCloseTo(240, 4);
+      expect(diag.viewportCoverage).toBeCloseTo(0.75, 6);
+      expect(diag.barsRequired).toBe(true);
+    }
 
     await page.screenshot({ path: path.join(artifactDir, `${entry.name}.png`) });
     fs.writeFileSync(
@@ -76,7 +104,7 @@ for (const entry of matrix) {
   });
 }
 
-test('window resize keeps aspect ratio and pointer center aligned', async ({ browser }) => {
+test('window resize neutralizes legacy stage transform and keeps pointer alignment', async ({ browser }) => {
   const { context, page } = await openRealClient(browser, { width: 1366, height: 768, dpr: 1 });
   const before = await diagnostics(page);
 
@@ -90,25 +118,23 @@ test('window resize keeps aspect ratio and pointer center aligned', async ({ bro
   expect(after.centerMapping.x).toBeCloseTo(after.backing.width / 2, 4);
   expect(after.centerMapping.y).toBeCloseTo(after.backing.height / 2, 4);
   expect(after.css.width !== before.css.width || after.css.height !== before.css.height).toBe(true);
+  expect(after.stageTransform).toBe('none');
 
   await page.screenshot({ path: path.join(artifactDir, 'resize-900x1000.png') });
   await context.close();
 });
 
-test('fullscreen change event path reflows and fullscreen exit is reversible', async ({ browser }) => {
+test('fullscreen API path preserves native aspect and exit is reversible', async ({ browser }) => {
   const { context, page } = await openRealClient(browser, { width: 1280, height: 720, dpr: 1 });
 
   const result = await page.evaluate(async () => {
-    const canvas = document.getElementById('canvas');
     const instance = window.__WS43_DISPLAY_COMPAT__;
     let entered = false;
     let error = null;
 
     try {
-      if (canvas.requestFullscreen) {
-        await canvas.requestFullscreen();
-        entered = document.fullscreenElement === canvas;
-      }
+      await instance.requestFullscreen();
+      entered = Boolean(document.fullscreenElement);
     } catch (err) {
       error = String(err && err.message ? err.message : err);
     }
@@ -117,8 +143,8 @@ test('fullscreen change event path reflows and fullscreen exit is reversible', a
     instance.applyLayout();
     const during = instance.snapshot();
 
-    if (document.fullscreenElement && document.exitFullscreen) {
-      await document.exitFullscreen();
+    if (document.fullscreenElement) {
+      await instance.exitFullscreen();
     }
     document.dispatchEvent(new Event('fullscreenchange'));
     instance.applyLayout();
@@ -128,7 +154,9 @@ test('fullscreen change event path reflows and fullscreen exit is reversible', a
   });
 
   expect(result.during.aspectError).toBeLessThan(0.0001);
+  expect(result.during.stageTransform).toBe('none');
   expect(result.after.aspectError).toBeLessThan(0.0001);
+  expect(result.after.stageTransform).toBe('none');
   expect(result.after.fullscreen).toBe(false);
 
   fs.writeFileSync(

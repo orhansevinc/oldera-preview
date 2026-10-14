@@ -101,6 +101,8 @@
   }
 
   function preserveInlineStyles(node, names) {
+    if (!node) return function restoreNothing() {};
+
     var values = {};
     names.forEach(function (name) {
       values[name] = node.style[name];
@@ -126,9 +128,15 @@
       return win[INSTANCE_KEY];
     }
 
+    var stage = options.stage || (canvas.parentElement && canvas.parentElement.id === 'stage' ? canvas.parentElement : null);
+    var fullscreenTarget = options.fullscreenTarget || doc.documentElement;
     var restoreCanvas = preserveInlineStyles(canvas, [
-      'position', 'left', 'top', 'width', 'height', 'maxWidth', 'maxHeight',
+      'position', 'left', 'top', 'right', 'bottom', 'width', 'height', 'maxWidth', 'maxHeight',
       'margin', 'transform', 'transformOrigin', 'display'
+    ]);
+    var restoreStage = preserveInlineStyles(stage, [
+      'position', 'left', 'top', 'right', 'bottom', 'width', 'height', 'maxWidth', 'maxHeight',
+      'margin', 'transform', 'transformOrigin'
     ]);
     var restoreHtml = preserveInlineStyles(doc.documentElement, ['margin', 'padding', 'overflow', 'backgroundColor']);
     var restoreBody = preserveInlineStyles(doc.body, ['margin', 'padding', 'overflow', 'backgroundColor']);
@@ -146,12 +154,35 @@
     doc.body.style.backgroundColor = '#000';
 
     canvas.style.position = 'fixed';
+    canvas.style.right = 'auto';
+    canvas.style.bottom = 'auto';
     canvas.style.maxWidth = 'none';
     canvas.style.maxHeight = 'none';
     canvas.style.margin = '0';
     canvas.style.transform = 'none';
     canvas.style.transformOrigin = '0 0';
     canvas.style.display = 'block';
+
+    function neutralizeLegacyStage() {
+      if (!stage) return;
+
+      // The canonical WS01 entry page has its own 1024x768 stage transform.
+      // Once WS43 owns presentation geometry that transform must not multiply
+      // the canvas fit a second time. Keep the real canvas in-place in the DOM;
+      // only neutralize the legacy presentation wrapper.
+      stage.style.position = 'static';
+      stage.style.left = 'auto';
+      stage.style.top = 'auto';
+      stage.style.right = 'auto';
+      stage.style.bottom = 'auto';
+      stage.style.width = '0px';
+      stage.style.height = '0px';
+      stage.style.maxWidth = 'none';
+      stage.style.maxHeight = 'none';
+      stage.style.margin = '0';
+      stage.style.transform = 'none';
+      stage.style.transformOrigin = '0 0';
+    }
 
     function currentBackingStore() {
       var width = Number(canvas.width);
@@ -167,6 +198,8 @@
     function applyLayout() {
       queued = false;
       if (disposed) return null;
+
+      neutralizeLegacyStage();
 
       var backing = currentBackingStore();
       if (!backing) return null;
@@ -207,6 +240,12 @@
       var rect = canvas.getBoundingClientRect();
       var cssAspect = finitePositive(rect.width) && finitePositive(rect.height) ? rect.width / rect.height : null;
       var backingAspect = backing ? backing.width / backing.height : null;
+      var fitted = backing && finitePositive(viewport.width) && finitePositive(viewport.height)
+        ? fitRect(backing.width, backing.height, viewport.width, viewport.height, viewport.left, viewport.top)
+        : null;
+      var coverage = fitted
+        ? (fitted.width * fitted.height) / (viewport.width * viewport.height)
+        : null;
 
       return {
         backing: backing,
@@ -218,11 +257,16 @@
         },
         viewport: viewport,
         devicePixelRatio: Number(win.devicePixelRatio) || 1,
-        fullscreen: doc.fullscreenElement === canvas,
+        fullscreen: Boolean(doc.fullscreenElement),
+        fullscreenElement: doc.fullscreenElement ? (doc.fullscreenElement.id || doc.fullscreenElement.tagName || 'unknown') : null,
+        stageTransform: stage ? win.getComputedStyle(stage).transform : null,
         aspectError: cssAspect && backingAspect ? Math.abs(cssAspect - backingAspect) : null,
-        letterbox: backing && finitePositive(viewport.width) && finitePositive(viewport.height)
-          ? fitRect(backing.width, backing.height, viewport.width, viewport.height, viewport.left, viewport.top).letterbox
-          : null
+        letterbox: fitted ? fitted.letterbox : null,
+        viewportCoverage: coverage,
+        barsRequired: fitted ? (
+          fitted.letterbox.left > EPSILON || fitted.letterbox.right > EPSILON ||
+          fitted.letterbox.top > EPSILON || fitted.letterbox.bottom > EPSILON
+        ) : null
       };
     }
 
@@ -230,6 +274,21 @@
       var backing = currentBackingStore();
       if (!backing) return null;
       return mapClientToCanvas(clientX, clientY, canvas.getBoundingClientRect(), backing.width, backing.height);
+    }
+
+    function requestFullscreen() {
+      if (!fullscreenTarget || typeof fullscreenTarget.requestFullscreen !== 'function') {
+        return Promise.reject(new Error('Fullscreen API is unavailable.'));
+      }
+      return Promise.resolve(fullscreenTarget.requestFullscreen());
+    }
+
+    function exitFullscreen() {
+      if (!doc.fullscreenElement) return Promise.resolve(false);
+      if (typeof doc.exitFullscreen !== 'function') {
+        return Promise.reject(new Error('Fullscreen exit API is unavailable.'));
+      }
+      return Promise.resolve(doc.exitFullscreen()).then(function () { return true; });
     }
 
     function destroy() {
@@ -244,6 +303,7 @@
       }
       if (observer) observer.disconnect();
       restoreCanvas();
+      restoreStage();
       restoreHtml();
       restoreBody();
       if (win[INSTANCE_KEY] === instance) delete win[INSTANCE_KEY];
@@ -251,10 +311,14 @@
 
     var instance = {
       canvas: canvas,
+      stage: stage,
+      fullscreenTarget: fullscreenTarget,
       applyLayout: applyLayout,
       scheduleLayout: scheduleLayout,
       snapshot: snapshot,
       mapPointer: mapPointer,
+      requestFullscreen: requestFullscreen,
+      exitFullscreen: exitFullscreen,
       destroy: destroy
     };
 
