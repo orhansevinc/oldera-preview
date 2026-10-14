@@ -6,6 +6,11 @@ main loop is running. WS04 therefore captures the genuine RHIDeviceGL
 backbuffer. Present() remains the preferred pre-swap service point; an
 Emscripten timer services requests that would otherwise starve while the
 browser has yielded inside a long/suspended main-scene frame.
+
+For the Moradon E2E gate the JS driver may set WS04_CAPTURE_PRESENT_ONLY=1.
+That arms a request early while JS is still responsive but explicitly prevents
+the timer fallback from reading an incomplete preload frame; only the next real
+RHIDeviceGL::Present() may service that request.
 """
 from pathlib import Path
 
@@ -32,8 +37,6 @@ include_patch = """#include <vector>
 """
 s = replace_once(s, include_anchor, include_patch, "Emscripten include")
 
-# Keep all browser-capture state on the GL device. Desktop builds never see
-# these declarations.
 header = Path("openko/src/Client/WarFare/RHIDeviceGL.h")
 h = header.read_text(encoding="utf-8")
 private_anchor = """private:
@@ -53,12 +56,6 @@ private_patch = """private:
 h = replace_once(h, private_anchor, private_patch, "WS04 device capture declarations")
 header.write_text(h, encoding="utf-8")
 
-# Character Select/Create normally reach Present(), so those requests keep the
-# exact existing pre-swap behavior. Moradon can yield after drawing the native
-# scene but before a subsequent Present(); the browser remains alive (network
-# callbacks and Playwright evaluation continue), so a small Emscripten timer
-# observes a request that has remained pending for several ticks and reads the
-# same native GL backbuffer. No game/render decisions are changed.
 ctor_anchor = """\tspdlog::info("RHIDeviceGL: S3TC {}, max texture size {}",
 \t\tm_bS3TC ? "supported" : "NOT supported", maxTexSize);
 \tm_bValid = true;
@@ -121,9 +118,25 @@ void RHIDeviceGL::WS04ServiceCaptureRequest(const char* source, bool deferFromTi
 \t\treturn;
 \t}
 
+\t// A world-transition proof can arm the request while JS is responsive but
+\t// require that only the next genuine Present() services it. This prevents
+\t// the timer fallback from invoking a synchronous glReadPixels/DumpFramePPM
+\t// halfway through the Moradon resource-preload phase.
+\tif (deferFromTimer)
+\t{
+\t\tconst int ws04PresentOnly = EM_ASM_INT({
+\t\t\treturn globalThis.WS04_CAPTURE_PRESENT_ONLY ? 1 : 0;
+\t\t});
+\t\tif (ws04PresentOnly != 0)
+\t\t{
+\t\t\tm_iWS04DeferredCaptureID = 0;
+\t\t\tm_iWS04DeferredCaptureTicks = 0;
+\t\t\treturn;
+\t\t}
+\t}
+
 \t// Present() always wins immediately. The timer is only a starvation
-\t// fallback: require the exact same request to remain pending for 10 ticks
-\t// (~500 ms) so normal Character Select/Create captures stay pre-swap.
+\t// fallback for ordinary proof captures when PRESENT_ONLY is not requested.
 \tif (deferFromTimer)
 \t{
 \t\tif (m_iWS04DeferredCaptureID != ws04CaptureRequest)
@@ -137,9 +150,6 @@ void RHIDeviceGL::WS04ServiceCaptureRequest(const char* source, bool deferFromTi
 \t\t\treturn;
 \t}
 
-\t// Claim the id on the JS side before the synchronous GL readback. Present
-\t// and the browser timer run on the same browser thread, but the claim also
-\t// prevents a stale callback from duplicating a completed request.
 \tconst int ws04ClaimedRequest = EM_ASM_INT({
 \t\tconst requested = Number(globalThis.WS04_CAPTURE_REQUEST || 0) | 0;
 \t\tconst wanted = $0 | 0;
@@ -169,6 +179,7 @@ void RHIDeviceGL::WS04ServiceCaptureRequest(const char* source, bool deferFromTi
 \t\t\tglobalThis.WS04_CAPTURE_REQUEST = 0;
 \t\tif ((Number(globalThis.WS04_CAPTURE_INFLIGHT || 0) | 0) === id)
 \t\t\tglobalThis.WS04_CAPTURE_INFLIGHT = 0;
+\t\tglobalThis.WS04_CAPTURE_PRESENT_ONLY = 0;
 \t}, ws04Ok ? 1 : 0, ws04CaptureRequest);
 }
 #endif
@@ -176,9 +187,6 @@ void RHIDeviceGL::WS04ServiceCaptureRequest(const char* source, bool deferFromTi
 HRESULT RHIDeviceGL::Present()
 {
 #ifdef __EMSCRIPTEN__
-\t// Preferred path: capture the actual KO GL backbuffer immediately before
-\t// SDL_GL_SwapWindow. The timer above only runs when this service point is
-\t// starved by the browser/main-scene lifecycle.
 \tWS04ServiceCaptureRequest("present", false);
 #endif
 
@@ -187,8 +195,6 @@ HRESULT RHIDeviceGL::Present()
 s = replace_once(s, present_anchor, present_patch, "Present pre-swap capture service")
 cpp.write_text(s, encoding="utf-8")
 
-# Expose Emscripten MEMFS to Playwright so the PPM written by DumpFramePPM can
-# be collected as an artifact. This does not change desktop builds.
 cmake = Path("openko/src/Client/WarFare/CMakeLists.txt")
 s = cmake.read_text(encoding="utf-8")
 chr_preload = '    "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/../ko-assets/Chr@/data/Chr"\n'
@@ -199,4 +205,4 @@ if fs_export not in s:
     s = s.replace(chr_preload, chr_preload + fs_export, 1)
 cmake.write_text(s, encoding="utf-8")
 
-print("WS04 pre-swap GL capture + browser-lifecycle starvation fallback patch applied")
+print("WS04 pre-swap GL capture + present-only Moradon arming patch applied")
