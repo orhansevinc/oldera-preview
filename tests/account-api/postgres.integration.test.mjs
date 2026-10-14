@@ -10,6 +10,7 @@ import { PostgresRateLimitStore } from '../../services/account-api/src/postgres-
 import { buildProductionRuntime } from '../../services/account-api/src/production-runtime.js';
 import { createHttpServer } from '../../services/account-api/src/http.js';
 import { openApiDocument } from '../../services/account-api/src/openapi.js';
+import { digestToken } from '../../services/account-api/src/security.js';
 
 const enabled = process.env.OLDKO_POSTGRES_INTEGRATION === '1';
 const integration = enabled ? test : test.skip;
@@ -17,8 +18,8 @@ const origin = 'https://oldkoweb.com';
 
 class CaptureDelivery {
   constructor() { this.verifications = []; this.resets = []; }
-  async sendVerification(payload) { this.verifications.push(payload); }
-  async sendPasswordReset(payload) { this.resets.push(payload); }
+  async sendVerification(payload) { this.verifications.push(payload); return { accepted: true, provider: 'ci-capture', providerMessageId: `verify-${this.verifications.length}` }; }
+  async sendPasswordReset(payload) { this.resets.push(payload); return { accepted: true, provider: 'ci-capture', providerMessageId: `reset-${this.resets.length}` }; }
 }
 
 async function jsonRequest(base, route, { method = 'GET', body, headers = {} } = {}) {
@@ -33,7 +34,7 @@ async function jsonRequest(base, route, { method = 'GET', body, headers = {} } =
 function uniqueAccount(label) {
   const suffix = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
   const username = `${label}${suffix}`.replace(/[^A-Za-z0-9_]/g, '').slice(0, 20);
-  return { username, email: `${username.toLowerCase()}@example.test`, password: 'Str0ng!ProdPass1' };
+  return { username, email: `${username.toLowerCase()}@example.test`, password: 'Prod!Pwd1234' };
 }
 
 async function loadWs07() {
@@ -83,9 +84,6 @@ async function fixture(label = 'Prod') {
     const closed = new Promise((resolve) => server.close(resolve));
     server.closeAllConnections?.();
     await closed;
-    // The pinned WS07 schema intentionally rejects hard account deletion. The CI
-    // PostgreSQL service is ephemeral and account names are unique, so fixtures
-    // are left intact while only the shared limiter state is reset between gates.
     await repository.db.query('TRUNCATE oldko.account_rate_limits');
     await rateLimitStore.close();
     await repository.db.end();
@@ -95,7 +93,7 @@ async function fixture(label = 'Prod') {
 }
 
 integration('production runtime pins the exact WS07 PostgreSQL adapter and shared rate limiter', async () => {
-  const env = { ...process.env, NODE_ENV: 'production', OLDKO_ACCOUNT_ALLOWED_ORIGINS: 'https://oldkoweb.com', OLDKO_TRUST_PROXY: '1', OLDKO_ACCOUNT_DELIVERY_WEBHOOK_URL: 'https://delivery.example.invalid/account', OLDKO_ACCOUNT_DELIVERY_WEBHOOK_SECRET: 'ci-only-placeholder-secret' };
+  const env = { ...process.env, NODE_ENV: 'production', OLDKO_ACCOUNT_ALLOWED_ORIGINS: 'https://oldkoweb.com', OLDKO_TRUST_PROXY: '1', OLDKO_ACCOUNT_DELIVERY_WEBHOOK_URL: 'https://delivery.example.invalid/account', OLDKO_ACCOUNT_DELIVERY_WEBHOOK_SECRET: 'ci-only-placeholder-secret', OLDKO_ACCOUNT_MAIL_FROM: 'accounts@oldkoweb.com' };
   const runtime = await buildProductionRuntime(env);
   try {
     assert.equal(runtime.repository.constructor.name, 'PgWs13AccountRepository');
@@ -135,6 +133,7 @@ integration('PostgreSQL login current logout and revoked session', async () => {
     await f.registerAndVerify();
     const login = await jsonRequest(f.base, '/api/account/v1/session/login', { method: 'POST', headers: { origin }, body: { identifier: f.account.email, password: f.account.password } });
     assert.equal(login.status, 200);
+    assert.equal((await login.clone().json()).credentialUpgradeRequired, false);
     const setCookie = login.headers.get('set-cookie');
     assert.match(setCookie, /^oldko_session=/);
     assert.match(setCookie, /HttpOnly/i);
@@ -155,7 +154,7 @@ integration('PostgreSQL login current logout and revoked session', async () => {
 
 integration('PostgreSQL password change invalidates prior session and credential', async () => {
   const f = await fixture('Chg');
-  const nextPassword = 'Str0ng!ProdPass2';
+  const nextPassword = 'Prod!Pwd1235';
   try {
     await f.registerAndVerify();
     const login = await jsonRequest(f.base, '/api/account/v1/session/login', { method: 'POST', headers: { origin }, body: { identifier: f.account.username, password: f.account.password } });
@@ -171,7 +170,7 @@ integration('PostgreSQL password change invalidates prior session and credential
 
 integration('PostgreSQL password reset rotates credential', async () => {
   const f = await fixture('Rst');
-  const nextPassword = 'Str0ng!ProdPass3';
+  const nextPassword = 'Prod!Pwd1236';
   try {
     await f.registerAndVerify();
     const resetRequest = await jsonRequest(f.base, '/api/account/v1/password-reset/request', { method: 'POST', headers: { origin }, body: { email: f.account.email } });
@@ -181,6 +180,56 @@ integration('PostgreSQL password reset rotates credential', async () => {
     assert.equal(resetConfirm.status, 200);
     assert.equal((await jsonRequest(f.base, '/api/account/v1/session/login', { method: 'POST', headers: { origin }, body: { identifier: f.account.username, password: f.account.password } })).status, 401);
     assert.equal((await jsonRequest(f.base, '/api/account/v1/session/login', { method: 'POST', headers: { origin }, body: { identifier: f.account.username, password: nextPassword } })).status, 200);
+  } finally { await f.cleanup(); }
+});
+
+integration('PostgreSQL credential envelope rejects unsupported writes, preserves reset token on policy failure, rejects bad Origin, and enforces token expiry/use-once', async () => {
+  const f = await fixture('Env');
+  try {
+    const evilRegister = await jsonRequest(f.base, '/api/account/v1/accounts/register', { method: 'POST', headers: { origin: 'https://evil.example' }, body: f.account });
+    assert.equal(evilRegister.status, 403);
+    const tooLong = { ...f.account, password: 'Prod!Pwd12345' };
+    assert.equal(Buffer.byteLength(tooLong.password, 'utf8'), 13);
+    const badRegister = await jsonRequest(f.base, '/api/account/v1/accounts/register', { method: 'POST', headers: { origin }, body: tooLong });
+    assert.equal(badRegister.status, 400);
+
+    await f.registerAndVerify();
+    const gameCheck = await jsonRequest(f.base, '/api/account/v1/accounts/access-check', { method: 'POST', body: { username: f.account.username, password: f.account.password } });
+    assert.equal(gameCheck.status, 200);
+    assert.equal((await gameCheck.json()).access, 'allowed');
+    const evilLogin = await jsonRequest(f.base, '/api/account/v1/session/login', { method: 'POST', headers: { origin: 'https://evil.example' }, body: { identifier: f.account.username, password: f.account.password } });
+    assert.equal(evilLogin.status, 403);
+    const badChange = await jsonRequest(f.base, '/api/account/v1/password/change', { method: 'POST', headers: { origin }, body: { username: f.account.username, currentPassword: f.account.password, newPassword: 'Prod!Pwd12345' } });
+    assert.equal(badChange.status, 400);
+
+    assert.equal((await jsonRequest(f.base, '/api/account/v1/password-reset/request', { method: 'POST', headers: { origin }, body: { email: f.account.email } })).status, 202);
+    const token = f.delivery.resets[0].token;
+    const badReset = await jsonRequest(f.base, '/api/account/v1/password-reset/confirm', { method: 'POST', headers: { origin }, body: { token, newPassword: 'Prod!Pwd12345' } });
+    assert.equal(badReset.status, 400);
+    const goodReset = await jsonRequest(f.base, '/api/account/v1/password-reset/confirm', { method: 'POST', headers: { origin }, body: { token, newPassword: 'Prod!Pwd1237' } });
+    assert.equal(goodReset.status, 200);
+    assert.equal((await jsonRequest(f.base, '/api/account/v1/password-reset/confirm', { method: 'POST', headers: { origin }, body: { token, newPassword: 'Prod!Pwd1238' } })).status, 400);
+
+    assert.equal((await jsonRequest(f.base, '/api/account/v1/password-reset/request', { method: 'POST', headers: { origin }, body: { email: f.account.email } })).status, 202);
+    const expiredToken = f.delivery.resets[1].token;
+    await f.repository.db.query('UPDATE oldko.account_action_tokens SET expires_at=now() - interval \'1 second\' WHERE token_hash=$1', [Buffer.from(digestToken(expiredToken), 'hex')]);
+    assert.equal((await jsonRequest(f.base, '/api/account/v1/password-reset/confirm', { method: 'POST', headers: { origin }, body: { token: expiredToken, newPassword: 'Prod!Pwd1239' } })).status, 400);
+  } finally { await f.cleanup(); }
+});
+
+integration('PostgreSQL official frontend password aliases execute against the production /api/account base', async () => {
+  const f = await fixture('Ali');
+  try {
+    await f.registerAndVerify();
+    const changed = 'Prod!Pwd1235';
+    const change = await jsonRequest(f.base, '/api/account/v1/accounts/password/change', { method: 'POST', headers: { origin }, body: { username: f.account.username, currentPassword: f.account.password, newPassword: changed } });
+    assert.equal(change.status, 200);
+    const request = await jsonRequest(f.base, '/api/account/v1/accounts/password-reset/request', { method: 'POST', headers: { origin }, body: { username: f.account.username } });
+    assert.equal(request.status, 202);
+    const finalPassword = 'Prod!Pwd1236';
+    const confirm = await jsonRequest(f.base, '/api/account/v1/accounts/password-reset/confirm', { method: 'POST', headers: { origin }, body: { token: f.delivery.resets[0].token, newPassword: finalPassword } });
+    assert.equal(confirm.status, 200);
+    assert.equal((await jsonRequest(f.base, '/api/account/v1/session/login', { method: 'POST', headers: { origin }, body: { identifier: f.account.username, password: finalPassword } })).status, 200);
   } finally { await f.cleanup(); }
 });
 
