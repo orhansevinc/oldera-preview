@@ -78,7 +78,7 @@ jobs:
           grep -Fqx 'WS10_CLIENT_ARTIFACT_DIGEST=sha256:f749750fc5bb0249a67b712bd4e1a03847773d8845fd209508b8c95f6c447a83' "$RELEASE"
           grep -Fq '"permanent_domain_ready": false' workstreams/ws09/DOMAIN_DEPLOYMENT.json
 
-      - name: Account and website authority contract
+      - name: Domain owner authority contract
         shell: bash
         run: |
           set -euo pipefail
@@ -87,6 +87,9 @@ jobs:
           grep -Fqx 'WS13_ACCOUNT_HEAD=1ef67bd7c0c98a588bce4db6c0f1305b820af008' deploy/.env.production.example
           grep -Fqx 'WS13_ACCOUNT_RUN_ID=38650301600' deploy/.env.production.example
           grep -Fqx 'WS07_ACCOUNT_COMMIT=1ae85c96319cbab11648a91ed28300e17d4c607f' deploy/.env.production.example
+          grep -Fqx 'WS08_ADMIN_DOMAIN_SOURCE=97771268f37735e6ebaad9ed48a6927438f65f59' deploy/.env.production.example
+          grep -Fqx 'WS08_ADMIN_RUN_ID=38654675678' deploy/.env.production.example
+          grep -Fqx 'WS10_DOMAIN_LIVE_RUN_ID=38654558721' deploy/.env.production.example
           grep -Fq 'OLDKO_ACCOUNT_REPOSITORY_MODULE=/opt/oldkoweb/ws07/services/oldko-data/src/adapters/ws13-account-api.js' deploy/.env.production.example
 
       - name: Prepare production contract fixtures
@@ -112,7 +115,14 @@ jobs:
             -e "s#^KO_SESSION_WORLD_IMAGE=.*#KO_SESSION_WORLD_IMAGE=$fake#" \
             -e 's#^ACCOUNT_DATABASE_URL=.*#ACCOUNT_DATABASE_URL=postgresql://ci:ci@db:5432/oldkoweb#' \
             -e 's#^OLDKO_ACCOUNT_DELIVERY_WEBHOOK_URL=.*#OLDKO_ACCOUNT_DELIVERY_WEBHOOK_URL=https://delivery.example.invalid/account#' \
-            -e 's#^OLDKO_ACCOUNT_DELIVERY_WEBHOOK_SECRET=.*#OLDKO_ACCOUNT_DELIVERY_WEBHOOK_SECRET=ci-placeholder-through-secure-channel#' \
+            -e 's#^OLDKO_ACCOUNT_DELIVERY_WEBHOOK_SECRET=.*#OLDKO_ACCOUNT_DELIVERY_WEBHOOK_SECRET=ci-secure-channel-placeholder#' \
+            -e 's#^ADMIN_DATABASE_URL=.*#ADMIN_DATABASE_URL=postgresql://ci:ci@db:5432/oldkoweb#' \
+            -e 's#^ADMIN_USERS_JSON=.*#ADMIN_USERS_JSON=[{"id":"ci-owner","username":"ci","passwordHash":"ci-only","roles":["ROOT_OWNER"]}]#' \
+            -e 's#^ADMIN_ROOT_OWNER_ID=.*#ADMIN_ROOT_OWNER_ID=ci-owner#' \
+            -e 's#^ADMIN_SESSION_SECRET=.*#ADMIN_SESSION_SECRET=ci-secure-channel-placeholder#' \
+            -e 's#^ADMIN_REPOSITORY_MODULE=.*#ADMIN_REPOSITORY_MODULE=/opt/oldkoweb/adapters/admin-repository.js#' \
+            -e 's#^ADMIN_RUNTIME_AUTHORITY_MODULE=.*#ADMIN_RUNTIME_AUTHORITY_MODULE=/opt/oldkoweb/adapters/admin-runtime.js#' \
+            -e 's#^ADMIN_COMMAND_BUS_MODULE=.*#ADMIN_COMMAND_BUS_MODULE=/opt/oldkoweb/adapters/admin-command-bus.js#' \
             /tmp/ws09-production-ci.env
 
       - name: Production compose and env dry-run
@@ -153,6 +163,7 @@ jobs:
           grep -Fq 'location = /auth' infra/nginx/templates/production.conf.template
           grep -Fq 'location = /game' infra/nginx/templates/production.conf.template
           grep -Fq 'location /api/admin/' infra/nginx/templates/production.conf.template
+          grep -Fq 'proxy_pass http://admin-api:${ADMIN_API_PORT};' infra/nginx/templates/production.conf.template
           grep -Fq 'application/wasm' infra/nginx/mime.types
           grep -Fq 'application/octet-stream' infra/nginx/mime.types
           ! grep -Fq 'Strict-Transport-Security' infra/nginx/templates/production.conf.template
