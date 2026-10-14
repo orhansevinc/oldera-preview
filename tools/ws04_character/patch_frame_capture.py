@@ -4,13 +4,13 @@
 The browser compositor screenshot API is unreliable while the real SDL/WebGL
 main loop is running. WS04 therefore captures the genuine RHIDeviceGL
 backbuffer. Present() remains the preferred pre-swap service point; an
-Emscripten timer services requests that would otherwise starve while the
-browser has yielded inside a long/suspended main-scene frame.
+Emscripten timer services ordinary requests that would otherwise starve while
+the browser has yielded inside a long/suspended scene frame.
 
-For the Moradon E2E gate the JS driver may set WS04_CAPTURE_PRESENT_ONLY=1.
-That arms a request early while JS is still responsive but explicitly prevents
-the timer fallback from reading an incomplete preload frame; only the next real
-RHIDeviceGL::Present() may service that request.
+World-proof request IDs (>=1000), including WS10's Moradon id 1010, are
+Present-only by contract. They may be armed while JS is still responsive, but
+the timer fallback must never call DumpFramePPM during asset preload. The next
+real RHIDeviceGL::Present() services them against the genuine backbuffer.
 """
 from pathlib import Path
 
@@ -118,14 +118,16 @@ void RHIDeviceGL::WS04ServiceCaptureRequest(const char* source, bool deferFromTi
 \t\treturn;
 \t}
 
-\t// A world-transition proof can arm the request while JS is responsive but
-\t// require that only the next genuine Present() services it. This prevents
-\t// the timer fallback from invoking a synchronous glReadPixels/DumpFramePPM
-\t// halfway through the Moradon resource-preload phase.
+\t// IDs >= 1000 are reserved for world-frame proof captures. They are armed
+\t// before the sustained world render begins, and MUST wait for a real
+\t// Present(). Never let the timer synchronously read the framebuffer during
+\t// terrain/model/resource preload. An explicit JS flag supports the same
+\t// behavior for any future request id.
 \tif (deferFromTimer)
 \t{
 \t\tconst int ws04PresentOnly = EM_ASM_INT({
-\t\t\treturn globalThis.WS04_CAPTURE_PRESENT_ONLY ? 1 : 0;
+\t\t\tconst request = Number(globalThis.WS04_CAPTURE_REQUEST || 0) | 0;
+\t\t\treturn (globalThis.WS04_CAPTURE_PRESENT_ONLY || request >= 1000) ? 1 : 0;
 \t\t});
 \t\tif (ws04PresentOnly != 0)
 \t\t{
@@ -135,8 +137,6 @@ void RHIDeviceGL::WS04ServiceCaptureRequest(const char* source, bool deferFromTi
 \t\t}
 \t}
 
-\t// Present() always wins immediately. The timer is only a starvation
-\t// fallback for ordinary proof captures when PRESENT_ONLY is not requested.
 \tif (deferFromTimer)
 \t{
 \t\tif (m_iWS04DeferredCaptureID != ws04CaptureRequest)
@@ -205,4 +205,4 @@ if fs_export not in s:
     s = s.replace(chr_preload, chr_preload + fs_export, 1)
 cmake.write_text(s, encoding="utf-8")
 
-print("WS04 pre-swap GL capture + present-only Moradon arming patch applied")
+print("WS04 pre-swap GL capture + world Present-only proof patch applied")
