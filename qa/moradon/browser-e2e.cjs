@@ -11,10 +11,15 @@ const url = process.env.WS10_CLIENT_URL || 'http://127.0.0.1:8000/ws10-moradon.h
 const username = process.env.WS10_TEST_ID || 'ws10e2e';
 const password = process.env.WS10_TEST_PW || 'ws10pass';
 const charName = process.env.WS10_CHAR_NAME || 'Ws10Hero';
+const runtimeTimeoutMs = Number(process.env.WS10_RUNTIME_TIMEOUT_MS || 300000);
+const worldTimeoutMs = Number(process.env.WS10_WORLD_TIMEOUT_MS || 600000);
+const worldHeartbeatMs = Number(process.env.WS10_WORLD_HEARTBEAT_MS || 15000);
 fs.mkdirSync(out, { recursive: true });
 
 const lines = [];
 const network = [];
+let pageCrashed = false;
+let pageClosed = false;
 const browser = await chromium.launch({
   headless: true,
   executablePath: process.env.CHROME || undefined,
@@ -32,6 +37,15 @@ page.on('pageerror', (e) => {
   lines.push(text);
   console.error(text);
 });
+page.on('crash', () => {
+  pageCrashed = true;
+  const text = '[pagecrash] Chromium renderer crashed';
+  lines.push(text);
+  console.error(text);
+});
+page.on('close', () => {
+  pageClosed = true;
+});
 page.on('websocket', (ws) => {
   const rec = { url: ws.url(), sent: 0, received: 0 };
   network.push(rec);
@@ -39,14 +53,17 @@ page.on('websocket', (ws) => {
   ws.on('framereceived', (f) => { rec.received += Buffer.byteLength(f.payload || ''); });
 });
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const has = (needle) => lines.some((line) => line.includes(needle));
+const fatalRendererLine = () => lines.find((line) => /\[pageerror\]|\[pagecrash\]|GL_INVALID_(ENUM|VALUE|OPERATION)|WebGL: INVALID_|WebGL: too many errors|render backend: Null/i.test(line));
 const wait = async (needle, timeout = 30000) => {
   const end = Date.now() + timeout;
   while (Date.now() < end) {
     if (has(needle)) return lines.find((line) => line.includes(needle));
-    await page.waitForTimeout(75);
+    if (pageCrashed || pageClosed) throw new Error(`browser unavailable while waiting for ${needle}`);
+    await sleep(75);
   }
-  throw new Error(`timeout waiting for ${needle}`);
+  throw new Error(`timeout waiting for ${needle} after ${timeout}ms`);
 };
 const held = async (key, ms = 90) => {
   await page.keyboard.down(key);
@@ -60,6 +77,49 @@ const heldClick = async (x, y, holdMs = 90, settleMs = 100) => {
   await page.mouse.up();
   await page.waitForTimeout(settleMs);
 };
+
+let worldDeadline = 0;
+let worldWaitStartedAt = 0;
+let nextWorldHeartbeat = 0;
+function latestWorldProgress() {
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (/WS05_GATE|WS04_GL_CAPTURE|WS10_CAPTURE_ARMED|InitZone|loading|preload|resource|terrain|shape|player|%/i.test(lines[i])) {
+      return lines[i].replace(/\s+/g, ' ').slice(0, 320);
+    }
+  }
+  return '(no world progress marker yet)';
+}
+function startWorldWait() {
+  worldWaitStartedAt = Date.now();
+  worldDeadline = worldWaitStartedAt + worldTimeoutMs;
+  nextWorldHeartbeat = worldWaitStartedAt;
+  console.log(`[ws10-driver] WS10_WORLD_WAIT_START timeout_ms=${worldTimeoutMs} polling=node-only`);
+}
+async function waitWorld(needle) {
+  if (!worldDeadline) startWorldWait();
+  while (Date.now() < worldDeadline) {
+    const match = lines.find((line) => line.includes(needle));
+    if (match) {
+      const elapsed = Date.now() - worldWaitStartedAt;
+      console.log(`[ws10-driver] WS10_WORLD_PROGRESS matched='${needle}' elapsed_ms=${elapsed}`);
+      return match;
+    }
+    const fatal = fatalRendererLine();
+    if (fatal) throw new Error(`fatal renderer/browser evidence while waiting for ${needle}: ${fatal}`);
+    if (pageCrashed || pageClosed) throw new Error(`browser unavailable while waiting for ${needle}`);
+    const now = Date.now();
+    if (now >= nextWorldHeartbeat) {
+      const elapsed = now - worldWaitStartedAt;
+      const remaining = Math.max(0, worldDeadline - now);
+      console.log(`[ws10-driver] WS10_WORLD_WAIT target='${needle}' elapsed_ms=${elapsed} remaining_ms=${remaining} latest='${latestWorldProgress()}'`);
+      nextWorldHeartbeat = now + worldHeartbeatMs;
+    }
+    // Deliberately poll only in Node. Do not call page.evaluate()/waitForTimeout()
+    // while the synchronous WASM world loader owns the browser main thread.
+    await sleep(100);
+  }
+  throw new Error(`world timeout waiting for ${needle} after ${worldTimeoutMs}ms; latest=${latestWorldProgress()}`);
+}
 
 function ppmToPng(buffer) {
   let newlines = 0;
@@ -84,18 +144,9 @@ function ppmToPng(buffer) {
 }
 
 const nativeCaptureId = 1010;
-async function armNativeMoradonCapture() {
-  await page.evaluate((requestId) => {
-    globalThis.WS04_CAPTURE_READY = 0;
-    globalThis.WS04_CAPTURE_INFLIGHT = 0;
-    globalThis.WS04_CAPTURE_REQUEST = requestId;
-  }, nativeCaptureId);
-  console.log(`[ws10-driver] armed native Moradon capture id=${nativeCaptureId} before first world render`);
-}
-
 async function collectNativeMoradonCapture() {
   const id = nativeCaptureId;
-  await wait(`WS04_GL_CAPTURE id=${id} ok=1`, 60000);
+  await waitWorld(`WS04_GL_CAPTURE id=${id} ok=1 source=present`);
   const ready = await page.evaluate(() => globalThis.WS04_CAPTURE_READY || 0);
   if (ready !== id) throw new Error(`native GL capture not ready: ${ready}`);
   const b64 = await page.evaluate((requestId) => {
@@ -123,7 +174,7 @@ async function collectNativeMoradonCapture() {
 let result = { status: 'FAIL' };
 try {
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-  await wait('WASM_RUNTIME_READY', 90000);
+  await wait('WASM_RUNTIME_READY', runtimeTimeoutMs);
   await wait('render backend: OpenGL', 30000);
 
   await page.locator('#canvas').focus();
@@ -170,20 +221,19 @@ try {
   await wait('WS04_CHAR_SELECT_REQUEST index=0', 15000);
   await wait('WS04_CHAR_SELECT_RESPONSE success=1', 30000);
 
-  await wait('WS05_GATE event=moradon-zone-begin zone=21', 60000);
-  await wait('WS05_GATE event=moradon-assets-loaded zone=21', 60000);
-
-  // Arm while JS is definitely running, before C++ enters the sustained main-scene
-  // render loop. The native pre-swap hook will service this request at the first
-  // genuine Moradon Present(), even if the browser event loop is starved later.
-  await armNativeMoradonCapture();
-
-  await wait('WS05_GATE event=moradon-terrain-rendered zone=21', 60000);
-  await wait('WS05_GATE event=moradon-shapes-rendered zone=21', 60000);
-  await wait('WS05_GATE event=moradon-local-player-rendered zone=21', 60000);
+  // The selected-character transition begins the one shared world-load deadline.
+  // All waits below are Node-only so the genuine synchronous WASM loader is never
+  // interrupted by Playwright evaluate/poll calls.
+  startWorldWait();
+  await waitWorld('WS05_GATE event=moradon-zone-begin zone=21');
+  await waitWorld('WS05_GATE event=moradon-assets-loaded zone=21');
+  await waitWorld(`WS10_CAPTURE_ARMED id=${nativeCaptureId} trigger=moradon-assets-loaded mode=present-only`);
+  await waitWorld('WS05_GATE event=moradon-terrain-rendered zone=21');
+  await waitWorld('WS05_GATE event=moradon-shapes-rendered zone=21');
+  await waitWorld('WS05_GATE event=moradon-local-player-rendered zone=21');
 
   const nativeFrame = await collectNativeMoradonCapture();
-  const fatal = lines.filter((line) => /\[pageerror\]|GL_INVALID_(ENUM|VALUE|OPERATION)|WebGL: INVALID_|WebGL: too many errors|render backend: Null/i.test(line));
+  const fatal = lines.filter((line) => /\[pageerror\]|\[pagecrash\]|GL_INVALID_(ENUM|VALUE|OPERATION)|WebGL: INVALID_|WebGL: too many errors|render backend: Null/i.test(line));
   if (fatal.length) throw new Error(`fatal renderer/browser evidence: ${fatal.slice(0, 5).join(' | ')}`);
 
   result = {
@@ -192,6 +242,8 @@ try {
     charName,
     version: 1298,
     zone: 21,
+    nativeZone: 210,
+    worldTimeoutMs,
     nativeFrame,
     requiredMarkers: [
       'WS04_CHAR_CREATE_SENT opcode=0x02',
@@ -201,22 +253,24 @@ try {
       'WS04_CHAR_SELECT_RESPONSE success=1',
       'WS05_GATE event=moradon-zone-begin zone=21',
       'WS05_GATE event=moradon-assets-loaded zone=21',
+      `WS10_CAPTURE_ARMED id=${nativeCaptureId} trigger=moradon-assets-loaded mode=present-only`,
       'WS05_GATE event=moradon-terrain-rendered zone=21',
       'WS05_GATE event=moradon-shapes-rendered zone=21',
       'WS05_GATE event=moradon-local-player-rendered zone=21',
+      `WS04_GL_CAPTURE id=${nativeCaptureId} ok=1 source=present`,
       'WS05_MORADON_VISUAL_OK source=pre-swap-gl',
     ],
   };
   console.log('WS10_MORADON_E2E_PASS');
 } catch (error) {
-  result = { status: 'FAIL', error: error.message };
+  result = { status: 'FAIL', error: error.message, latestWorldProgress: latestWorldProgress() };
   console.error(`[ws10-driver] failure: ${error.stack || error.message}`);
   process.exitCode = 1;
 } finally {
   fs.writeFileSync(path.join(out, 'browser-console.log'), lines.join('\n') + '\n');
   fs.writeFileSync(path.join(out, 'network.json'), JSON.stringify(network, null, 2) + '\n');
   fs.writeFileSync(path.join(out, 'browser-result.json'), JSON.stringify(result, null, 2) + '\n');
-  await page.screenshot({ path: path.join(out, 'final-compositor.png') }).catch(() => {});
+  if (!pageClosed) await page.screenshot({ path: path.join(out, 'final-compositor.png') }).catch(() => {});
   await browser.close();
 }
 })().catch((error) => {

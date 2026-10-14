@@ -6,7 +6,7 @@ on:
     paths:
       - 'qa/**'
       - 'tests/e2e/**'
-      - 'workstreams/ws10/**'
+      - 'workstreams/ws10/RERUN_REQUEST.md'
       - '.github/workflows/ws10-e2e.yml'
   workflow_dispatch:
     inputs:
@@ -70,6 +70,9 @@ jobs:
       WS10_TEST_ID: ws10e2e
       WS10_TEST_PW: ws10pass
       WS10_CHAR_NAME: Ws10Hero
+      WS10_RUNTIME_TIMEOUT_MS: '300000'
+      WS10_WORLD_TIMEOUT_MS: '600000'
+      WS10_WORLD_HEARTBEAT_MS: '15000'
       QA_ARTIFACT_DIR: artifacts/moradon
     steps:
       - name: Checkout WS10 integration harness
@@ -173,6 +176,12 @@ jobs:
           from pathlib import Path
           p = Path('openko/src/Client/WarFare/RHIDeviceGL.cpp')
           s = p.read_text()
+          if 'request >= 1000' not in s:
+              raise SystemExit('WS04 world capture is no longer Present-only')
+          if 'WS04ServiceCaptureRequest("present", false)' not in s:
+              raise SystemExit('WS04 Present capture service missing')
+          p = Path('openko/src/Client/WarFare/RHIDeviceGL.cpp')
+          s = p.read_text()
           bad = r'#version 300 es\nprecision highp float;'
           good = '#version 300 es\nprecision highp float;'
           if s.count(bad) != 2:
@@ -208,6 +217,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
+          emcc --version | tee artifacts/moradon/emscripten-version.txt
           emcmake cmake -S openko -B build-web -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_C_FLAGS='-DBOOST_HAS_PTHREADS=1' \
@@ -226,6 +236,11 @@ jobs:
           test -s build-web/bin/Release/KnightOnLine.js
           test -s build-web/bin/Release/KnightOnLine.wasm
           test -s build-web/bin/Release/KnightOnLine.data
+          stat -c '%n %s' \
+            build-web/bin/Release/KnightOnLine.js \
+            build-web/bin/Release/KnightOnLine.wasm \
+            build-web/bin/Release/KnightOnLine.data \
+            | tee artifacts/moradon/client-build-sizes.txt
 
       - name: Run one real browser create-select-Moradon session
         shell: bash
@@ -239,7 +254,23 @@ jobs:
           <script>
           (() => {
             const status=document.getElementById('status');
-            const write=(kind,args)=>{const line='['+kind+'] '+args.join(' ');status.textContent+=line+'\n';console.log(line);};
+            const worldCaptureId=1010;
+            let worldCaptureArmed=false;
+            const armWorldCapture=(line)=>{
+              if(worldCaptureArmed || !line.includes('WS05_GATE event=moradon-assets-loaded zone=21')) return;
+              worldCaptureArmed=true;
+              globalThis.WS04_CAPTURE_READY=0;
+              globalThis.WS04_CAPTURE_INFLIGHT=0;
+              globalThis.WS04_CAPTURE_PRESENT_ONLY=1;
+              globalThis.WS04_CAPTURE_REQUEST=worldCaptureId;
+              console.log(`WS10_CAPTURE_ARMED id=${worldCaptureId} trigger=moradon-assets-loaded mode=present-only`);
+            };
+            const write=(kind,args)=>{
+              const line='['+kind+'] '+args.join(' ');
+              status.textContent+=line+'\n';
+              console.log(line);
+              armWorldCapture(line);
+            };
             window.Module={canvas:document.getElementById('canvas'),arguments:['--renderer','gl','--data','/data'],
               print:(...a)=>write('OUT',a),printErr:(...a)=>write('ERR',a),onRuntimeInitialized:()=>write('SMOKE',['WASM_RUNTIME_READY'])};
           })();
@@ -284,9 +315,53 @@ jobs:
           grep -q 'WS10_COMPOSE event=game-tx opcode=0x0e' artifacts/moradon/composition-server.log
           grep -q 'WS10_COMPOSE event=game-tx opcode=0x5e' artifacts/moradon/composition-server.log
           grep -q 'WS10_COMPOSE event=game-tx opcode=0x1c' artifacts/moradon/composition-server.log
+          grep -q 'WS10_CAPTURE_ARMED id=1010 trigger=moradon-assets-loaded mode=present-only' artifacts/moradon/driver.log
+          grep -q 'WS04_GL_CAPTURE id=1010 ok=1 source=present' artifacts/moradon/driver.log
           grep -q 'WS10_MORADON_E2E_PASS' artifacts/moradon/driver.log
 
           python3 .qa-providers/ws05/tools/ws05_moradon/moradon_gate.py artifacts/moradon/driver.log | tee artifacts/moradon/ws05-gate.log
+
+      - name: Stage exact passing client build
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$GITHUB_WORKSPACE/build-web/bin/Release"
+          PASS_DIR="$GITHUB_WORKSPACE/artifacts/passing-client"
+          mkdir -p "$PASS_DIR/evidence"
+          cp "$OUT/KnightOnLine.js" "$PASS_DIR/"
+          cp "$OUT/KnightOnLine.wasm" "$PASS_DIR/"
+          cp "$OUT/KnightOnLine.data" "$PASS_DIR/"
+          cp "$OUT/ws10-moradon.html" "$PASS_DIR/"
+          cp artifacts/moradon/provider-refs.txt "$PASS_DIR/"
+          cp artifacts/moradon/asset-identity.txt "$PASS_DIR/"
+          cp artifacts/moradon/emscripten-version.txt "$PASS_DIR/"
+          cp artifacts/moradon/client-build-sizes.txt "$PASS_DIR/"
+          cp artifacts/moradon/browser-result.json "$PASS_DIR/evidence/"
+          cp artifacts/moradon/driver.log "$PASS_DIR/evidence/"
+          cp artifacts/moradon/ws05-gate.log "$PASS_DIR/evidence/"
+          cp artifacts/moradon/moradon-native.png "$PASS_DIR/evidence/"
+          (
+            cd "$PASS_DIR"
+            sha256sum KnightOnLine.js KnightOnLine.wasm KnightOnLine.data ws10-moradon.html > SHA256SUMS.txt
+          )
+          {
+            echo 'MORADON E2E: PASS'
+            echo "github_run_id=${GITHUB_RUN_ID}"
+            echo "github_run_number=${GITHUB_RUN_NUMBER}"
+            echo "github_run_attempt=${GITHUB_RUN_ATTEMPT}"
+            echo "ws10_commit=${GITHUB_SHA}"
+            echo 'entry=ws10-moradon.html'
+            echo 'capture_id=1010'
+            echo 'capture_source=present'
+            echo 'wire_zone=21'
+            echo 'native_zone=210'
+            echo "runtime_timeout_ms=${WS10_RUNTIME_TIMEOUT_MS}"
+            echo "world_timeout_ms=${WS10_WORLD_TIMEOUT_MS}"
+            echo '--- provider refs ---'
+            cat artifacts/moradon/provider-refs.txt
+            echo '--- asset identity ---'
+            cat artifacts/moradon/asset-identity.txt
+          } > "$PASS_DIR/PASS_METADATA.txt"
 
       - name: Upload WS10 Moradon evidence
         if: always()
@@ -297,3 +372,14 @@ jobs:
           if-no-files-found: warn
           path: |
             artifacts/moradon/**
+            !artifacts/passing-client/**
+
+      - name: Freeze exact passing client build
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ws10-moradon-passing-client-${{ github.run_number }}
+          retention-days: 30
+          compression-level: 0
+          if-no-files-found: error
+          path: artifacts/passing-client/**
