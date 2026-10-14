@@ -36,24 +36,37 @@ jobs:
           sparse-checkout-cone-mode: false
           fetch-depth: 1
 
-      - name: Checkout pinned WS16 Moradon NPC provider
+      - name: Checkout task-pinned WS11 visibility authority
         uses: actions/checkout@v4
         with:
           repository: orhansevinc/oldera-preview
-          ref: 234657c1264ead6b8828425ae9e7fcdca0cca5c8
+          ref: 944b6ff9b6329af29f1048a74aa6e14fca141639
+          path: .authority/ws11
+          sparse-checkout: |
+            protocol-lab/visibility-fixtures
+          sparse-checkout-cone-mode: false
+          fetch-depth: 1
+
+      - name: Checkout task-pinned WS16 Moradon NPC provider
+        uses: actions/checkout@v4
+        with:
+          repository: orhansevinc/oldera-preview
+          ref: 5ed48ff32187000312652838674388df52fc3fb7
           path: .authority/ws16
           sparse-checkout: |
+            services/ko1298-npc
             world-data/npc/moradon.json
           sparse-checkout-cone-mode: false
           fetch-depth: 1
 
-      - name: Checkout pinned WS25 Moradon mob provider
+      - name: Checkout task-pinned WS25 Moradon mob provider
         uses: actions/checkout@v4
         with:
           repository: orhansevinc/oldera-preview
-          ref: a42b489e1a17d7c2889cfd92909ddd45c65e825e
+          ref: a334f54f9a6bd3ac416bd099cc48060f88a7e7fd
           path: .authority/ws25
           sparse-checkout: |
+            services/ko1298-mobs/mob-model.cjs
             world-data/mobs/verified/moradon-zone21.verified.json
           sparse-checkout-cone-mode: false
           fetch-depth: 1
@@ -62,10 +75,13 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Run WS14 tests with real height authority
+      - name: Run WS14 tests with exact pinned visibility providers
         env:
           WS14_MORADON_SMD: ${{ github.workspace }}/.authority/openko/assets/Server/MAP/moradon_0826.smd
+          WS14_WS11_VISIBILITY_FIXTURES: ${{ github.workspace }}/.authority/ws11/protocol-lab/visibility-fixtures
+          WS14_WS16_PROVIDER_ROOT: ${{ github.workspace }}/.authority/ws16
           WS14_WS16_NPC_DATA: ${{ github.workspace }}/.authority/ws16/world-data/npc/moradon.json
+          WS14_WS25_PROVIDER_ROOT: ${{ github.workspace }}/.authority/ws25
           WS14_WS25_MOB_DATA: ${{ github.workspace }}/.authority/ws25/world-data/mobs/verified/moradon-zone21.verified.json
         run: |
           set -o pipefail
@@ -75,7 +91,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ws14-height-authority-diagnostics
+          name: ws14-visibility-authority-diagnostics
           path: ws14-test.log
           if-no-files-found: error
           retention-days: 7
