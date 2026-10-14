@@ -13,9 +13,12 @@
       "maxHp": 120,
       "aggroRange": 8,
       "leashRange": 18,
+      "attackRange": 2,
+      "attackDelayMs": 1000,
       "returnTolerance": 0.5,
       "corpseDespawnMs": 3000,
-      "respawnDelayMs": 10000
+      "respawnDelayMs": 10000,
+      "stuckThreshold": 2
     }
   ],
   "spawnGroups": [
