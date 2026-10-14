@@ -6,11 +6,11 @@ def fail(message: str) -> None:
     raise SystemExit(f"RUNTIME_SOURCE_FAIL: {message}")
 
 
-path = Path("openko/src/Client/WarFare/RHIDeviceGL.cpp")
-if not path.is_file():
-    fail(f"missing {path}")
+rhi_path = Path("openko/src/Client/WarFare/RHIDeviceGL.cpp")
+if not rhi_path.is_file():
+    fail(f"missing {rhi_path}")
 
-text = path.read_text(encoding="utf-8")
+text = rhi_path.read_text(encoding="utf-8")
 marker = "OldKOWeb live browser framebuffer refresh"
 marker_pos = text.find(marker)
 if marker_pos < 0:
@@ -31,7 +31,7 @@ block = text[block_start:block_end]
 if "\\t" in block:
     normalized = block.replace("\\t", "\t")
     text = text[:block_start] + normalized + text[block_end:]
-    path.write_text(text, encoding="utf-8")
+    rhi_path.write_text(text, encoding="utf-8")
     block = normalized
 
 if "\\t" in block:
@@ -39,4 +39,36 @@ if "\\t" in block:
 if "\t// OldKOWeb live browser framebuffer refresh" not in block:
     fail("normalized framebuffer refresh block lost its expected indentation")
 
-print("RUNTIME_SOURCE_NORMALIZED generated RHIDeviceGL browser-resize block is valid C++ indentation")
+# WS43's true-widescreen contract defines the selected browser size as the
+# native logical AND backing-store resolution. A CSS viewport of 1920x1080 at
+# DPR=2 must therefore stay a 1920x1080 Emscripten canvas/default framebuffer;
+# DPR must not silently turn it into 3840x2160. Keep native desktop HiDPI
+# behavior unchanged and disable SDL high-pixel-density window creation only
+# for the Emscripten build.
+main_path = Path("openko/src/Client/WarFare/WarFareMainSDL.cpp")
+if not main_path.is_file():
+    fail(f"missing {main_path}")
+
+main_text = main_path.read_text(encoding="utf-8")
+dpr_marker = "OldKOWeb browser native backing is DPR-independent"
+if dpr_marker not in main_text:
+    anchor = "\tSDL_WindowFlags windowFlags = SDL_WINDOW_HIGH_PIXEL_DENSITY;"
+    if anchor not in main_text:
+        fail("SDL high-pixel-density window flag anchor changed")
+    replacement = '''#ifdef __EMSCRIPTEN__
+\t// OldKOWeb browser native backing is DPR-independent: the selected
+\t// viewport-native size is the actual SDL logical size AND canvas/default
+\t// framebuffer size. Browser devicePixelRatio must not multiply it.
+\tSDL_WindowFlags windowFlags = 0;
+#else
+\tSDL_WindowFlags windowFlags = SDL_WINDOW_HIGH_PIXEL_DENSITY;
+#endif'''
+    main_text = main_text.replace(anchor, replacement, 1)
+    main_path.write_text(main_text, encoding="utf-8")
+
+if dpr_marker not in main_text:
+    fail("browser DPR-independent backing-store guard is missing")
+if "#else\n\tSDL_WindowFlags windowFlags = SDL_WINDOW_HIGH_PIXEL_DENSITY;\n#endif" not in main_text:
+    fail("native desktop high-pixel-density behavior was not preserved")
+
+print("RUNTIME_SOURCE_NORMALIZED generated browser resize source + DPR-independent native backing are valid")
