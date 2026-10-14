@@ -12,9 +12,9 @@ export const PLAYER_SELECT = `SELECT c.id,c.account_id,c.name,c.name_key,c.natio
  EXISTS(SELECT 1 FROM oldko.session_leases l WHERE l.scope='character' AND l.state='active' AND l.lease_until>$1 AND l.character_id IN (c.id::text,c.name,c.name_key)) online
  FROM oldko.characters c JOIN oldko.accounts a ON a.id=c.account_id AND a.deleted_at IS NULL
  JOIN oldko.character_stats s ON s.character_id=c.id
- LEFT JOIN LATERAL (SELECT source_ip::text ip,COALESCE(last_seen_at,created_at) last_seen_at FROM oldko.account_sessions WHERE account_id=a.id AND source_ip IS NOT NULL ORDER BY COALESCE(last_seen_at,created_at) DESC,id DESC LIMIT 1) sess ON true`;
+ LEFT JOIN LATERAL (SELECT host(source_ip) ip,COALESCE(last_seen_at,created_at) last_seen_at FROM oldko.account_sessions WHERE account_id=a.id AND source_ip IS NOT NULL ORDER BY COALESCE(last_seen_at,created_at) DESC,id DESC LIMIT 1) sess ON true`;
 
-export const ITEM_LOCATION_SELECT = `SELECT i.id item_instance_id,i.serial,i.item_template_id,i.stack_count,i.durability,p.scope,p.slot,p.character_id,c.name character,a.username account
+export const ITEM_LOCATION_SELECT = `SELECT i.id item_instance_id,i.serial,i.item_template_id,i.stack_count,i.durability,p.scope,p.slot,p.character_id,c.name AS character_name,a.username account
  FROM (SELECT ci.item_instance_id,'equipment'::text scope,ci.slot::int slot,ci.character_id,NULL::bigint account_id FROM oldko.character_items ci
  UNION ALL SELECT iv.item_instance_id,'inventory',iv.slot::int,iv.character_id,NULL::bigint FROM oldko.inventory iv
  UNION ALL SELECT ins.item_instance_id,'inn',ins.flat_slot::int,NULL::bigint,ins.account_id FROM oldko.inn_storage ins) p
@@ -46,7 +46,7 @@ export async function lockOffline(repo, name) {
 }
 
 export async function latestIp(repo, accountId) {
-  const { rows } = await repo.db.query(`SELECT source_ip::text ip FROM oldko.account_sessions WHERE account_id=$1 AND source_ip IS NOT NULL ORDER BY COALESCE(last_seen_at,created_at) DESC,id DESC LIMIT 1`, [accountId]);
+  const { rows } = await repo.db.query(`SELECT host(source_ip) ip FROM oldko.account_sessions WHERE account_id=$1 AND source_ip IS NOT NULL ORDER BY COALESCE(last_seen_at,created_at) DESC,id DESC LIMIT 1`, [accountId]);
   return rows[0]?.ip ?? null;
 }
 
@@ -69,7 +69,7 @@ export async function player(repo, row, { includeSkills = false } = {}) {
 }
 
 export function itemSlot(row) { return { slot:Number(row.slot), itemId:Number(row.item_template_id), serial:String(row.serial), count:Number(row.stack_count), duration:row.durability==null?0:Number(row.durability), empty:false }; }
-export function itemLocationRow(row) { return { character:row.character??null, account:row.account, scope:row.scope, slot:Number(row.slot), itemId:Number(row.item_template_id), serial:String(row.serial), count:Number(row.stack_count), duration:row.durability==null?0:Number(row.durability) }; }
+export function itemLocationRow(row) { return { character:row.character_name??null, account:row.account, scope:row.scope, slot:Number(row.slot), itemId:Number(row.item_template_id), serial:String(row.serial), count:Number(row.stack_count), duration:row.durability==null?0:Number(row.durability) }; }
 export function sanctionRow(row, who) { const active=row.revoked_at==null&&(row.expires_at==null||new Date(row.expires_at).getTime()>Date.now()); return { id:String(row.id),character:who.name,account:who.account,ip:row.ip==null?null:String(row.ip),type:row.type,reason:row.reason,actor:row.created_by_admin_id??null,traceId:row.request_id??null,active,createdAt:iso(row.created_at),expiresAt:row.expires_at?iso(row.expires_at):null,revokedAt:row.revoked_at?iso(row.revoked_at):null }; }
 export function commandRow(row) { return { id:row.id,command:row.command,target:row.target,arg:row.arg,requestedBy:row.requested_by,traceId:row.trace_id,source:row.source,status:row.status,attemptCount:Number(row.attempt_count),expected:{characterId:row.expected_character_id==null?null:String(row.expected_character_id),worldVersion:num(row.expected_world_version),progressionVersion:num(row.expected_progression_version),itemVersion:num(row.expected_item_version)},createdAt:iso(row.created_at),updatedAt:iso(row.updated_at) }; }
 export function emptyInventory() { return { equipment:Array.from({length:14},(_,slot)=>({slot,empty:true})), inventory:Array.from({length:28},(_,slot)=>({slot,empty:true})) }; }
