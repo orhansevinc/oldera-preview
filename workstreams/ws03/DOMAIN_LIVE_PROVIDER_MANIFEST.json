@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "workstream": "WS03",
+  "releaseId": "oldkoweb-domain-live-20261015",
+  "purpose": "Production account/session persistence composed with the real Moradon visibility and movement providers; this does not inherit a historical browser PASS.",
+  "sourceBaseline": {
+    "ws03TaskStart": "7c5f5f3584e7d3621aa5a318ad65c011bd77276f",
+    "ws50C5ManifestCommit": "0d5001095fa3b43693b4fa0cda615f84e2cb7df5",
+    "ws10HistoricalBrowserRun": 38604174659,
+    "historicalBrowserPassReusable": false
+  },
+  "productionProviders": {
+    "WS07": "1ae85c96319cbab11648a91ed28300e17d4c607f",
+    "WS13": "1ef67bd7c0c98a588bce4db6c0f1305b820af008",
+    "WS14": "ed5f806ce7505f4dfae406e4164735def63b6c86",
+    "WS15": "ce9bed13b8d45c32ff0592595aa3a0d1e7b3964d",
+    "WS16": "5ed48ff32187000312652838674388df52fc3fb7",
+    "WS25": "18c9e9b8439fef88fc93d74bfec7981b0cb41958"
+  },
+  "c5Compatibility": {
+    "WS14": {"c5":"ed5f806ce7505f4dfae406e4164735def63b6c86","production":"ed5f806ce7505f4dfae406e4164735def63b6c86","relation":"exact"},
+    "WS15": {"c5":"ce9bed13b8d45c32ff0592595aa3a0d1e7b3964d","production":"ce9bed13b8d45c32ff0592595aa3a0d1e7b3964d","relation":"exact"},
+    "WS16": {"c5":"5ed48ff32187000312652838674388df52fc3fb7","production":"5ed48ff32187000312652838674388df52fc3fb7","relation":"exact"},
+    "WS25": {"c5":"13c9bafe287b250d56b52f19e97a02e7ef18e6e5","production":"18c9e9b8439fef88fc93d74bfec7981b0cb41958","relation":"direct-child; C5 mob-visibility-service blob remains 5f092b3b6daefde008b7548a971b5109ba05fde1"}
+  },
+  "explicitPinDeltas": [
+    {
+      "provider": "WS16",
+      "from": "234657c1264ead6b8828425ae9e7fcdca0cca5c8",
+      "to": "5ed48ff32187000312652838674388df52fc3fb7",
+      "reason": "The PostgreSQL composition pin predated the exact WS50-C5 visibility provider. Production domain-live must consume the C5 runtime-identity-coherent NPC provider."
+    },
+    {
+      "provider": "WS25",
+      "fromC5": "13c9bafe287b250d56b52f19e97a02e7ef18e6e5",
+      "to": "18c9e9b8439fef88fc93d74bfec7981b0cb41958",
+      "reason": "18c9 is the direct child adding targetable combat lifecycle while preserving the exact C5 mob visibility service blob; no rollback of later WS25 work."
+    }
+  ],
+  "productionInputs": {
+    "database": "DATABASE_URL",
+    "moradonSmd": {
+      "env": "OLDKO_MORADON_SMD",
+      "zoneId": 21,
+      "source": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:moradon_0826.smd",
+      "gitBlobSha1": "cf47772b8e42a8bad71032419f47978c8bbd6142",
+      "byteLength": 786000
+    },
+    "npcData": "world-data/npc/moradon.json",
+    "mobData": "world-data/mobs/verified/moradon-zone21.verified.json"
+  },
+  "productionRules": {
+    "memoryRepositoryAllowed": false,
+    "fixtureWorldAllowed": false,
+    "missingNpcProviderBehavior": "fail-closed",
+    "movementPersistence": "await PostgreSQL save before accepting authoritative movement; rollback runtime state on save failure",
+    "characterSelect": "restore persisted zone/position through WS14 restoreAuthoritativeSession"
+  },
+  "acceptanceOwnership": {
+    "ws03": "provider API/composition contract and persistent runtime",
+    "ws10": "real browser render gate",
+    "ws50": "new immutable child candidate and release integration"
+  }
+}
