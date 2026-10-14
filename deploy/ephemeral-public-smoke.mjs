@@ -112,8 +112,11 @@ if (typeof basePath !== 'string' || !basePath.startsWith('/client-content/v1/'))
   throw new Error(`unexpected immutableBasePath: ${basePath}`);
 }
 
-// Edge smoke checks public existence, exact MIME, Content-Length and immutable caching.
-// The following exact WS12 preflight performs the large body download + SHA-256 validation once.
+// Edge smoke checks public existence, exact MIME and immutable caching. If an
+// intermediary preserves Content-Length on HEAD, validate it too. Some public
+// tunnel/CDN edges legitimately omit Content-Length on HEAD; do not coerce a
+// missing header (null) to numeric zero. The exact WS12 preflight immediately
+// after this step downloads every required body and verifies exact size/hash.
 for (const file of manifest.files || []) {
   if (!file.required) continue;
   const res = await response(`${basePath}${file.path}`, { method: 'HEAD' });
@@ -121,9 +124,15 @@ for (const file of manifest.files || []) {
   if (contentType !== file.contentType) {
     throw new Error(`${file.path} content-type ${contentType} != ${file.contentType}`);
   }
-  const contentLength = Number(res.headers.get('content-length'));
-  if (Number.isFinite(contentLength) && contentLength !== file.size) {
-    throw new Error(`${file.path} content-length ${contentLength} != ${file.size}`);
+  const contentLengthHeader = res.headers.get('content-length');
+  if (contentLengthHeader !== null) {
+    const contentLength = Number(contentLengthHeader);
+    if (!Number.isFinite(contentLength) || contentLength < 0) {
+      throw new Error(`${file.path} invalid content-length ${contentLengthHeader}`);
+    }
+    if (contentLength !== file.size) {
+      throw new Error(`${file.path} content-length ${contentLength} != ${file.size}`);
+    }
   }
   const cacheControl = (res.headers.get('cache-control') || '').toLowerCase();
   if (!cacheControl.includes('immutable')) throw new Error(`${file.path} is not served immutable`);
