@@ -34,9 +34,15 @@ function selectCharacter(accountId, name) {
   return new Writer().u8(GAME.SEL_CHAR).str16(accountId).str16(name).u8(1).u8(21).done();
 }
 
-test('one PostgreSQL row powers WS13 register/verify/login and WS03 KO1298 auth + character world runtime', async () => {
+async function authAccepted(repo, username, password) {
+  const response = (await new AuthSession(repo).handle(credentials(LOGIN.LOGIN_REQ, username, password)))[0];
+  return response[0] === LOGIN.LOGIN_REQ && response[1] === 1;
+}
+
+test('one PostgreSQL row powers website account state, KO1298 auth, persistent character and restart restore', async () => {
   assert.ok(process.env.DATABASE_URL, 'DATABASE_URL must be provided by the PostgreSQL composition harness');
-  const gameRepository = await createProductionPostgresRepository();
+  let gameRepository = await createProductionPostgresRepository();
+  let restartedRepository = null;
   try {
     const websiteRepository = new PgWs13AccountRepository(gameRepository.pool);
     const delivery = new CaptureDelivery();
@@ -48,7 +54,9 @@ test('one PostgreSQL row powers WS13 register/verify/login and WS03 KO1298 auth 
 
     const username = 'WebHero';
     const password = 'Ko!Pass2026';
+    const newPassword = 'N3w!Pass2026';
     assert.ok(Buffer.byteLength(password, 'latin1') <= 12, 'KO1298 login credential envelope permits at most 12 password bytes');
+    assert.ok(Buffer.byteLength(newPassword, 'latin1') <= 12, 'replacement password must remain inside the KO1298 wire envelope');
     const context = { ip: '127.0.0.1', requestId: 'ws03-one-db-e2e', userAgent: 'ws03-ci' };
 
     const registration = await website.register({
@@ -59,6 +67,8 @@ test('one PostgreSQL row powers WS13 register/verify/login and WS03 KO1298 auth 
     assert.equal(registration.username, username);
     assert.ok(delivery.verification?.token);
 
+    assert.equal(await authAccepted(gameRepository, username, password), false, 'unverified website account must not enter KO auth');
+
     assert.deepEqual(
       await website.confirmVerification({ token: delivery.verification.token }, context),
       { verified: true },
@@ -68,7 +78,7 @@ test('one PostgreSQL row powers WS13 register/verify/login and WS03 KO1298 auth 
     assert.equal(websiteLogin.user.verified, true);
 
     const { rows: accountRows } = await gameRepository.pool.query(
-      `SELECT id,username,username_key,password_hash,verified_at
+      `SELECT id,username,username_key,password_hash,verified_at,password_version
        FROM oldko.accounts WHERE username_key=$1`,
       ['webhero'],
     );
@@ -77,9 +87,11 @@ test('one PostgreSQL row powers WS13 register/verify/login and WS03 KO1298 auth 
     assert.equal(accountRows[0].username_key, 'webhero');
     assert.match(accountRows[0].password_hash, /^scrypt\$\d+\$\d+\$\d+\$[A-Za-z0-9+/]+=*\$[A-Za-z0-9+/]+=*$/);
     assert.ok(accountRows[0].verified_at);
+    assert.equal(Number(accountRows[0].password_version), 1);
 
+    assert.equal(await authAccepted(gameRepository, username, 'Wrong!Pass1'), false);
+    assert.equal(await authAccepted(gameRepository, username, password), true);
     const auth = new AuthSession(gameRepository);
-    assert.deepEqual([...(await auth.handle(credentials(LOGIN.LOGIN_REQ, username, password)))[0]], [LOGIN.LOGIN_REQ, 1]);
     const serverList = (await auth.handle(Buffer.from([LOGIN.SERVER_LIST])))[0];
     assert.equal(serverList[0], LOGIN.SERVER_LIST);
     assert.equal(serverList[1], 1);
@@ -122,12 +134,32 @@ test('one PostgreSQL row powers WS13 register/verify/login and WS03 KO1298 auth 
       y: 0,
       z: 403,
     });
-    const restored = await gameRepository.loadReconnectSnapshot(username, characterName);
-    assert.equal(restored.accountId, 'webhero');
-    assert.equal(restored.characterId, characterName);
-    assert.equal(restored.zoneId, 21);
-    assert.equal(restored.x, 313);
-    assert.equal(restored.z, 403);
+    const firstRestore = await gameRepository.loadReconnectSnapshot(username, characterName);
+    assert.equal(firstRestore.accountId.toLowerCase(), 'webhero');
+    assert.equal(firstRestore.characterId, characterName);
+    assert.equal(firstRestore.zoneId, 21);
+    assert.equal(firstRestore.x, 313);
+    assert.equal(firstRestore.z, 403);
+    assert.ok(Array.isArray(firstRestore.skills), 'persisted world_state created with character must load');
+
+    await gameRepository.pool.query(
+      `INSERT INTO oldko.bans(account_id,reason) VALUES($1,$2)`,
+      [accountRows[0].id, 'ws03 release gate'],
+    );
+    assert.equal(await authAccepted(gameRepository, username, password), false, 'active oldko.bans row must deny KO login');
+    await gameRepository.pool.query(
+      `UPDATE oldko.bans SET revoked_at=now(),revoke_reason='test complete'
+       WHERE account_id=$1 AND revoked_at IS NULL`,
+      [accountRows[0].id],
+    );
+    assert.equal(await authAccepted(gameRepository, username, password), true);
+
+    await website.changePassword({ username, currentPassword: password, newPassword }, context);
+    await assert.rejects(() => website.currentUser(websiteLogin.token, context), (error) => error?.status === 401);
+    assert.equal(await authAccepted(gameRepository, username, password), false, 'old password must be rejected after password version/hash change');
+    assert.equal(await authAccepted(gameRepository, username, newPassword), true, 'new website password must authenticate through KO');
+    const accessAfterChange = await gameRepository.getGameAccountAccess(username);
+    assert.equal(accessAfterChange.passwordVersion, 2);
 
     const { rows: duplicateRows } = await gameRepository.pool.query(
       `SELECT username_key,count(*)::int AS copies FROM oldko.accounts
@@ -135,7 +167,29 @@ test('one PostgreSQL row powers WS13 register/verify/login and WS03 KO1298 auth 
       ['webhero'],
     );
     assert.deepEqual(duplicateRows.map((row) => row.copies), [1]);
-  } finally {
+
+    await game.disconnect({ reason: 'WS03_RESTART_TEST', useGrace: false });
     await gameRepository.close();
+    gameRepository = null;
+
+    restartedRepository = await createProductionPostgresRepository();
+    assert.equal(await authAccepted(restartedRepository, username, newPassword), true, 'fresh process repository must authenticate the same account row');
+    const charactersAfterRestart = await restartedRepository.listCharacters(username);
+    assert.equal(charactersAfterRestart[0]?.characterId, characterName);
+    const restoredAfterRestart = await restartedRepository.loadReconnectSnapshot(username, characterName);
+    assert.equal(restoredAfterRestart.x, 313);
+    assert.equal(restoredAfterRestart.z, 403);
+    assert.ok(Array.isArray(restoredAfterRestart.skills));
+
+    const reconnectWorld = new WorldSessionService({ repository: restartedRepository });
+    const reconnect = await reconnectWorld.restoreAuthoritativeSession({
+      accountId: 'webhero', characterId: characterName, socketId: 778,
+    });
+    assert.equal(reconnect.snapshot.x, 313);
+    assert.equal(reconnect.snapshot.z, 403);
+    assert.equal(reconnect.snapshot.zoneId, 21);
+  } finally {
+    if (gameRepository) await gameRepository.close().catch(() => {});
+    if (restartedRepository) await restartedRepository.close().catch(() => {});
   }
 });
