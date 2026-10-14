@@ -26,6 +26,10 @@ const NPC_OPCODES = new Set([GAME.NPC_EVENT, GAME.TARGET_HP]);
 const COMBAT_OPCODES = new Set([GAME.ATTACK, GAME.MAGIC_PROCESS]);
 const DOMAIN_EVENT_SOURCES = new Set(['WS25', 'WS26', 'WS27']);
 
+function isPromiseLike(value) {
+  return value && typeof value.then === 'function';
+}
+
 class AuthSession {
   constructor(repo, { gameHost = '127.0.0.1', gameName = 'OldKO', concurrent = 0, logger = () => {} } = {}) {
     this.repo = repo;
@@ -44,7 +48,11 @@ class AuthSession {
           return [new Writer().u8(LOGIN.SERVER_LIST).u8(1).str16(this.gameHost).str16(this.gameName).i16(this.concurrent).done()];
         case LOGIN.LOGIN_REQ: {
           const { username, password } = parseCredentials(packet, LOGIN.LOGIN_REQ);
-          return [new Writer().u8(LOGIN.LOGIN_REQ).u8(this.repo.authenticate(username, password) ? 1 : (this.repo.accounts?.has(username) ? 3 : 2)).done()];
+          const result = this.repo.authenticate(username, password);
+          const respond = (authenticated) => [
+            new Writer().u8(LOGIN.LOGIN_REQ).u8(authenticated ? 1 : (this.repo.accounts?.has(username) ? 3 : 2)).done(),
+          ];
+          return isPromiseLike(result) ? Promise.resolve(result).then(respond) : respond(result);
         }
         case LOGIN.NEWS:
           return [new Writer().u8(LOGIN.NEWS).str16('Login Notice').str16('#\0\nOldKO development server\0\n#\0\n').done()];
@@ -170,14 +178,14 @@ class GameSession {
           return await this._gameLogin(packet);
 
         case GAME.SEL_NATION:
-          return this._selectNation(packet);
+          return await this._selectNation(packet);
 
         case GAME.ALLCHAR_INFO_REQ:
           if (packet.length !== 1) throw Error('WIZ_ALLCHAR_INFO_REQ must be opcode-only');
-          return [buildCharacterList(this.repo.listCharacters(this.state.accountId))];
+          return [buildCharacterList(await this.repo.listCharacters(this.state.accountId))];
 
         case GAME.NEW_CHAR:
-          return this._createCharacter(packet);
+          return await this._createCharacter(packet);
 
         case GAME.SEL_CHAR:
           return await this._selectCharacter(packet);

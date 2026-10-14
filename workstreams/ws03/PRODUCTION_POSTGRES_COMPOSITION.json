@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "workstream": "WS03",
+  "task": "WS03_WS07_PERSISTENT_GAME_REPOSITORY",
+  "basePlayableCombatHead": "f127bb85453c13e89ea1093dd2873888b892dd12",
+  "sourcePins": {
+    "WS03": "f127bb85453c13e89ea1093dd2873888b892dd12",
+    "WS07": "1ae85c96319cbab11648a91ed28300e17d4c607f",
+    "WS13": "5777c865274cba26ca35a5e74bd13cb08530c5eb",
+    "officialSiteHandoff": "8370de2ebfdfd319cf8a719da79cbdef9853fd2f"
+  },
+  "taskStartResolvedDirectProviders": {
+    "WS11": {"resolvedHead":"013559b6e66ef9f6257403c96f3b012884739470","compositionPin":"013559b6e66ef9f6257403c96f3b012884739470"},
+    "WS14": {"resolvedHead":"ed5f806ce7505f4dfae406e4164735def63b6c86","compositionPin":"ed5f806ce7505f4dfae406e4164735def63b6c86"},
+    "WS15": {"resolvedHead":"ce9bed13b8d45c32ff0592595aa3a0d1e7b3964d","compositionPin":"ce9bed13b8d45c32ff0592595aa3a0d1e7b3964d"},
+    "WS16": {"resolvedHead":"5ed48ff32187000312652838674388df52fc3fb7","compositionPin":"234657c1264ead6b8828425ae9e7fcdca0cca5c8","upgradeApplied":false,"reason":"preserve f127 playable-combat composition; no silent provider upgrade"},
+    "WS17": {"resolvedHead":"eb3e9fce63b71fa68682d81d9227e6ed7ae905bf","compositionPin":"eb3e9fce63b71fa68682d81d9227e6ed7ae905bf"},
+    "WS19": {"resolvedHead":"cc1490672b676f0bf1675f83c8f4fc146b940df4","compositionPin":"cc1490672b676f0bf1675f83c8f4fc146b940df4"},
+    "WS25": {"resolvedHead":"18c9e9b8439fef88fc93d74bfec7981b0cb41958","compositionPin":"18c9e9b8439fef88fc93d74bfec7981b0cb41958"},
+    "WS31": {"resolvedHead":"56ada741532c8f6cabfc83b129a8e87e645db055","compositionPin":"56ada741532c8f6cabfc83b129a8e87e645db055"},
+    "WS45": {"resolvedHead":"4a66338743553c2781c68ca84b866ff4e999c14e","compositionPin":"4a66338743553c2781c68ca84b866ff4e999c14e"}
+  },
+  "persistence": {
+    "authoritativeAccountTable": "oldko.accounts",
+    "characterForeignKey": "oldko.characters.account_id -> oldko.accounts.id",
+    "repositoryFactory": "services/ko1298-session/postgres-repository.js#createProductionPostgresRepository",
+    "ws07RuntimeSource": "services/oldko-data",
+    "requiredEnvironment": ["DATABASE_URL"],
+    "memoryRepositoryProductionAllowed": false,
+    "migrationOrder": ["database/migrations/0001_init.sql","database/migrations/0002_persistence_hardening.sql","database/migrations/0003_public_account_api.sql"]
+  },
+  "identity": {
+    "websiteCanonical": "trim(username).toLowerCase()",
+    "gameCanonical": "trim(username).toLowerCase()",
+    "databaseKey": "oldko.accounts.username_key",
+    "sessionIdentity": "canonical username key",
+    "databasePrimaryKey": "oldko.accounts.id"
+  },
+  "password": {
+    "format": "scrypt$N$r$p$base64(salt)$base64(hash64)",
+    "websiteAuthority": "WS13 ScryptPasswordHasher",
+    "gameVerifier": "WS07 verifyPassword",
+    "canonicalParams": {"N":32768,"r":8,"p":1,"hashBytes":64}
+  },
+  "runtime": {
+    "productionEntrypoint": "services/ko1298-session/production-server.js",
+    "packageStart": "node production-server.js",
+    "worldPersistenceDelegation": "WS07 PgWs14WorldRepository",
+    "memoryRepository": "unit/regression fixtures only"
+  },
+  "ci": {
+    "oneDatabaseE2E": "postgres-one-db-e2e",
+    "flow": ["WS13 register","WS13 verify","WS13 login","same oldko.accounts row","WS03 auth","1298 version","game login","character list","character create","character select","WS14 world ready","save/load"],
+    "playableCombatRegression": "existing composed-contracts + combat-composition jobs unchanged in authority/pins"
+  },
+  "secrets": "No production credentials are committed. DATABASE_URL is environment-only; workflow credentials are ephemeral CI-only values."
+}

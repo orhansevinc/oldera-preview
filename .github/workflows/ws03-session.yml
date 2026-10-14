@@ -2,9 +2,9 @@ name: WS03 KO1298 Session
 on:
   push:
     branches: [ws03-ko1298-session]
-    paths: ['services/ko1298-session/**','protocol-lab/runtime/playable-combat-codec.cjs','tests/ko1298-session/**','workstreams/ws03/**','.github/workflows/ws03-session.yml']
+    paths: ['services/ko1298-session/**','services/oldko-data/**','database/**','protocol-lab/runtime/playable-combat-codec.cjs','tests/ko1298-session/**','workstreams/ws03/**','.github/workflows/ws03-session.yml']
   pull_request:
-    paths: ['services/ko1298-session/**','protocol-lab/runtime/playable-combat-codec.cjs','tests/ko1298-session/**','workstreams/ws03/**','.github/workflows/ws03-session.yml']
+    paths: ['services/ko1298-session/**','services/oldko-data/**','database/**','protocol-lab/runtime/playable-combat-codec.cjs','tests/ko1298-session/**','workstreams/ws03/**','.github/workflows/ws03-session.yml']
 
 jobs:
   test:
@@ -82,3 +82,51 @@ jobs:
           path: artifacts/ws03/resolved-providers.json
           if-no-files-found: error
           retention-days: 14
+
+  postgres-one-db-e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: oldko
+          POSTGRES_PASSWORD: oldko_ci_only
+          POSTGRES_DB: oldko
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U oldko -d oldko"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://oldko:oldko_ci_only@127.0.0.1:5432/oldko
+      WS07_SHA: 1ae85c96319cbab11648a91ed28300e17d4c607f
+      WS13_SHA: 5777c865274cba26ca35a5e74bd13cb08530c5eb
+      WS14_SHA: ed5f806ce7505f4dfae406e4164735def63b6c86
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 1}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Verify exact persistent/account/world provider pins
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1000 origin \
+            +refs/heads/ws07-database-persistence:refs/remotes/origin/ws07-database-persistence \
+            +refs/heads/ws13-account-api:refs/remotes/origin/ws13-account-api \
+            +refs/heads/ws14-world-session:refs/remotes/origin/ws14-world-session
+          for sha in "$WS07_SHA" "$WS13_SHA" "$WS14_SHA"; do git cat-file -e "$sha^{commit}"; done
+          test "$(git rev-parse "$WS07_SHA^{tree}:services/oldko-data")" = "$(git rev-parse HEAD^{tree}:services/oldko-data)"
+          test "$(git rev-parse "$WS07_SHA^{tree}:database")" = "$(git rev-parse HEAD^{tree}:database)"
+          git archive "$WS13_SHA" services/account-api | tar -x
+          git archive "$WS14_SHA" services/ko1298-world | tar -x
+      - name: Install WS07 PostgreSQL driver
+        run: npm install --ignore-scripts --no-audit --no-fund
+        working-directory: services/oldko-data
+      - name: Apply existing migrations in canonical order
+        run: npm run migrate
+        working-directory: services/oldko-data
+      - name: Website account to KO1298 one-database E2E
+        run: node --test tests/ko1298-session/postgres-composition.test.mjs
