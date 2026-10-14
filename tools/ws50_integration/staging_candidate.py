@@ -28,7 +28,7 @@ FROZEN = {
     "WS03": ("ws03-ko1298-session", "d634870bbcd2c541695516643d34e0ac119354d7"),
     "WS04": ("ws04-character-client", "32616b1b7ccbdc3de41c0949f182a65e03450d18"),
     "WS05": ("ws05-moradon-world", "0537c481383a69c534799b43810f35e7279c5578"),
-    "WS09": ("ws09-production-infra", "2d4ec8ab89637d08b1f37c12dde0c93b89f8dc70"),
+    "WS09": ("ws09-production-infra", "bac4f9d1338e385c8aff3989becaa8ed74037b38"),
     "WS10": ("ws10-qa-integration", "b11929915d881e046ff50aa34695c9da70a5480a"),
     "WS11": ("ws11-protocol-lab", "05562662d9d3f13a4b0500d0478e065fd802cfd0"),
     "WS12": ("ws12-browser-launcher", "77f55b2949844e0fdd279526dab0fba4e8ab4f94"),
@@ -63,7 +63,7 @@ PATHS = {
     "WS04": ["tools/ws04_character"],
     "WS05": ["tools/ws05_moradon"],
     "WS11": ["tools/ws11_protocol", "protocol-lab", "tests/protocol-lab"],
-    "WS09": ["infra", "deploy", "docker-compose.ws09-staging.yml"],
+    "WS09": ["infra", "deploy", "docker-compose.ws09.yml", "docker-compose.ws09-staging.yml"],
     "WS10": ["qa", "tests/e2e"],
 }
 
