@@ -70,6 +70,26 @@ function moradonWormWorld() {
     }],
   };
 }
+function compositionTerrainPort() {
+  // WS25 correctly refuses constant/raw spawn Y for real data. Terrain is outside this WS03 combat task,
+  // so the composition harness supplies the required authority port explicitly instead of weakening WS25.
+  // This proves the WS25 target boundary; it is not production terrain evidence and is never used as such.
+  return Object.freeze({
+    resolveHeight(zoneId, x, z) {
+      assert.equal(zoneId, 21);
+      assert.equal(x, 313);
+      assert.equal(z, 402);
+      return Object.freeze({
+        status: 'authoritative',
+        height: 0,
+        surface: 'WS03_COMPOSITION_HARNESS',
+        policy: 'TEST_ONLY_TERRAIN_AUTHORITY_PORT',
+        terrainHeight: 0,
+        shapeHeight: null,
+      });
+    },
+  });
+}
 function normalizeWs17SnapshotForWs19(raw) {
   // Current WS17 exposes raw legacy range/delay but not a verified unit conversion to WS19's
   // weaponRange/attackDelayMs contract. Preserve the real snapshot and fail closed on those units.
@@ -114,6 +134,7 @@ test('pinned WS11/15/17/19/25 providers compose through WS03 combat ingress with
   let nextRuntimeId = 20001;
   const mobs = new MobVisibilityService(moradonWormWorld(), {
     runtimeIds: { claim: () => nextRuntimeId++ },
+    terrain: compositionTerrainPort(),
   });
   mobs.initialize(0);
   const mobRuntimeId = 20001;
