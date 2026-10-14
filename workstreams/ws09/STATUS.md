@@ -1,177 +1,96 @@
 WS09
 
-# STATUS — Public test / staging preparation
+# STATUS — Staging MIME Contract Finalization
 
 ## Decision
 
-**STAGING DEPLOY PREP: READY**
+**STAGING MIME CONTRACT: READY**
 
 Branch: `ws09-production-infra`
+Implementation head validated before this closing status: `834f913c29d9678215fa00d9817ae79b12b7af2c`.
+Closing commit is the branch HEAD containing this status; the exact SHA is reported in the control-session closure message.
 
-This control session prepares the deployment path only. It does **not** claim a production cutover, a purchased domain, a production certificate, or a completed Moradon E2E PASS.
+This control session is only the deployment-contract repair requested by `coordination/inbox/WS09.md`. It does not change provider/game/client code, production DNS, production certificates, or secrets.
 
-## What changed
+## Evidence consumed
 
-The previous WS09 scaffold used stale pre-integration assumptions: one generic gateway and one session TCP target. Current provider evidence requires two WS02 gateway instances and WS03's separate AUTH/GAME TCP listeners, with WS14 composed behind WS03.
+- `main`: `coordination/MASTER_CONTROL.md`, `BROADCAST.md`, `WORKSTREAM_REGISTRY.md`, `TASK_QUEUE.md`, `MORADON_CRITICAL_PATH.md`, and `coordination/inbox/WS09.md`.
+- WS12 `ws12-browser-launcher@77f55b2949844e0fdd279526dab0fba4e8ab4f94`: strict WS38 publication preflight requires the response Content-Type to match the manifest declaration exactly; its handoff explicitly requests WS09 to serve JS as `text/javascript; charset=utf-8`.
+- WS38 `ws38-client-content-pipeline@5f323f3cf055ba7f96d928605a2f2faf84e609cb`: `oldko1298.profile.json` declares:
+  - `KnightOnLine.js` -> `text/javascript; charset=utf-8`
+  - `KnightOnLine.wasm` -> `application/wasm`
+  - `KnightOnLine.data` -> `application/octet-stream`
+- WS50 current staging evidence branch head checked at `ws50-integration-rehearsal@94715058fdedc0a4fbab3a5f5c2ab29602fe747b`; its staging candidate report independently records the previous WS09 JS MIME mismatch as a deployment follow-up.
 
-WS09 now provides:
+## Fix implemented
 
-- `docker-compose.ws09-staging.yml` — separate domain-free staging profile;
-- `deploy/.env.staging.example` — non-secret local/public-test environment template;
-- `infra/nginx/templates/staging.conf.template` — staging edge/reverse proxy;
-- `deploy/staging-up.sh` — one-command bring-up after artifacts/images are supplied;
-- `deploy/staging-smoke.sh` — edge/gateway/MIME smoke checks;
-- `deploy/artifacts/staging-play/README.md` — exact static artifact layout;
-- extended `deploy/verify-config.sh` and WS09 CI validation;
-- `workstreams/ws09/DEPENDENCY_SNAPSHOT.md` with current provider heads/contracts.
+- `infra/nginx/mime.types`
+  - changed `.js/.mjs` from `application/javascript` to `text/javascript`;
+  - kept `.wasm = application/wasm`;
+  - kept `.data = application/octet-stream`.
+- `infra/nginx/nginx.conf`
+  - enables `charset utf-8` for `text/javascript` so the emitted header is exactly `text/javascript; charset=utf-8`;
+  - binary WASM/DATA media types are excluded from charset handling;
+  - gzip recognizes `text/javascript` while retaining compatibility with `application/javascript` from unrelated upstream responses.
+- `deploy/verify-config.sh`
+  - requires the `text/javascript js mjs` mapping;
+  - fails if legacy `application/javascript` owns `js` or `mjs` again;
+  - requires UTF-8 charset handling for `text/javascript`;
+  - keeps explicit WASM/DATA assertions.
+- `deploy/staging-smoke.sh`
+  - compares the complete response Content-Type, mirroring WS12 `strictContentType` behavior;
+  - requires JS to be exactly `text/javascript; charset=utf-8`;
+  - keeps exact WASM/DATA checks;
+  - supports an optional synthetic `.mjs` fixture for CI regression coverage.
+- `.github/workflows/ws09-deploy.yml`
+  - adds real Nginx HTTP smoke coverage for `.js`, synthetic `.mjs`, `.wasm`, and `.data` through the staging template.
 
-No provider/product code, production DNS, production certificates, or secrets were changed.
-
-## Staging topology
-
-```text
-browser
-  |
-  | HTTPS/WSS (public host/tunnel/LB terminates TLS)
-  v
-WS09 nginx staging edge
-  |-- /play-shell/ + real WASM/static content
-  |-- /auth  -> WS02 gateway-auth -> WS03 AUTH TCP :15100
-  `-- /game  -> WS02 gateway-game -> WS03 GAME TCP :15001
-                                      |
-                                      `-> WS14 world provider in integrated image
-```
-
-Only the staging edge publishes a host port. AUTH/GAME TCP ports stay on the private compose network.
-
-Browser-facing WebSocket contract:
-
-```text
-local smoke:  ws://localhost:8080/auth
-local smoke:  ws://localhost:8080/game
-public test:  wss://<temporary-staging-host>/auth
-public test:  wss://<temporary-staging-host>/game
-```
-
-The gateway containers use the current WS02 deployment contract:
-
-- `GATEWAY_MODE=auth|game`;
-- `/auth` and `/game` WS paths;
-- `/healthz` health path;
-- exact `ALLOWED_ORIGINS` and `ALLOWED_HOSTS`;
-- `REQUIRE_ORIGIN=true`;
-- `TRUST_PROXY=true` with edge-provided Host / X-Forwarded-Host.
-
-## Static client / launcher contract
-
-Materialize approved provider artifacts into:
+## Exact staging MIME contract
 
 ```text
-deploy/artifacts/staging-play/
-  play-shell/**
-  real1298/index.html
-  real1298/BUILD.txt
-  real1298/KnightOnLine.js
-  real1298/KnightOnLine.wasm
-  real1298/KnightOnLine.data
+.js   -> text/javascript; charset=utf-8
+.mjs  -> text/javascript; charset=utf-8
+.wasm -> application/wasm
+.data -> application/octet-stream
 ```
 
-For a public test, deployment may rewrite the staged `play-shell/config.json` artifact without changing WS12's provider branch:
+This now matches the WS38 manifest contract consumed by WS12 strict publication validation.
 
-- client/build/required-file URLs stay same-origin;
-- set the launcher gateway reachability probe to `wss://<temporary-staging-host>/auth`;
-- set `gateway.required=true` when launch must fail closed on unavailable transport;
-- bump `cacheVersion` when the staged client package changes.
+## Verification actually run
 
-Important: WS12's gateway URL is a launcher reachability probe. It does not replace the real C++/WASM client's auth/game transport wiring. The client package used for publication must be the integrated browser build proven by WS10 and must use the exposed `/auth` and `/game` transport endpoints.
+GitHub Actions:
 
-## MIME and cache policy
+- workflow: `WS09 deployment config`
+- run: `38496243278` (run 16)
+- job: `validate` / `115632531458`
+- implementation head: `834f913c29d9678215fa00d9817ae79b12b7af2c`
+- result: **SUCCESS**
 
-The staging edge keeps the WS38 contract:
+Passing steps include:
 
-- `.wasm`: `application/wasm`;
-- `.data`: `application/octet-stream`;
-- `client-content/v1/<contentVersion>/...`: `public, max-age=31536000, immutable`;
-- `latest.json` / `rollback.json`: `no-store, max-age=0`;
-- mutable inherited `real1298` staging JS/WASM/DATA: forced revalidation instead of one-year caching.
+- static validation: PASS
+- production compose validation: PASS
+- staging compose validation: PASS
+- Nginx local template syntax: PASS
+- Nginx staging template syntax: PASS
+- **Staging WS38 and WS12 strict MIME smoke: PASS**
+- Nginx production template syntax: PASS
 
-When the full WS38 versioned publication flow is used, publish immutable files first, then `manifest.json`, verify, publish `_complete.json` last, verify again, and only then advance `latest.json`.
+The MIME smoke exercises a real Nginx container and verifies the full HTTP Content-Type values for `.js`, `.mjs`, `.wasm`, and `.data`.
 
-## Exact publish steps after MORADON PASS
+## Remaining gates outside this task
 
-1. Require a **new WS10 `MORADON E2E: PASS`** using the corrected WS05 provider. The current WS10 report is run #16 and predates WS05's wire-zone-21/native-zone-210 fix, so it is not a release PASS.
-2. Freeze the provider SHAs used by that passing run. Build/publish immutable image tags/digests for:
-   - WS02 gateway -> `GATEWAY_IMAGE`;
-   - integrated WS03 + WS14 session/world runtime -> `KO_SESSION_WORLD_IMAGE`.
-3. Materialize the exact passing WS12 launcher + real WASM/client package into `deploy/artifacts/staging-play/`. If WS38 versioned content is used, materialize its manifest/marker/pointer layout as specified above.
-4. Create the host-local env file:
+No WS09 MIME blocker remains.
 
-   ```sh
-   cp deploy/.env.staging.example deploy/.env.staging
-   ```
-
-5. Set these deployment values in `deploy/.env.staging`:
-   - `GATEWAY_IMAGE=<immutable WS02 image ref>`
-   - `KO_SESSION_WORLD_IMAGE=<immutable integrated WS03+WS14 image ref>`
-   - `STAGING_HOST=<temporary provider hostname>`
-   - `STAGING_PUBLIC_ORIGIN=https://<temporary provider hostname>`
-   - `STAGING_ALLOWED_HOST=<temporary provider hostname>` (include port only if the public URL uses a non-default port)
-   - `STAGING_HTTP_BIND=<host port reached by the TLS/tunnel/LB layer>`
-   - `KO_GAME_ADVERTISE_HOST=<host identity required by the exact integrated browser transport proven by WS10>`
-6. Configure the external host/tunnel/load balancer to provide HTTPS/WSS and forward to the staging edge. Preserve `Host`, `X-Forwarded-Host`, and `X-Forwarded-Proto=https`. Do **not** expose TCP 15100 or 15001 publicly.
-7. Update the staged `play-shell/config.json` gateway probe/client URLs for that public origin; do not edit the WS12 branch.
-8. Bring up and smoke-check in one command:
-
-   ```sh
-   sh deploy/staging-up.sh deploy/.env.staging
-   ```
-
-9. Verify from outside the host:
-   - `https://<host>/play-shell/` loads;
-   - `wss://<host>/auth` and `wss://<host>/game` are the browser endpoints;
-   - WASM and DATA MIME headers are correct;
-   - static content is the frozen passing build.
-10. Rerun the real WS10 browser/Moradon gate against the published staging composition before telling the user the public link is a verified Moradon PASS. The WS09 smoke command is infrastructure evidence only; it is not a substitute for WS10 native render evidence.
-
-## GitHub Pages boundary
-
-GitHub Pages may host static launcher/client files, but it cannot run WS02 WebSocket gateway, WS03 session TCP service, or WS14 world service. WS09 therefore does not present GitHub Pages as a complete public-test deployment.
-
-## Single external requirement
-
-**One external requirement remains for an actual public URL:** an Internet-reachable container host, or an equivalent tunnel/load-balancer service, that provides a temporary HTTPS/WSS hostname and forwards traffic to the WS09 staging edge while preserving the proxy headers above.
-
-This does **not** require buying `oldkoweb.com`; a provider-issued temporary hostname is sufficient for the test.
-
-## Current upstream gate
-
-- WS05 is corrected and reports ready for an unchanged WS10 rerun.
-- WS10's latest recorded report still reflects the older pre-fix run and therefore does not yet authorize publication as a verified Moradon PASS.
-- This is a publish-quality gate, not an unresolved WS09 implementation defect.
-
-## Verification
-
-WS09 CI/static validation now checks:
-
-- production compose parses;
-- staging compose parses with the non-secret example env;
-- local, staging, and production Nginx templates pass `nginx -t` in CI;
-- staging compose includes separate auth/game gateway modes and paths;
-- Origin/Host allowlist configuration is present;
-- `.wasm` and `.data` MIME contracts are present;
-- immutable and no-store cache directives are present;
-- staging shell scripts pass `sh -n`.
-
-The exact GitHub Actions run evidence is recorded/reported at closure after the final branch validation run is inspected.
+This READY decision is intentionally narrow: it does not override WS50's separate public-staging blocker concerning browser-native WSS/path routing ownership, and it does not declare the project-level Moradon E2E gate passed. Those remain external acceptance/provider concerns, not permission for WS09 to modify provider code.
 
 ## Boundaries
 
 - No merge to `main`.
 - No force push.
-- No other WS branch modified.
-- No application/product/provider implementation modified.
-- No secret committed.
-- No production domain ownership assumed.
-- No production DNS or certificate cutover performed.
+- No other workstream branch modified.
+- No application/provider/game/client implementation modified.
+- No production domain/DNS/certificate changed.
+- No secret added.
 
 BU SOHBETE ARTIK GEREK VAR MI?: HAYIR
