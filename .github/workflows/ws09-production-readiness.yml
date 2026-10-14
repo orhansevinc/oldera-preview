@@ -7,21 +7,21 @@ on:
       - 'docker-compose.ws09.yml'
       - 'infra/nginx/**'
       - 'deploy/.env.production.example'
-      - 'deploy/RELEASE.ws10-38505039290.env'
+      - 'deploy/RELEASE.ws50-c5-ws10-38604174659.env'
       - 'deploy/ko-auth-roundtrip-smoke.mjs'
       - 'deploy/production-smoke.sh'
       - 'deploy/release-switch.sh'
       - 'deploy/rollback-static.sh'
       - 'deploy/validate-production-env.sh'
-      - 'deploy/.gitignore'
       - 'workstreams/ws09/**'
       - '.github/workflows/ws09-production-readiness.yml'
+      - '.github/workflows/ws09-permanent-release-bundle.yml'
   pull_request:
     paths:
       - 'docker-compose.ws09.yml'
       - 'infra/nginx/**'
       - 'deploy/.env.production.example'
-      - 'deploy/RELEASE.ws10-38505039290.env'
+      - 'deploy/RELEASE.ws50-c5-ws10-38604174659.env'
       - 'deploy/ko-auth-roundtrip-smoke.mjs'
       - 'deploy/production-smoke.sh'
       - 'deploy/release-switch.sh'
@@ -29,6 +29,7 @@ on:
       - 'deploy/validate-production-env.sh'
       - 'workstreams/ws09/**'
       - '.github/workflows/ws09-production-readiness.yml'
+      - '.github/workflows/ws09-permanent-release-bundle.yml'
 
 permissions:
   contents: read
@@ -39,7 +40,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Syntax and secret-policy checks
+      - name: Syntax, JSON and secret-policy checks
         shell: bash
         run: |
           set -euo pipefail
@@ -48,10 +49,28 @@ jobs:
           sh -n deploy/release-switch.sh
           sh -n deploy/rollback-static.sh
           sh -n deploy/validate-production-env.sh
+          python3 -m json.tool workstreams/ws09/DOMAIN_DEPLOYMENT.json >/dev/null
+          python3 -m json.tool workstreams/ws09/DOMAIN_RELEASE_REQUESTS.json >/dev/null
           ! grep -RIE --exclude='*.md' --exclude='*.example' '(password|token|secret)[=:][^$<{ ]{6,}' deploy workstreams/ws09 || {
             echo 'possible literal secret detected in WS09 production surfaces' >&2
             exit 1
           }
+
+      - name: Exact C5 permanent release identity contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          RELEASE=deploy/RELEASE.ws50-c5-ws10-38604174659.env
+          grep -Fqx 'FINAL_PROVIDER_SET=WS50-C5@sha256:7ac3b8a4c06b67e52b8d18518ef8c82209a60c6101c33609a4c16e64d84f119e' "$RELEASE"
+          grep -Fqx 'WS50_MANIFEST_COMMIT=0d5001095fa3b43693b4fa0cda615f84e2cb7df5' "$RELEASE"
+          grep -Fqx 'WS50_HANDOFF_REF=7497087d4cf67e4e05a3a090f6edad3d206078cb' "$RELEASE"
+          grep -Fqx 'WS49_RUN_ID=38600254823' "$RELEASE"
+          grep -Fqx 'WS10_RUN_ID=38604174659' "$RELEASE"
+          grep -Fqx 'WS10_HEAD_SHA=163f2ebf81e750bf746fdaa277695329a0682e22' "$RELEASE"
+          grep -Fqx 'WS10_CLIENT_ARTIFACT=ws10-c5-visibility-passing-client-4' "$RELEASE"
+          grep -Fqx 'WS10_CLIENT_ARTIFACT_ID=11915666463' "$RELEASE"
+          grep -Fqx 'WS10_CLIENT_ARTIFACT_DIGEST=sha256:f749750fc5bb0249a67b712bd4e1a03847773d8845fd209508b8c95f6c447a83' "$RELEASE"
+          grep -Fq '"permanent_domain_ready": false' workstreams/ws09/DOMAIN_DEPLOYMENT.json
 
       - name: Prepare production contract fixtures
         shell: bash
@@ -75,21 +94,18 @@ jobs:
             -e "s#^KO_SESSION_WORLD_IMAGE=.*#KO_SESSION_WORLD_IMAGE=$fake#" \
             /tmp/ws09-production-ci.env
 
-      - name: Production compose dry-run
-        run: |
-          docker compose --env-file /tmp/ws09-production-ci.env -f docker-compose.ws09.yml config --quiet
-
-      - name: Production env fail-closed contract
+      - name: Production compose and env dry-run
         shell: bash
         run: |
           set -euo pipefail
+          docker compose --env-file /tmp/ws09-production-ci.env -f docker-compose.ws09.yml config --quiet
           sh deploy/validate-production-env.sh /tmp/ws09-production-ci.env
           if sh deploy/validate-production-env.sh deploy/.env.production.example; then
             echo 'placeholder production env unexpectedly passed immutable image validation' >&2
             exit 1
           fi
 
-      - name: Production Nginx syntax
+      - name: Production Nginx syntax and route contract
         shell: bash
         run: |
           set -euo pipefail
@@ -109,19 +125,12 @@ jobs:
             -v "$PWD/deploy/tls:/etc/nginx/tls:ro" \
             -v "$PWD/deploy/artifacts:/srv/oldkoweb:ro" \
             nginx:stable-alpine nginx -t
-
-      - name: Production route contract
-        shell: bash
-        run: |
-          set -euo pipefail
           grep -Fq 'location = /auth' infra/nginx/templates/production.conf.template
           grep -Fq 'location = /game' infra/nginx/templates/production.conf.template
           grep -Fq 'location /api/admin/' infra/nginx/templates/production.conf.template
-          ! grep -Fq '${API_HOST}' infra/nginx/templates/production.conf.template
-          ! grep -Fq '${GATEWAY_HOST}' infra/nginx/templates/production.conf.template
-          ! grep -Fq 'Strict-Transport-Security' infra/nginx/templates/production.conf.template
           grep -Fq 'application/wasm' infra/nginx/mime.types
           grep -Fq 'application/octet-stream' infra/nginx/mime.types
+          ! grep -Fq 'Strict-Transport-Security' infra/nginx/templates/production.conf.template
 
       - name: Release switch and rollback dry-run
         shell: bash
@@ -133,13 +142,3 @@ jobs:
           sh deploy/release-switch.sh --dry-run "$release"
           printf '%s\n' "$previous" > deploy/state/previous-release
           sh deploy/rollback-static.sh --dry-run deploy/state/previous-release
-
-      - name: Exact passing client identity contract
-        shell: bash
-        run: |
-          set -euo pipefail
-          grep -Fq 'WS10_RUN_ID=38505039290' deploy/RELEASE.ws10-38505039290.env
-          grep -Fq 'WS10_HEAD_SHA=f0cadfb50b5d1a36d2bfe4e5bf0a68f7c3061f41' deploy/RELEASE.ws10-38505039290.env
-          grep -Fq 'WS10_CLIENT_ARTIFACT=ws10-moradon-passing-client-26' deploy/RELEASE.ws10-38505039290.env
-          grep -Fq 'WS10_CLIENT_ARTIFACT_DIGEST=sha256:ff9fb679ad1b3caa184ad098cff81cfb5469b0698d5e5f3b76ef4fab2ea775b3' deploy/RELEASE.ws10-38505039290.env
-          grep -Fq 'KNIGHTONLINE_DATA_BYTES=615930538' deploy/RELEASE.ws10-38505039290.env

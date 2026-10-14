@@ -1,107 +1,103 @@
 WS09
 
-# Dependency Snapshot — Production domain preparation
+# Dependency Snapshot — Permanent domain release
 
 ## SELF
 
 - Workstream: `WS09`
 - Branch: `ws09-production-infra`
-- Pre-production baseline head before this work: `22254254776293d0f3eed45950011de8742532fc`.
-- Last successful WS09 public ephemeral validation: run `38515548307` / run #6 — **SUCCESS**.
-- Last successful WS09 config validation observed before this work: run `38515548191` / run #40 — **SUCCESS**.
-- No main merge, force push, DNS change or registrar action.
+- Permanent release implementation commit: `a0c968e6e09e5b26911ebfb0431c062593ad456c`.
+- WS09 deployment config run `38609175733`: SUCCESS.
+- WS09 production readiness run `38609175508`: SUCCESS.
+- WS09 permanent release bundle run `38609175962`: SUCCESS.
+- Permanent host bundle: `ws09-c5-permanent-host-bundle-1`, artifact `11916143558`, digest `sha256:dace8c076b51eb70e4dc5196830655a32af17156ee04877402e080faa2a3e3ca`.
 
-## CANONICAL PASS / RELEASE
-
-WS50 READY handoff: `9e0fc1822351965755fc490c2d2abf34d40f430d`.
-
-Canonical WS10:
+## CANONICAL GAMEPLAY RELEASE
 
 ```text
-run id             38505039290
-run number         26
-head                f0cadfb50b5d1a36d2bfe4e5bf0a68f7c3061f41
-PASS artifact       ws10-moradon-e2e-26
-client artifact     ws10-moradon-passing-client-26
-artifact id         11867980473
-artifact digest     sha256:ff9fb679ad1b3caa184ad098cff81cfb5469b0698d5e5f3b76ef4fab2ea775b3
-contentVersion      1298-ws10-38505039290
+FINAL_PROVIDER_SET      WS50-C5@sha256:7ac3b8a4c06b67e52b8d18518ef8c82209a60c6101c33609a4c16e64d84f119e
+WS50 manifest commit    0d5001095fa3b43693b4fa0cda615f84e2cb7df5
+WS50 handoff commit     7497087d4cf67e4e05a3a090f6edad3d206078cb
+WS49 run                38600254823 / SUCCESS
+WS10 run                38604174659 / SUCCESS
+WS10 head               163f2ebf81e750bf746fdaa277695329a0682e22
+PASS artifact           ws10-c5-visibility-e2e-4
+client artifact         ws10-c5-visibility-passing-client-4
+client artifact id      11915666463
+client artifact digest  sha256:f749750fc5bb0249a67b712bd4e1a03847773d8845fd209508b8c95f6c447a83
 ```
 
-Frozen production-relevant provider refs:
+The C5 manifest's historical browser baseline/run #26 is not the publication client for this release.
+
+Frozen provider refs used for the host bundle:
 
 ```text
 WS01 57d0aa7c6a82810d5f126bda83a368e7eb7801bb
 WS02 1738f60945b24e00bdd2266e6600b5c0cf3c64cf
-WS03 237c4a613e94434baae656c1399cb449e7b78067
+WS03 495de481726734d85cc28b3d432835799aff7e48
+WS11 944b6ff9b6329af29f1048a74aa6e14fca141639
 WS12 121bb7bdb82c364bf9459111096f5ff007873a61
-WS14 82cdcef40bed265ff4c4ce0fb7c8f6ad8cf2f52b
+WS14 ed5f806ce7505f4dfae406e4164735def63b6c86
+WS15 ce9bed13b8d45c32ff0592595aa3a0d1e7b3964d
+WS16 5ed48ff32187000312652838674388df52fc3fb7
+WS25 13c9bafe287b250d56b52f19e97a02e7ef18e6e5
+WS31 546d2ab62cd46a97f3385ebcddbe0c775a02c2eb
 WS38 5f323f3cf055ba7f96d928605a2f2faf84e609cb
+WS45 4a66338743553c2781c68ca84b866ff4e999c14e
 ```
 
-The WS09 public run built those exact WS02 + WS03/WS14 slices, published the exact passing client via WS38, and passed public HTTPS/MIME/WSS + WS12 preflight. The temporary URL was intentionally removed after its 45-minute keepalive.
+## PERSISTENCE / ACCOUNT OWNERS
 
-## WS01
+### WS07
 
-Same-origin browser transport is canonical:
+- Branch: `ws07-database`
+- Observed head: `10008ad1698b79c01d87cde54463d49f3bf623a2`
+- PostgreSQL foundation: GREEN.
+- Publishes asynchronous PostgreSQL repositories including WS03 session persistence.
 
-```text
-/auth
-/game
-```
+### WS03
 
-Production maps both only under `play.oldkoweb.com`. Legacy TCP auth/game ports remain private behind WS02.
+- Observed head: `495de481726734d85cc28b3d432835799aff7e48`
+- Blocker: current repository call sites are synchronous while the production WS07 adapter is asynchronous. Game auth/character persistence is therefore not yet production-composed.
 
-## WS02
+### WS13
 
-Production uses two gateway instances from the same frozen image: auth mode and game mode. Both require exact Origin and Host allowlists for `https://play.oldkoweb.com` / `play.oldkoweb.com`.
+- Observed head: `23ac239b26e0353bf2da6f9c9649710db58e3a9a`
+- Blocker: production requires an external repository module; current WS13 account/password/verification semantics are not yet proven compatible with the WS07/game credential model.
+- Acceptance: website-created account and game login must use one real PostgreSQL-backed account identity/credential authority.
 
-## WS03 + WS14
+### WS08
 
-Production Compose preserves the integrated `session-world` shape proven by WS50. The canonical staging composition is protocol-complete for the browser path. Production durability is not fabricated by WS09; persistent gameplay repository integration remains a provider concern (WS07/WS03).
+- Observed head: `239cdacf0fb6bacde5017fb3b787451595a3be0d`
+- Blocker: production must replace `MemoryAdminRepository` with the WS07-backed required repository surface.
 
-## WS12 + WS38
+Any gameplay/auth runtime integration that changes C5 composition requires a WS50 child candidate; C5 remains immutable.
 
-Production publishes the exact frozen client through the same immutable content contract:
+## WEBSITE HANDOFF
 
-- JS `text/javascript; charset=utf-8`
-- WASM `application/wasm`
-- DATA `application/octet-stream`
-- immutable version path
-- `latest.json` last and no-store.
-
-## WS35 runtime/security config
-
-Observed head: `5327d50906d02c829add08cf1ca73fbe978526dc`.
-
-Relevant contract: typed production config, trusted origins/CORS rules, secret references, production literal-secret rejection and redaction. WS09 uses file-mounted secrets and exact origin/host rules, while avoiding unsupported provider variables.
-
-## WS29 observability
-
-Observed head: `d26f5af7aae0892576af5f35599a9d6076daf129`.
-
-Relevant contract: structured/redacted logs, correlation IDs, health/readiness, metrics and graceful shutdown. WS09 supplies edge/container health and log rotation and leaves service instrumentation to provider integration.
+- Branch: `official-site-domain-release`.
+- Last observed branch head: `c75118905217343d30d3e25cf24a1552a5dc82b1`.
+- Required handoff: `coordination/handoffs/official-site-release.json`.
+- Last active read: NOT FOUND.
+- WS09 must not guess/reimplement website source or public account routes while the handoff is absent.
 
 ## DOMAIN / HOST
 
-- Domain: `oldkoweb.com` — purchased/owned by the user.
-- Persistent host target: **WAITING FOR HOST TARGET**.
-- DNS changes performed by WS09: **NO**.
-- Required public names: apex, `play`, `admin`.
-- Recommended permanent staging name: `staging`.
-- Public `api` / `gateway`: not required.
+- Domain: `oldkoweb.com` — owned/purchased.
+- Target names: apex, `play`, `admin`.
+- Persistent host: no authorized target/stable public address available to WS09 yet.
+- Authoritative DNS provider connection: not available to WS09 yet.
+- DNS mutations in this permanent-domain task: none yet, because a verified target is a prerequisite.
+- Once a target exists, current task authorizes controlled cutover after existing zone records are inspected and preserved.
 
-## EPHEMERAL FALLBACK
+## LIVE-CUTOVER BLOCKERS
 
-Known-good fallback evidence remains WS09 public run `38515548307` at branch commit `22254254776293d0f3eed45950011de8742532fc`.
+1. Authorized persistent host + stable public target.
+2. WS03/WS07 persistent game-session composition.
+3. WS13/WS07 shared real website/game account source.
+4. WS08/WS07 production admin repository.
+5. Official-site release handoff file/artifact/route contract.
+6. Authoritative DNS inspection, apex/play/admin cutover and SAN TLS.
+7. Real-domain browser E2E, restart persistence and rollback proof.
 
-Production infra changes after that frozen publisher revision must not be misrepresented as covered by the old WS50 WS09 freeze. If the Quick Tunnel publisher itself is rerun from a newer infra revision, obtain a matching WS50 re-freeze or use the known-good validated publisher revision.
-
-## BLOCKERS TO LIVE CUTOVER
-
-1. Choose/provision a persistent host with a stable target.
-2. Produce/publish immutable image digests for Nginx, Postgres, admin API, WS02, and integrated WS03+WS14 (or build/freeze equivalent images on the host).
-3. Obtain the production SAN certificate after the host/DNS challenge path is available.
-4. Human-approved DNS cutover.
-
-None of these justify changing DNS tonight.
+Quick Tunnel remains test/fallback evidence only; it is not a production host or DNS target.

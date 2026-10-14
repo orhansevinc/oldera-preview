@@ -1,10 +1,20 @@
 # WS09 — Persistent production topology
 
-## Decision
+## Canonical release
 
-Primary recommendation: a maintained Linux VM/VPS with a stable public IP, Docker Engine + Compose v2, Nginx at the edge, and ACME-managed certificates. This keeps the application portable across hosting vendors: the source of truth is Compose, Nginx, release directories and environment/secrets contracts, not a provider-specific PaaS API.
+```text
+FINAL_PROVIDER_SET      WS50-C5@sha256:7ac3b8a4c06b67e52b8d18518ef8c82209a60c6101c33609a4c16e64d84f119e
+WS50 manifest commit    0d5001095fa3b43693b4fa0cda615f84e2cb7df5
+WS50 handoff commit     7497087d4cf67e4e05a3a090f6edad3d206078cb
+WS49 run                38600254823 / SUCCESS
+WS10 run                38604174659 / SUCCESS
+WS10 head               163f2ebf81e750bf746fdaa277695329a0682e22
+client artifact         ws10-c5-visibility-passing-client-4
+client artifact id      11915666463
+client artifact digest  sha256:f749750fc5bb0249a67b712bd4e1a03847773d8845fd209508b8c95f6c447a83
+```
 
-A managed VM/container host with an attached persistent disk is acceptable if it preserves the same contracts. A persistent Cloudflare Tunnel can be used for staging or emergency ingress, but it is not the primary production recommendation because it adds an avoidable edge dependency. Quick Tunnel is development/fallback only.
+The old WS10 run #26/browser-baseline values are historical only. Permanent C5 publication uses the exact newer client above.
 
 ## Public topology
 
@@ -12,98 +22,73 @@ A managed VM/container host with an attached persistent disk is acceptable if it
 Internet
   |
   +-- https://oldkoweb.com
-  |      -> Nginx -> static official site
+  |      -> Nginx -> exact official-site artifact from official-site handoff
+  |      -> same-origin public account API route from official-site handoff
   |
   +-- https://play.oldkoweb.com
-  |      -> Nginx -> launcher + WS38 immutable client content
-  |      -> /auth -> WS02 auth gateway -> WS03/WS14 session-world :15100
-  |      -> /game -> WS02 game gateway -> WS03/WS14 session-world :15001
+  |      -> Nginx -> WS12 launcher + WS38 immutable C5 client content
+  |      -> /auth -> WS02 auth gateway -> session/world
+  |      -> /game -> WS02 game gateway -> session/world
   |
   +-- https://admin.oldkoweb.com
-         -> Nginx -> admin static frontend
-         -> /api/admin/ -> admin-api
+         -> Nginx -> exact admin frontend
+         -> /api/admin/ -> WS08 admin API
+
+private backend network
+  -> PostgreSQL
+  -> public account service
+  -> admin API
+  -> session/world
+  -> WS02 gateway instances
 ```
 
-No backend TCP service is published. Only Nginx binds host ports 80/443. The Compose backend network is `internal: true`.
+Only Nginx exposes host ports 80/443. PostgreSQL and application TCP ports remain private.
 
-No public `api.oldkoweb.com` or `gateway.oldkoweb.com` is needed. Admin stays same-origin and the browser game stays same-origin, so CORS is not enabled at the WS09 edge.
+## Persistent host baseline
 
-## Quick Tunnel vs production
+Portable baseline: maintained Linux VM/VPS, stable public address, Docker Engine + Compose v2, Nginx, ACME TLS, persistent local disk/volume and off-host backup destination. The host is the long-running runtime; GitHub Actions is build/test/package/deploy orchestration only.
 
-| Concern | Ephemeral Quick Tunnel | Persistent production |
-|---|---|---|
-| hostname | random `*.trycloudflare.com` | owned `oldkoweb.com` names |
-| lifetime | workflow/process lifetime | host/service lifetime |
-| TLS | tunnel edge | owned-domain ACME certificate |
-| DNS | none | controlled cutover records |
-| release | disposable runner | retained immutable release directories |
-| persistence | staging fixtures acceptable | PostgreSQL volume + explicit backups |
-| restart | runner cleanup | `restart: unless-stopped`, health ordering |
-| rollback | start another run | previous static release + prior image identities |
-| observability | job logs | rotated edge logs + WS29 service contract |
-| security boundary | staging origin allowlist | exact Host/Origin allowlist and firewall |
-| vendor dependency | Cloudflare Quick Tunnel | portable Linux/Docker/Nginx baseline |
+Starting capacity for the current single-world early-production load: 4 vCPU, 8 GiB RAM, at least 80 GiB SSD/NVMe. Monitor WS29 metrics and resize from measured CPU/RAM/IO/concurrency rather than guessing future scale.
 
-Validated Quick Tunnel baseline: WS09 public run `38515548307` at `22254254776293d0f3eed45950011de8742532fc`, using canonical WS10 run `38505039290`. It passed public HTTPS, WS38/MIME, `/auth` + `/game` WebSocket upgrades and WS12 launcher preflight.
+## Permanent bundle
 
-## Exact passing client identity
-
-Production must consume the frozen WS10 artifact unchanged:
+WS09 run `38609175962` built `ws09-c5-permanent-host-bundle-1` from commit `a0c968e6e09e5b26911ebfb0431c062593ad456c`.
 
 ```text
-WS10 run             38505039290
-WS10 head            f0cadfb50b5d1a36d2bfe4e5bf0a68f7c3061f41
-PASS artifact        ws10-moradon-e2e-26
-client artifact      ws10-moradon-passing-client-26
-artifact id          11867980473
-artifact digest      sha256:ff9fb679ad1b3caa184ad098cff81cfb5469b0698d5e5f3b76ef4fab2ea775b3
-KnightOnLine.js       1,493,510 bytes
-KnightOnLine.wasm     5,631,727 bytes
-KnightOnLine.data     615,930,538 bytes
-contentVersion        1298-ws10-38505039290
+artifact id      11916143558
+artifact digest  sha256:dace8c076b51eb70e4dc5196830655a32af17156ee04877402e080faa2a3e3ca
 ```
 
-WS38 publication order remains:
+The bundle contains the exact C5 client publication, frozen gameplay images, Compose/Nginx contracts, backup/restore/smoke/rollback tooling and SHA-256 checksums. It deliberately does not claim live-domain readiness.
 
-`immutable files -> manifest -> verify -> _complete -> verify -> latest.json last`.
-
-## Static content contract
+## Static client contract
 
 - `.js/.mjs`: `text/javascript; charset=utf-8`
 - `.wasm`: `application/wasm`
 - `.data`: `application/octet-stream`
-- `/client-content/v1/<version>/...`: one-year immutable cache
-- `/latest.json`, `/rollback.json`, launcher config/index: no-store/no-cache
-- `.data` remains a normal Nginx static file with byte ranges enabled and no gzip; production smoke requires `Range: bytes=0-15` -> `206` + valid `Content-Range`.
+- `.data` byte ranges enabled
+- immutable `/client-content/v1/<version>/...`
+- `latest.json` no-store and published last
+- `_complete` identity must match the activated release
 
-## Runtime / secret contract
+## Persistence status
 
-- Image values in the real production env must be immutable `image@sha256:<digest>` identities.
-- Provider SHAs and exact client identities are retained in `deploy/RELEASE.ws10-38505039290.env`.
-- Passwords, tokens, private keys and database connection secrets never enter Git.
-- PostgreSQL password is mounted from a host file through Compose secrets.
-- Align service-owned runtime settings with WS35 (`ws35-runtime-config@5327d50906d02c829add08cf1ca73fbe978526dc`) as providers adopt the shared contract. WS09 does not invent unsupported provider variables.
-- Align structured logs, redaction, readiness and graceful shutdown with WS29 (`ws29-observability@d26f5af7aae0892576af5f35599a9d6076daf129`). Edge logs contain request metadata, not WebSocket packet bodies/passwords.
+WS07 PostgreSQL foundation is ready, but production composition is not yet complete:
 
-## Persistence
+- WS03 must consume the asynchronous WS07 repository contract instead of the staging/in-memory path.
+- WS13 must persist public accounts into the same compatible credential/account source consumed by game authentication, including password-hash and verification/action-token semantics.
+- WS08 must replace its in-memory production repository with a WS07-backed adapter.
 
-Required persistent state today:
+If persistent game/auth integration changes the C5 runtime provider composition, C5 stays immutable. WS50 must create a child candidate and rerun affected contract/scenario/real-browser gates before production promotion.
 
-- named PostgreSQL volume `oldkoweb_postgres_data`;
-- off-host encrypted DB backups;
-- host release directories so current + previous client/site/admin bundles survive container recreation;
-- host TLS/ACME state.
+## Official-site handoff
 
-The exact WS10 passing WS03/WS14 staging composition uses the development/staging repository behavior proven by WS50. WS09 does not falsely claim that this alone supplies production gameplay persistence; use the WS07 production repository adapter when that provider is integrated.
+WS09 consumes, but does not author, `official-site-domain-release:coordination/handoffs/official-site-release.json`. Until that handoff exists, WS09 does not guess the website artifact or public-account route.
 
-## TLS / HSTS
+## TLS / DNS
 
-One initial SAN certificate covers official/play/admin. TLS terminates only at Nginx; backend traffic remains on the private Docker network. TLS 1.2/1.3 only.
+One initial SAN certificate covers apex/play/admin. DNS mutation is allowed by the current permanent-domain task only after the authoritative zone is inspected and a verified persistent host target exists. Unrelated DNS/mail/ownership records are preserved. Initial cutover stays direct/DNS-only with TTL 300 until HTTPS/WSS, browser E2E, restart persistence and rollback are verified.
 
-HSTS is deliberately absent from the initial production template. Enable in stages only after all required names have valid HTTPS, renewal succeeds and DNS rollback is proven. Start with a short max-age; use `includeSubDomains` only when every relevant subdomain is HTTPS-safe. Do not preload during initial cutover.
+## Rollback
 
-## Low-downtime strategy
-
-Static artifacts are release-addressed and activated through atomic symlinks under `deploy/artifacts/{site,play,admin}`. Keep at least the current and previous release. Backend images are immutable. Upgrade one layer at a time, wait for health, then reload the proxy. Rollback switches static symlinks and restores the previous image digests. Database rollback is never automatic.
-
-For true zero-downtime backend replacement, add a second application replica/upstream and drain connections before replacing the first; the single-host Compose baseline is low-downtime, not falsely labeled zero-downtime.
+Keep current + previous static release and immutable backend image identities. Static rollback is an atomic symlink switch; backend rollback restores previous image digests. Database rollback is never automatic.

@@ -1,0 +1,115 @@
+{
+  "schema_version": "ws09-domain-deployment/v1",
+  "updated_at": "2026-10-14T20:48:00+03:00",
+  "branch": "ws09-production-infra",
+  "source_head_verified_before_prepare": "8d1d313d4fbfa0ff67e7059ec3a814528d88f8ae",
+  "permanent_release_commit": "a0c968e6e09e5b26911ebfb0431c062593ad456c",
+  "release": {
+    "release_id": "oldkoweb-ws50-c5-ws10-38604174659",
+    "final_provider_set": "WS50-C5@sha256:7ac3b8a4c06b67e52b8d18518ef8c82209a60c6101c33609a4c16e64d84f119e",
+    "manifest_commit": "0d5001095fa3b43693b4fa0cda615f84e2cb7df5",
+    "handoff_commit": "7497087d4cf67e4e05a3a090f6edad3d206078cb",
+    "ws49_run_id": 38600254823,
+    "ws10_run_id": 38604174659,
+    "ws10_head": "163f2ebf81e750bf746fdaa277695329a0682e22",
+    "client_artifact": "ws10-c5-visibility-passing-client-4",
+    "client_artifact_id": 11915666463,
+    "client_artifact_digest": "sha256:f749750fc5bb0249a67b712bd4e1a03847773d8845fd209508b8c95f6c447a83",
+    "client_artifact_verified_live": true
+  },
+  "permanent_bundle": {
+    "workflow_run_id": 38609175962,
+    "workflow_result": "SUCCESS",
+    "artifact": "ws09-c5-permanent-host-bundle-1",
+    "artifact_id": 11916143558,
+    "artifact_digest": "sha256:dace8c076b51eb70e4dc5196830655a32af17156ee04877402e080faa2a3e3ca",
+    "source_commit": "a0c968e6e09e5b26911ebfb0431c062593ad456c",
+    "state": "READY_FOR_AUTHORIZED_HOST_TRANSFER"
+  },
+  "ci": {
+    "deployment_config_run_id": 38609175733,
+    "deployment_config_result": "SUCCESS",
+    "production_readiness_run_id": 38609175508,
+    "production_readiness_result": "SUCCESS",
+    "permanent_bundle_run_id": 38609175962,
+    "permanent_bundle_result": "SUCCESS"
+  },
+  "domains": {
+    "official": "oldkoweb.com",
+    "account_login": "https://oldkoweb.com/account.html#login",
+    "account_register": "https://oldkoweb.com/account.html#register",
+    "account_dashboard": "https://oldkoweb.com/account.html#dashboard",
+    "play": "play.oldkoweb.com",
+    "admin": "admin.oldkoweb.com",
+    "auth_wss": "wss://play.oldkoweb.com/auth",
+    "game_wss": "wss://play.oldkoweb.com/game"
+  },
+  "persistent_host": {
+    "state": "BLOCKED_NO_AUTHORIZED_TARGET",
+    "provider": null,
+    "stable_public_ipv4": null,
+    "host_identity": null,
+    "note": "No authorized persistent VPS/container host connection or stable production target is available to WS09. Domain ownership alone is not a server."
+  },
+  "dns": {
+    "state": "NOT_APPLIED",
+    "records_inspected_in_provider": false,
+    "reason": "A verified persistent target and authoritative DNS-provider access are prerequisites. Existing unrelated DNS/mail/ownership records must be preserved."
+  },
+  "tls": {
+    "state": "NOT_ISSUED",
+    "required_san": ["oldkoweb.com", "play.oldkoweb.com", "admin.oldkoweb.com"]
+  },
+  "website_handoff": {
+    "branch": "official-site-domain-release",
+    "observed_branch_head": "c75118905217343d30d3e25cf24a1552a5dc82b1",
+    "path": "coordination/handoffs/official-site-release.json",
+    "state": "WAITING_FOR_HANDOFF_FILE",
+    "website_source_commit": null,
+    "artifact_digest": null
+  },
+  "persistence": {
+    "postgres_foundation": {
+      "ws": "WS07",
+      "branch": "ws07-database",
+      "head": "10008ad1698b79c01d87cde54463d49f3bf623a2",
+      "state": "PASS_FOUNDATION_READY"
+    },
+    "game_session": {
+      "ws": "WS03",
+      "head": "495de481726734d85cc28b3d432835799aff7e48",
+      "state": "BLOCKED_RUNTIME_ADAPTER_NOT_COMPOSED",
+      "detail": "WS07 PgWs03SessionRepository is asynchronous while current WS03 repository call sites are synchronous. Persistent game auth/character state is not yet production-composed."
+    },
+    "public_account": {
+      "ws": "WS13",
+      "head": "23ac239b26e0353bf2da6f9c9649710db58e3a9a",
+      "state": "BLOCKED_WS07_ADAPTER_AND_SCHEMA_COMPATIBILITY",
+      "detail": "WS13 production needs a real repository and a credential/schema mapping compatible with the game account verifier."
+    },
+    "admin": {
+      "ws": "WS08",
+      "head": "239cdacf0fb6bacde5017fb3b787451595a3be0d",
+      "state": "BLOCKED_WS07_ADMIN_ADAPTER",
+      "detail": "WS08 production must replace MemoryAdminRepository with the persistent required repository surface."
+    },
+    "account_game_shared_source": "NOT_YET_PROVEN"
+  },
+  "deployment": {
+    "production_compose_present": true,
+    "private_backend_network_present": true,
+    "persistent_postgres_volume_present": true,
+    "restart_policy_present": true,
+    "log_rotation_present": true,
+    "backup_restore_scripts_present": true,
+    "static_release_rollback_present": true,
+    "permanent_gameplay_bundle_workflow": "ws09-permanent-release-bundle.yml",
+    "live_release_state": "NOT_DEPLOYED"
+  },
+  "acceptance": {
+    "domain_browser_e2e": "NOT_RUN",
+    "restart_persistence": "NOT_RUN",
+    "rollback_live_verified": "NOT_RUN",
+    "permanent_domain_ready": false
+  }
+}
