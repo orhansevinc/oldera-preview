@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -12,9 +12,10 @@ const WS50_SOURCE_COMMIT = '0d5001095fa3b43693b4fa0cda615f84e2cb7df5';
 const EXPECTED_KEY = 'WS50-C5@sha256:7ac3b8a4c06b67e52b8d18518ef8c82209a60c6101c33609a4c16e64d84f119e';
 
 function git(args, options = {}) {
+  const encoding = Object.prototype.hasOwnProperty.call(options, 'encoding') ? options.encoding : 'utf8';
   return execFileSync('git', args, {
     cwd: repoRoot,
-    encoding: options.encoding ?? 'utf8',
+    encoding,
     stdio: options.stdio ?? ['ignore', 'pipe', 'pipe'],
     maxBuffer: 128 * 1024 * 1024,
     input: options.input,
