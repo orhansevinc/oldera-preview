@@ -8,9 +8,11 @@ function createFixture(options = {}) {
     inventories: new Map(),
     trades: new Map(),
     offers: new Map(),
-    merchants: new Set(),
+    merchants: new Map(),
+    playerContexts: new Map(),
     capacities: new Map(),
     templates: new Map(),
+    audit: [],
     nextSerial: 1,
   };
   const ref = { current: initial };
@@ -18,6 +20,7 @@ function createFixture(options = {}) {
   let tradeSeq = 1;
   let failNextNpcCredit = false;
   let failNextTransfer = false;
+  let nowMs = options.startTimeMs ?? 1_700_000_000_000;
 
   const stateFor = (tx) => tx?.state ?? ref.current;
   const inventoryOf = (state, playerId) => {
@@ -54,12 +57,27 @@ function createFixture(options = {}) {
   };
 
   const merchantPort = {
-    async assertInteraction({ npcId, tx }) {
-      if (!stateFor(tx).merchants.has(npcId)) {
+    async assertInteraction({ playerId, npcId, tx }) {
+      const state = stateFor(tx);
+      const merchant = state.merchants.get(npcId);
+      if (!merchant) {
         const error = new Error('not a merchant');
         error.code = 'NOT_MERCHANT';
         throw error;
       }
+      const context = state.playerContexts.get(playerId) ?? {};
+      if (merchant.zoneId != null && context.zoneId != null && String(context.zoneId) !== String(merchant.zoneId)) {
+        const error = new Error('wrong zone');
+        error.code = 'WRONG_ZONE';
+        throw error;
+      }
+      const distance = context.distances?.[npcId];
+      if (merchant.maxDistance != null && distance != null && distance > merchant.maxDistance) {
+        const error = new Error('merchant too far');
+        error.code = 'TOO_FAR';
+        throw error;
+      }
+      return structuredClone(merchant);
     },
     async getOffer({ npcId, itemTemplateId, tx }) {
       return stateFor(tx).offers.get(`${npcId}:${itemTemplateId}`) ?? null;
@@ -67,26 +85,60 @@ function createFixture(options = {}) {
   };
 
   const inventoryPort = {
-    async canReceiveNpcPurchase({ playerId, tx }) {
+    async canReceiveNpcPurchase({ playerId, itemTemplateId, quantity, tx }) {
       const state = stateFor(tx);
       const capacity = state.capacities.get(playerId) ?? 28;
-      return { ok: inventoryOf(state, playerId).length < capacity, reason: 'full' };
+      const inventory = inventoryOf(state, playerId);
+      const template = state.templates.get(String(itemTemplateId));
+      if (template?.stackable) {
+        const maxStack = template.maxStack ?? 9999;
+        const mergeRoom = inventory
+          .filter((entry) => entry.templateId === String(itemTemplateId))
+          .reduce((sum, entry) => sum + Math.max(0, maxStack - entry.quantity), 0);
+        const remainder = Math.max(0, quantity - mergeRoom);
+        const requiredSlots = Math.ceil(remainder / maxStack);
+        return { ok: inventory.length + requiredSlots <= capacity, reason: 'full' };
+      }
+      return { ok: inventory.length + quantity <= capacity, reason: 'full' };
     },
     async addNpcPurchase({ playerId, itemTemplateId, quantity, tx }) {
       const state = stateFor(tx);
-      const serial = `npc-${state.nextSerial++}`;
-      inventoryOf(state, playerId).push({
-        serial,
-        templateId: String(itemTemplateId),
-        quantity,
-        tradeable: state.templates.get(String(itemTemplateId))?.tradeable !== false,
-        sellable: state.templates.get(String(itemTemplateId))?.sellable !== false,
-      });
+      const inventory = inventoryOf(state, playerId);
+      const template = state.templates.get(String(itemTemplateId));
+      const serials = [];
+      let remaining = quantity;
+      if (template?.stackable) {
+        const maxStack = template.maxStack ?? 9999;
+        for (const item of inventory) {
+          if (item.templateId !== String(itemTemplateId) || item.quantity >= maxStack) continue;
+          const moved = Math.min(maxStack - item.quantity, remaining);
+          item.quantity += moved;
+          remaining -= moved;
+          if (remaining === 0) break;
+        }
+        while (remaining > 0) {
+          const serial = `npc-${state.nextSerial++}`;
+          const moved = Math.min(maxStack, remaining);
+          inventory.push({ serial, templateId: String(itemTemplateId), quantity: moved, tradeable: true, sellable: true });
+          serials.push(serial);
+          remaining -= moved;
+        }
+      } else {
+        const serial = `npc-${state.nextSerial++}`;
+        inventory.push({
+          serial,
+          templateId: String(itemTemplateId),
+          quantity,
+          tradeable: template?.tradeable !== false,
+          sellable: template?.sellable !== false,
+        });
+        serials.push(serial);
+      }
       if (failNextNpcCredit) {
         failNextNpcCredit = false;
         throw new Error('injected inventory credit failure');
       }
-      return { serials: [serial] };
+      return { serials };
     },
     async getOwnedItem({ playerId, itemSerial, tx }) {
       const item = inventoryOf(stateFor(tx), playerId).find((entry) => entry.serial === itemSerial);
@@ -127,7 +179,6 @@ function createFixture(options = {}) {
       if (index < 0) throw new Error('missing source item');
       const item = source[index];
       if (quantity > item.quantity) throw new Error('insufficient source quantity');
-
       if (quantity === item.quantity) {
         source.splice(index, 1);
         inventoryOf(state, toPlayerId).push(item);
@@ -136,7 +187,6 @@ function createFixture(options = {}) {
         const splitSerial = `split-${state.nextSerial++}`;
         inventoryOf(state, toPlayerId).push({ ...item, serial: splitSerial, quantity });
       }
-
       if (failNextTransfer) {
         failNextTransfer = false;
         throw new Error('injected transfer failure');
@@ -145,16 +195,12 @@ function createFixture(options = {}) {
   };
 
   const tradeRepository = {
-    async create(trade, { tx } = {}) {
-      stateFor(tx).trades.set(trade.id, structuredClone(trade));
-    },
+    async create(trade, { tx } = {}) { stateFor(tx).trades.set(trade.id, structuredClone(trade)); },
     async get(tradeId, { tx } = {}) {
       const trade = stateFor(tx).trades.get(tradeId);
       return trade ? structuredClone(trade) : null;
     },
-    async save(trade, { tx } = {}) {
-      stateFor(tx).trades.set(trade.id, structuredClone(trade));
-    },
+    async save(trade, { tx } = {}) { stateFor(tx).trades.set(trade.id, structuredClone(trade)); },
     async findActiveByPlayer(playerId, { tx } = {}) {
       for (const trade of stateFor(tx).trades.values()) {
         if ((trade.status === 'pending' || trade.status === 'open')
@@ -166,18 +212,21 @@ function createFixture(options = {}) {
     },
   };
 
+  const auditPort = {
+    async append(event, { tx } = {}) { stateFor(tx).audit.push(structuredClone(event)); },
+  };
+
   const service = new EconomyService({
     coinRepository,
     inventoryPort,
     merchantPort,
     tradeRepository,
     transactionManager,
+    auditPort,
     maxCoins: options.maxCoins ?? 2_100_000_000n,
+    tradeTimeoutMs: options.tradeTimeoutMs ?? 120_000,
     idFactory: () => `trade-${tradeSeq++}`,
-    clock: (() => {
-      let tick = 0;
-      return () => new Date(1_700_000_000_000 + tick++ * 1000);
-    })(),
+    clock: () => new Date(nowMs),
   });
 
   const api = {
@@ -186,7 +235,18 @@ function createFixture(options = {}) {
     setBalance(playerId, amount) { ref.current.balances.set(String(playerId), BigInt(amount)); },
     getBalance(playerId) { return ref.current.balances.get(String(playerId)) ?? 0n; },
     setCapacity(playerId, slots) { ref.current.capacities.set(String(playerId), slots); },
-    addMerchant(npcId) { ref.current.merchants.add(String(npcId)); },
+    addMerchant(npcId, merchant = {}) {
+      ref.current.merchants.set(String(npcId), {
+        npcId: String(npcId),
+        npcTemplateId: merchant.npcTemplateId == null ? null : String(merchant.npcTemplateId),
+        zoneId: merchant.zoneId == null ? null : String(merchant.zoneId),
+        sellingGroup: merchant.sellingGroup == null ? null : String(merchant.sellingGroup),
+        maxDistance: merchant.maxDistance ?? null,
+      });
+    },
+    setPlayerContext(playerId, context) {
+      ref.current.playerContexts.set(String(playerId), structuredClone(context));
+    },
     setOffer(npcId, templateId, offer) {
       ref.current.offers.set(`${npcId}:${templateId}`, {
         npcSellPrice: offer.npcSellPrice == null ? null : BigInt(offer.npcSellPrice),
@@ -195,6 +255,7 @@ function createFixture(options = {}) {
         canSell: offer.canSell,
       });
     },
+    setTemplate(templateId, template) { ref.current.templates.set(String(templateId), structuredClone(template)); },
     addItem(playerId, item) {
       const player = String(playerId);
       inventoryOf(ref.current, player).push({
@@ -207,6 +268,8 @@ function createFixture(options = {}) {
     },
     getInventory(playerId) { return structuredClone(inventoryOf(ref.current, String(playerId))); },
     getTrade(tradeId) { return structuredClone(ref.current.trades.get(tradeId)); },
+    getAudit() { return structuredClone(ref.current.audit); },
+    advanceClock(ms) { nowMs += Number(ms); },
     injectNpcCreditFailure() { failNextNpcCredit = true; },
     injectTransferFailure() { failNextTransfer = true; },
   };

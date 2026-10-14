@@ -1,138 +1,72 @@
-# OldKO 1298 Economy Model (WS22)
+# OldKO 1298 Economy Model — WS22
 
-## Scope
+## Ownership
 
-This domain owns merchant pricing decisions, coin balance safety, NPC buy/sell orchestration and player-to-player trade state. It does **not** own item persistence, NPC world logic, database migrations, client packets, combat, admin or website behavior.
+WS22 owns transaction orchestration for NPC merchant buy/sell, player-to-player trade state, coin arithmetic/reservations and economy audit events. It does not own NPC population/range logic (WS16), item instance/stack/serial mutation rules (WS17), database schema/migrations (WS07), or raw 1298 table acquisition (WS31).
 
-## Security invariants
+## Verified 1298 merchant facts
 
-1. Client-supplied prices are never accepted. NPC buy/sell prices come only from `merchantPort.getOffer()` inside the transaction.
-2. Coins are handled as integer `BigInt` values. Negative balances, negative staged amounts and balances above the configured cap are rejected before mutation.
-3. Default coin cap is `2,100,000,000`; the integration adapter may supply the authoritative 1298 cap explicitly.
-4. A sell/trade item serial must exist exactly once in authoritative inventory storage. `countSerial() !== 1` rejects the operation.
-5. WS22 never generates production item serials. Serial creation/split semantics belong to WS17's item service.
-6. NPC item+coin mutations and final player trade item+coin mutations must execute in one shared transaction boundary.
-7. Trade staging is metadata only. No coin or item is removed during staging, invite, accept or first confirmation.
-8. Final trade commit re-reads current balances, ownership, quantities, serial uniqueness, tradeability and receiving capacity. Stale staged data cannot bypass current state.
-9. Any staged-offer change clears both final confirmations.
-10. A player may participate in only one active (`pending` or `open`) trade.
-11. Trade finalization locks the trade plus both player/inventory domains. Duplicate concurrent confirmations cannot apply the exchange twice.
-12. Disconnect/cancel marks the trade inactive. Because staging never escrowed assets, rollback has no compensating coin/item creation step.
+The implementation is deliberately source-backed:
 
-## Transaction model
+- `WIZ_ITEM_TRADE = 0x21`; legacy client subpackets are BUY `0x01`, SELL `0x02`, MOVE `0x03`.
+- `WIZ_TRADE_NPC = 0x25` starts the NPC transaction UI.
+- BUY sends `tradeID`, `npcID`, `itemID`, destination slot and quantity. SELL sends `itemID`, inventory slot and quantity. The client does **not** send an authoritative price.
+- The client derives the visible merchant catalog as `basicSellGroup = floor(tradeID / 1000)` and `extensionId = tradeID % 1000`, filters item basics by `bySellGroup`, and resolves the extension row at that extension id.
+- Client canonical displayed buy price is `basic.iPrice * extension.siPriceMultiply`.
+- Client normal sell price is that value divided by 6 unless `SALE_TYPE_FULL`, where it is full price; verified sale types are `0=LOW`, `1=FULL`, `2=LOW_NO_REPAIR`. Premium `/4` is supported only when the integration explicitly selects it.
+- OpenKO DB identifies Moradon Caspy as NPC template `13001`, zone `21`, selling group `203002`.
 
-`transactionManager.run(lockKeys, work)` is the mandatory mutation boundary. Production integration must map this to the same authoritative transaction used by coin persistence, WS17 inventory writes and trade repository writes (for example a DB transaction plus row/advisory locks).
+`Legacy1298MerchantTableAdapter` implements the verified catalog split/filter/price rules against parsed real basic/extension rows. `VerifiedMerchantCatalog` requires provenance for manually supplied identities/offers, preventing fixture data from silently becoming production merchant data.
 
-A callback receives `tx`. Every mutating repository/port call in that callback receives the same `tx` object. If any validation or write throws, the transaction manager must roll back **all** writes from the callback.
+## Merchant transaction invariants
 
-Lock keys are semantic and deterministic:
+1. NPC interaction authority comes from `merchantPort.assertInteraction()`. Spoofed NPC, wrong-zone and too-far requests must be rejected there before economic mutation.
+2. Catalog membership and price come from the server-side merchant adapter. Client price is ignored; if an integration forwards one for diagnostics it must exactly match or `PRICE_MISMATCH` is returned.
+3. Quantity must be a positive safe integer.
+4. Buy checks authoritative balance plus active trade coin reservation before debit.
+5. Inventory/stack/space checks are delegated to WS17 through `canReceiveNpcPurchase()` and the actual credit through `addNpcPurchase()`.
+6. Sell requires exactly one authoritative occurrence of the serial, ownership, sufficient quantity, unreserved quantity and sellability.
+7. Item mutation and coin mutation use the same `tx`; adapter failure rolls the entire transaction back.
+8. Price multiplication and balance arithmetic are checked before mutation.
 
-- `player:<id>` protects coin/trade participation state.
-- `inventory:<id>` protects inventory capacity and item movement.
-- `trade:<id>` serializes trade state/confirmation changes.
-- `serial:<serial>` may be used by adapters for serial-level locking; WS22 also requires authoritative serial uniqueness validation.
+## Player trade / logical escrow
 
-## Ports
-
-### `coinRepository`
-
-- `getBalance(playerId, { tx }) -> BigInt-compatible integer`
-- `setBalance(playerId, balance, { tx })`
-
-`setBalance` is called only with a validated value between `0` and `maxCoins` inclusive.
-
-### `merchantPort` (WS16 adapter)
-
-- `assertInteraction({ playerId, npcId, tx })`
-- `getOffer({ npcId, itemTemplateId, tx }) -> { npcSellPrice, npcBuyPrice, canBuy?, canSell? }`
-
-Naming is from the NPC perspective:
-
-- `npcSellPrice`: player pays this amount per unit when buying from NPC.
-- `npcBuyPrice`: player receives this amount per unit when selling to NPC.
-
-`assertInteraction` must enforce that the entity is a valid merchant and that the player may currently interact with it (zone/range/state as decided by WS16).
-
-### `inventoryPort` (WS17 adapter)
-
-- `canReceiveNpcPurchase({ playerId, itemTemplateId, quantity, tx }) -> { ok, reason? }`
-- `addNpcPurchase({ playerId, itemTemplateId, quantity, sourceNpcId, tx })`
-- `getOwnedItem({ playerId, itemSerial, tx })`
-- `removeOwnedItem({ playerId, itemSerial, quantity, tx })`
-- `countSerial({ itemSerial, tx }) -> integer`
-- `canReceiveTrade({ playerId, incoming, outgoing, tx }) -> { ok, reason? }`
-- `transferItem({ fromPlayerId, toPlayerId, itemSerial, quantity, tx })`
-
-The WS17 adapter owns stack rules, equipment/inventory slot rules, item metadata and serial generation. If a partial stack transfer requires a new serial, WS17 must create it atomically and preserve uniqueness.
-
-### `tradeRepository`
-
-- `create(trade, { tx })`
-- `get(tradeId, { tx })`
-- `save(trade, { tx })`
-- `findActiveByPlayer(playerId, { tx })`
-
-The production repository must participate in the same transaction as coin/item mutations. An index/constraint or equivalent locking strategy should prevent multiple active trades per player across processes.
-
-## NPC buy flow
-
-1. Validate IDs and positive integer quantity.
-2. Lock player + inventory.
-3. Validate merchant interaction through WS16 adapter.
-4. Read canonical `npcSellPrice` from merchant adapter.
-5. Checked multiply price × quantity.
-6. Read and validate current coin balance.
-7. Validate destination capacity through WS17 adapter.
-8. Stage coin debit and WS17 item credit in the same transaction.
-9. Commit once; any failure rolls both back.
-
-## NPC sell flow
-
-1. Lock player + inventory + serial domain.
-2. Validate merchant interaction.
-3. Require serial occurrence count exactly `1`.
-4. Require item ownership and sufficient quantity.
-5. Read canonical `npcBuyPrice` using authoritative item template ID.
-6. Reject non-sellable item.
-7. Checked-add proceeds to balance; reject overflow before item removal.
-8. Remove item/quantity and credit coins in the same transaction.
-
-## Player trade state machine
+Trade state:
 
 `pending -> open -> completed`
 
-Alternative terminal states:
+Terminal alternatives:
 
-- `pending -> rejected`
-- `pending/open -> cancelled`
+`pending -> rejected`
 
-While `open`, each participant has:
+`pending/open -> cancelled`
 
-- staged item serial + quantity entries
-- staged coin amount
-- one final-confirmation flag
+Escrow state is explicit:
 
-Any offer edit clears both confirmation flags.
+`invited -> holding -> committed`
 
-On the second final confirmation, WS22 revalidates both offers and atomically performs all transfers. The coin equation is zero-sum:
+or `invited/holding -> released` on reject/cancel/disconnect/timeout.
 
-- A final = A balance - A staged coins + B staged coins
-- B final = B balance - B staged coins + A staged coins
+The escrow is a **logical reservation**, not an early physical move. Staged items remain in WS17 inventory and staged coins remain in the coin row until the second confirmation. While reserved, WS22 blocks conflicting merchant sales and coin spends. This preserves rollback simplicity: cancellation releases metadata instead of minting/restoring assets.
 
-Both results must remain in `[0, maxCoins]`.
+Any offer edit clears both confirmation flags. Finalization re-reads balances, item ownership, quantities, tradeability, serial uniqueness and recipient capacity, then swaps all item/coin state atomically. A participant may have only one active trade, which also prevents the same item being reserved into two WS22 trades. Production persistence must enforce the same active-trade uniqueness across processes.
 
-## Failure behavior
+Trades carry `expiresAt`. Expired trades are atomically cancelled with reason `timeout`; stale expired trades are cleaned before a new invite involving the same player.
 
-Validation errors throw `EconomyError` with stable `code` values such as:
+## Coin model
 
-- `INSUFFICIENT_COINS`
-- `COIN_OVERFLOW`
-- `NEGATIVE_COIN`
-- `INVENTORY_CAPACITY`
-- `INVALID_ITEM_SERIAL`
-- `ITEM_NOT_OWNED`
-- `ITEM_NOT_TRADEABLE`
-- `PLAYER_ALREADY_TRADING`
-- `TRADE_NOT_OPEN`
+Coins are represented as `BigInt`; floating point is never used for balances or prices.
 
-Unexpected adapter failures are allowed to propagate. The transaction manager is responsible for rollback in both expected and unexpected failures.
+- `PROTOCOL_MAX_COIN_VALUE = 4,294,967,295` is the verified uint32 representational ceiling from legacy `Gold` storage/transport.
+- `DEFAULT_MAX_COIN_BALANCE = 2,100,000,000` is retained as a conservative compatibility policy, **not claimed as a verified 1298 gameplay cap**. Production may override `maxCoins` only from authoritative configuration/data.
+- `addCoins()` and `removeCoins()` are atomic and require transaction reason metadata.
+- Negative balances and arithmetic overflow are rejected.
+- `removeCoins()` and merchant buy honor active trade coin reservation.
+
+## Audit contract
+
+`auditPort.append(event, { tx })` participates in the same transaction boundary. Events include merchant buy/sell, coin credit/debit, trade invite/accept/reject, item/coin reserve/unreserve, confirmation, completion, cancellation, timeout and disconnect cancellation.
+
+## Persistence boundary
+
+`transactionManager.run(lockKeys, callback)` must map to one authoritative persistence transaction shared by coin rows, WS17 item writes, trade rows and audit append. WS07 integration should use its transaction helper/locking pattern and must not perform read-delete-write outside the owning repository. Duplicate serial uniqueness remains backed by WS17/WS07 persistence constraints.

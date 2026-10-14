@@ -14,6 +14,7 @@ const REQUIRED_METHODS = Object.freeze({
   merchantPort: ['assertInteraction', 'getOffer'],
   tradeRepository: ['create', 'get', 'save', 'findActiveByPlayer'],
   transactionManager: ['run'],
+  auditPort: ['append'],
 });
 
 function assertContract(name, value) {

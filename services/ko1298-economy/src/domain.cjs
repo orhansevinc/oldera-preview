@@ -1,6 +1,10 @@
 'use strict';
 
+// Conservative gameplay policy default retained for compatibility. Production
+// integration may override this from verified 1298 server configuration.
 const DEFAULT_MAX_COIN_BALANCE = 2_100_000_000n;
+// Verified transport/storage ceiling from the legacy server's uint32 Gold field.
+const PROTOCOL_MAX_COIN_VALUE = 4_294_967_295n;
 
 const TRADE_STATUS = Object.freeze({
   PENDING: 'pending',
@@ -8,6 +12,13 @@ const TRADE_STATUS = Object.freeze({
   REJECTED: 'rejected',
   CANCELLED: 'cancelled',
   COMPLETED: 'completed',
+});
+
+const ESCROW_STATE = Object.freeze({
+  INVITED: 'invited',
+  HOLDING: 'holding',
+  RELEASED: 'released',
+  COMMITTED: 'committed',
 });
 
 class EconomyError extends Error {
@@ -26,6 +37,13 @@ function fail(code, message, details) {
 function normalizeId(value, fieldName) {
   const normalized = String(value ?? '').trim();
   if (!normalized) fail('INVALID_ID', `${fieldName} is required`, { fieldName });
+  return normalized;
+}
+
+function normalizeReason(value, fieldName = 'reason') {
+  const normalized = String(value ?? '').trim();
+  if (!normalized) fail('INVALID_REASON', `${fieldName} is required`, { fieldName });
+  if (normalized.length > 128) fail('INVALID_REASON', `${fieldName} is too long`, { fieldName });
   return normalized;
 }
 
@@ -73,6 +91,14 @@ function positiveQuantity(value, fieldName = 'quantity') {
   return quantity;
 }
 
+function positiveDurationMs(value, fieldName = 'durationMs') {
+  const duration = Number(value);
+  if (!Number.isSafeInteger(duration) || duration <= 0) {
+    fail('INVALID_DURATION', `${fieldName} must be a positive safe integer`, { fieldName, value });
+  }
+  return duration;
+}
+
 function nonNegativeCoin(value, maxCoins, fieldName = 'coins') {
   return assertCoinRange(value, maxCoins, fieldName);
 }
@@ -105,16 +131,20 @@ function resetConfirmations(trade) {
 
 module.exports = {
   DEFAULT_MAX_COIN_BALANCE,
+  PROTOCOL_MAX_COIN_VALUE,
   TRADE_STATUS,
+  ESCROW_STATE,
   EconomyError,
   fail,
   normalizeId,
+  normalizeReason,
   toCoin,
   assertCoinRange,
   checkedAddCoins,
   checkedSubtractCoins,
   checkedMultiplyCoins,
   positiveQuantity,
+  positiveDurationMs,
   nonNegativeCoin,
   isTradeActive,
   participantIds,

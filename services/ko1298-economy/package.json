@@ -1,14 +1,14 @@
 {
   "name": "@oldko/ko1298-economy",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "OldKO 1298 merchant, trade and coin economy domain",
+  "description": "OldKO 1298 production transaction domain for NPC merchants, player trade and coins",
   "main": "src/index.cjs",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --test ../../tests/ko1298-economy/*.test.cjs",
-    "check": "node --check src/domain.cjs && node --check src/contracts.cjs && node --check src/economy-service.cjs && node --check src/index.cjs"
+    "test": "node --test --test-concurrency=1 ../../tests/ko1298-economy/*.test.cjs",
+    "check": "node --check src/domain.cjs && node --check src/contracts.cjs && node --check src/merchant-catalog.cjs && node --check src/economy-service.cjs && node --check src/index.cjs"
   }
 }

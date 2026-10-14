@@ -1,12 +1,31 @@
 # WS22 Integration Patch
 
-## Current branch situation
+## WS16 merchant boundary
 
-WS22 starts from `main` as requested. At implementation time, `ws16-npc-world` and `ws17-item-inventory` still point to the same baseline commit as `main`, so there is no concrete WS16/WS17 service API to import yet. WS22 therefore publishes strict adapter contracts instead of modifying or guessing either workstream's implementation.
+WS16 now publishes `merchantInterface({ session, npc })` and supplies the NPC `sellingGroup` (Caspy: `203002`). Build `merchantPort.assertInteraction()` on that authoritative world entity/session context. It must reject non-merchant/spoofed id, wrong zone, excessive range and invalid interaction state. Return a merchant context containing at least runtime id, template id, zone id and selling group; pass that context to `getOffer()`.
 
-## Required WS17 adapter
+Do not duplicate world/range logic in WS22.
 
-Create an adapter outside WS22 or during integration that maps WS17's final API to:
+## Verified 1298 catalog adapter
+
+Wire parsed client item tables into `Legacy1298MerchantTableAdapter`:
+
+```js
+const table = new Legacy1298MerchantTableAdapter({
+  basicRows: itemBasicRows,
+  getExtension: (extIndex, extId) => itemExtensionTables[extIndex].get(extId),
+});
+
+const offers = table.listOffers(npc.sellingGroup);
+```
+
+The adapter implements the exact legacy client rule: `tradeID / 1000` selects `bySellGroup`; `tradeID % 1000` selects the extension id; item id is basic id + extension id; canonical prices use verified legacy price multiplier/sell ratio behavior.
+
+`VerifiedMerchantCatalog` may be used for cached/materialized offers, but every manually injected production offer must carry provenance. Test fixtures are not production provenance.
+
+## WS17 inventory boundary
+
+Map WS17 without copying its business rules:
 
 ```text
 canReceiveNpcPurchase({ playerId, itemTemplateId, quantity, tx })
@@ -18,67 +37,23 @@ canReceiveTrade({ playerId, incoming, outgoing, tx })
 transferItem({ fromPlayerId, toPlayerId, itemSerial, quantity, tx })
 ```
 
-Integration requirements:
+Capacity checks must use WS17's actual stack/slot semantics. Partial stack trade transfer must let WS17 create a fresh split serial. Never mutate WS17 storage outside the `tx` supplied by WS22.
 
-- WS17 remains the sole authority for item instance creation and serial generation.
-- `countSerial()` must query authoritative storage, not only the caller's inventory cache.
-- `transferItem()` must preserve unique serial semantics. Partial-stack split serial behavior belongs to WS17.
-- Capacity checks must account for outgoing slots and stack merging before final trade commit.
-- All WS17 writes must use the `tx` supplied by WS22; do not open an independent transaction inside the adapter.
+## WS07 persistence boundary
 
-## Required WS16 adapter
+Implement the coin/trade/audit repositories and transaction manager over one DB transaction. `setBalance()` receives `{ tx, reason, metadata }` so persistence/audit layers can retain transaction reason. Final trade must lock both participant coin/inventory domains plus the trade row. Enforce active-trade uniqueness and item serial uniqueness in persistence as defense in depth.
 
-Map the final WS16 merchant/NPC API to:
+WS07's existing inventory move operation owns its own SERIALIZABLE transaction and must not be nested blindly. The integration adapter must expose WS17 mutations that can participate in WS22's shared transaction boundary; if the current repository API cannot do that, that adapter mismatch is an integration blocker rather than a reason to split the transaction.
 
-```text
-assertInteraction({ playerId, npcId, tx })
-getOffer({ npcId, itemTemplateId, tx })
-```
+## Protocol boundary
 
-`assertInteraction()` should reject invalid NPC type, invalid zone/range and disallowed interaction state.
+Verified legacy client protocol:
 
-`getOffer()` must return server-authoritative prices:
+- `WIZ_NPC_EVENT 0x20`: NPC click/world interaction path.
+- `WIZ_ITEM_TRADE 0x21`: NPC buy/sell/move result path.
+- `WIZ_TRADE_NPC 0x25`: starts NPC trade UI.
+- BUY subpacket `0x01`: tradeID, npcID, itemID, destination slot, quantity.
+- SELL subpacket `0x02`: itemID, inventory slot, quantity.
+- MOVE subpacket `0x03`: itemID, source slot, destination slot.
 
-```text
-{
-  npcSellPrice,  // player buys from NPC
-  npcBuyPrice,   // player sells to NPC
-  canBuy,
-  canSell
-}
-```
-
-Do not pass a client-declared price into WS22.
-
-## Required DB/repository adapter
-
-WS22 deliberately adds no migration. Integration needs repositories that implement:
-
-```text
-coinRepository.getBalance(playerId, { tx })
-coinRepository.setBalance(playerId, balance, { tx })
-tradeRepository.create(trade, { tx })
-tradeRepository.get(tradeId, { tx })
-tradeRepository.save(trade, { tx })
-tradeRepository.findActiveByPlayer(playerId, { tx })
-transactionManager.run(lockKeys, callback)
-```
-
-The transaction manager must provide a single atomic boundary for:
-
-- coin row writes
-- WS17 inventory/item writes
-- trade state writes
-
-Recommended integration behavior (owned by the DB/integration workstream, not WS22):
-
-- lock both player coin rows before final trade arithmetic;
-- lock inventory/item rows being moved;
-- enforce unique item serial at persistence level in addition to WS22 runtime checks;
-- enforce non-negative coin and authoritative coin cap at persistence level as defense in depth;
-- prevent two active trades for one player via transactional locking/constraint strategy;
-- commit only after all item, coin and trade-state writes succeed.
-
-## Packet/server integration
-
-WS22 is a domain service and does not implement KO packet opcodes. The session/protocol layer should translate validated 1298 packet fields into WS22 method calls and map `EconomyError.code` values to protocol responses. Never treat a packet's item price, owner, balance or serial validity as authoritative.
+The protocol/session layer parses packets, resolves the current authoritative NPC/session context and calls WS22. It must never trust packet owner/balance/catalog/price facts. Real packets do not supply an authoritative price; `clientUnitPrice` exists only as an optional defense/test hook.
