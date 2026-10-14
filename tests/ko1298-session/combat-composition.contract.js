@@ -12,7 +12,7 @@ const { MemoryRepository } = require('../../services/ko1298-session/repository')
 const { GameSession } = require('../../services/ko1298-session/session');
 const { SESSION_STATES } = require('../../services/ko1298-session/contracts');
 const { MAGIC_COMMAND } = require('../../services/ko1298-session/combat-protocol');
-const { createPlayableCombatSessionAdapter } = require('../../services/ko1298-session/playable-combat-adapter');
+const { createPlayableCombatSessionAdapter, createWs17EquipmentCombatPort } = require('../../services/ko1298-session/playable-combat-adapter');
 const { MovementService } = require('../../services/ko1298-movement');
 const { CONTAINER_TYPES, EQUIPMENT_SLOTS, ItemTemplateRegistry, Legacy1298TableAdapter, InMemoryItemRepository, ItemDomainService } = require('../../services/ko1298-items');
 const { MobService, loadVerifiedWorldDefinition } = require('../../services/ko1298-mobs');
@@ -46,8 +46,7 @@ test('real canonical playable combat composition reaches exact client packets an
   const mobs=new MobService(singleBandicoot(),{runtimeIds:allocator(),terrain:{resolveHeight:()=>({status:'authoritative',height:0,surface:'terrain',policy:'ws03-composition'})},world:{listAggroCandidates:()=>[],getTargetSnapshot:id=>targets.get(String(id))??null,isMobVisibleToPlayer:()=>true},combat:{isTargetAlive:t=>t?.alive!==false,canAggro:()=>true,canAttack:()=>true,attackIntent:i=>intents.push(i)},visibility:{onEvent:e=>visibility.push(e)}});
   const [spawn]=mobs.initialize(0), mobId=spawn.runtimeId;let mob=mobs.getCombatSnapshot(mobId);assert.equal(mob.templateId,'ko1298:monster:850');assert.equal(mob.hp,11);
   const pos={x:mob.position.x-0.5,y:mob.position.y,z:mob.position.z};const player=playerFixture(500,pos),playerPort=createPlayerPort(player);targets.set('500',playerPort.getCombatSnapshot(500));
-  const movement=new MovementService({zoneBounds:{isValidPosition:()=>true}}),items=await equipmentService();const equip=await items.getCombatItemSnapshot('CombatHero');assert.equal(equip.weaponRange,1.0);assert.equal(equip.attackDelayMs,1140);assert.equal(equip.damage,4);
-  const equipmentPort={getCombatSnapshot:()=>equip};
+  const movement=new MovementService({zoneBounds:{isValidPosition:()=>true}}),items=await equipmentService();const equipmentPort=createWs17EquipmentCombatPort({service:items,characterId:'CombatHero'});const equip=await equipmentPort.refresh();assert.equal(equip.weaponRange,1.0);assert.equal(equip.attackDelayMs,1140);assert.equal(equip.damage,4);assert.equal(equip.weaponItemId,120010000);assert.equal(equip.weaponType,'SWORD');
   const worldPort={validateAttackRange({attacker,target,weaponRange}){const p=movement.getEntityPositionSnapshot(attacker.id),d=Math.hypot(p.position.x-target.position.x,p.position.z-target.position.z);return {ok:d<=weaponRange,reason:d<=weaponRange?null:'OUT_OF_RANGE',distance:d,maxRange:weaponRange};},validateMobAttackRange({source,target,attackRange}){const p=movement.getEntityPositionSnapshot(target.id),d=Math.hypot(source.position.x-p.position.x,source.position.z-p.position.z);return {ok:d<=attackRange,reason:d<=attackRange?null:'OUT_OF_RANGE',distance:d,maxRange:attackRange};}};
   const pve=new PlayablePveCombatService({mobCombatPort:mobs,playerCombatPort:playerPort,equipmentPort,worldPort,rng:()=>0,clock:()=>0});const combatAdapter=createPlayableCombatSessionAdapter({service:pve,mobCombatPort:mobs,playerCombatPort:playerPort});
   const domainEventAdapter={async encode({source,event}){if(source==='WS25'&&event?.type==='IN'&&event?.reason==='respawn'){const record=mobs.visibilitySnapshot(event.runtimeId);const ws14=buildNpcIn(record),ws11=codec.encodeNpcIn(record);assert.deepEqual(ws14,ws11);return {clientPackets:[ws14]};}return {clientPackets:[]};}};
