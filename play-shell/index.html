@@ -4,7 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="color-scheme" content="dark">
-  <title>OldKOWeb — OldKO Launcher</title>
+  <title>OldKOWeb — OldKO Preview</title>
+  <link rel="canonical" href="https://play.oldkoweb.com/">
   <link rel="stylesheet" href="launcher.css">
 </head>
 <body>
@@ -15,43 +16,48 @@
         <div>
           <p class="eyebrow" id="productName">OldKOWeb</p>
           <h1 id="launcherTitle">OldKO</h1>
-          <p class="patch" id="patchLabel">Gerçek Knight Online 1298 Web Client</p>
+          <p class="patch" id="patchLabel">Knight Online 1298 Web Client · Alpha / Preview</p>
         </div>
       </div>
 
+      <div class="preview-badge">PREVIEW CHANNEL · NOT STABLE</div>
       <div class="mobile-warning" id="mobileWarning" hidden></div>
       <div class="error-box" id="errorBox" role="alert" hidden></div>
 
       <div class="status-grid" aria-live="polite">
         <div class="status-row" data-step="browser"><span>Tarayıcı</span><strong>Kontrol ediliyor…</strong></div>
-        <div class="status-row" data-step="build"><span>Build</span><strong>Bekliyor</strong></div>
-        <div class="status-row" data-step="package"><span>1298 paket</span><strong>Bekliyor</strong></div>
-        <div class="status-row" data-step="gateway"><span>Gateway</span><strong>Bekliyor</strong></div>
+        <div class="status-row" data-step="build"><span>Release</span><strong>Bekliyor</strong></div>
+        <div class="status-row" data-step="package"><span>Client içerik</span><strong>Bekliyor</strong></div>
+        <div class="status-row" data-step="gateway"><span>Bağlantı</span><strong>Bekliyor</strong></div>
         <div class="status-row" data-step="runtime"><span>Runtime</span><strong>Başlatılmadı</strong></div>
       </div>
 
-      <div class="build-card">
-        <span>Sürüm</span>
-        <code id="buildVersion">—</code>
+      <div class="progress-card" aria-live="polite">
+        <div><span>İndirme / doğrulama</span><strong id="releaseProgressText">Bekliyor</strong></div>
+        <progress id="releaseProgress" max="100" value="0">0%</progress>
       </div>
+
+      <div class="build-card"><span>Sürüm</span><code id="buildVersion">—</code></div>
+      <div class="build-card"><span>Provider set</span><code id="providerSet">—</code></div>
 
       <button id="startButton" class="start-button" type="button" disabled>
         <span>OYNA</span>
         <small>START</small>
       </button>
-      <p class="notice" id="launcherNotice">Launcher yalnızca gerçek WASM client paketini doğrular ve başlatır.</p>
+      <p class="notice" id="launcherNotice">Bu Alpha/Preview kanal yalnız doğrulanmış immutable release pointerını açar. Backend kapalıysa launcher hata durumunu gösterir; sahte online/stable durumu üretmez.</p>
     </section>
 
-    <section class="game-stage" id="gameStage" hidden aria-label="OldKO gerçek 1298 client">
+    <section class="game-stage" id="gameStage" hidden aria-label="OldKO 1298 Preview client">
       <div class="runtime-strip" id="runtimeStrip">
         <span id="runtimeText">Client yükleniyor…</span>
         <button id="backButton" type="button">Launcher</button>
       </div>
-      <iframe id="gameFrame" title="OldKO 1298" allow="autoplay; fullscreen" referrerpolicy="same-origin"></iframe>
+      <iframe id="gameFrame" title="OldKO 1298 Preview" allow="autoplay; fullscreen" referrerpolicy="same-origin"></iframe>
     </section>
   </main>
 
   <script src="launcher-core.js"></script>
+  <script src="release-channel.js"></script>
   <script src="app.js" data-config="./config.json"></script>
 </body>
 </html>

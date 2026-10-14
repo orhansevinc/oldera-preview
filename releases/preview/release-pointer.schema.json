@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://play.oldkoweb.com/releases/preview/release-pointer.schema.json",
+  "title": "OldKOWeb Preview Release Pointer",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schemaVersion", "channel", "release_id", "provider_set", "client_artifact",
+    "manifest", "content_digest", "published_at", "contentVersion", "buildId",
+    "manifestPath", "manifestFileSha256", "manifestChecksum", "publicationMarkerPath", "connection"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "channel": { "const": "preview" },
+    "release_id": { "type": "string", "minLength": 1 },
+    "provider_set": { "type": "string", "pattern": "^WS50-[A-Z0-9]+@sha256:[0-9a-f]{64}$" },
+    "client_artifact": {
+      "type": "object",
+      "required": ["name", "digest"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+      }
+    },
+    "manifest": { "type": "string", "pattern": "^/releases/preview/immutable/.+/manifest\\.json$" },
+    "content_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "published_at": { "type": "string", "format": "date-time" },
+    "connection": {
+      "type": "object",
+      "required": ["auth", "game"],
+      "properties": { "auth": { "const": "/auth" }, "game": { "const": "/game" } }
+    }
+  }
+}

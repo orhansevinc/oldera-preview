@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "workstream": "WS12",
+  "branch": "ws12-browser-launcher",
+  "task_start_head": "121bb7bdb82c364bf9459111096f5ff007873a61",
+  "canonical_play_url": "https://play.oldkoweb.com/",
+  "channel": "preview",
+  "channel_label": "Alpha / Preview",
+  "latest_pointer": "/releases/preview/latest.json",
+  "shell": {
+    "document": "/play-shell/index.html",
+    "deployment_root_mapping": "/",
+    "branch_head_resolution_at_runtime": false,
+    "static_health_when_backend_down": true,
+    "mobile_gameplay": "UNSUPPORTED_BLOCKED_WITH_MESSAGE"
+  },
+  "release_authorities": {
+    "ws38": {
+      "branch": "ws38-client-content-pipeline",
+      "exact_head": "683f6d55471d1b101371e5766ecf0ef21c8bf1e9",
+      "asset_manifest": "workstreams/ws38/MORADON_PLAYABLE_COMBAT_ASSET_MANIFEST.json",
+      "contract": "WS38 manifest + manifest file SHA-256 + canonical manifest checksum + _complete marker + exact required-file SHA-256/MIME"
+    },
+    "ws50": {
+      "branch": "ws50-integration-rehearsal",
+      "exact_head": "7497087d4cf67e4e05a3a090f6edad3d206078cb",
+      "provider_set": "WS50-C5@sha256:7ac3b8a4c06b67e52b8d18518ef8c82209a60c6101c33609a4c16e64d84f119e",
+      "provider_manifest": "release/sets/ws50/C5.json",
+      "client_artifact": {
+        "name": "ws10-moradon-passing-client-26",
+        "artifact_id": 11867980473,
+        "digest": "sha256:ff9fb679ad1b3caa184ad098cff81cfb5469b0698d5e5f3b76ef4fab2ea775b3"
+      }
+    }
+  },
+  "release_pointer_required_fields": [
+    "provider_set", "client_artifact", "manifest", "content_digest", "published_at"
+  ],
+  "client_manifest_requirements": {
+    "required_files": ["KnightOnLine.js", "KnightOnLine.wasm", "KnightOnLine.data"],
+    "launchable_html_required": true,
+    "immutable_base_path_required": true,
+    "content_digest_semantics": "sha256:<WS38 manifest canonical checksum>"
+  },
+  "connection": {
+    "source": "accepted release pointer",
+    "auth": "/auth",
+    "game": "/game",
+    "same_origin_only": true,
+    "forbid_trycloudflare": true
+  },
+  "atomic_promotion": {
+    "sequence": [
+      "upload immutable release directory",
+      "upload manifest.json",
+      "verify manifest and every required file",
+      "write and verify _complete.json",
+      "construct candidate release pointer",
+      "re-verify candidate against immutable bytes",
+      "archive current latest pointer if present",
+      "atomic same-filesystem rename candidate pointer to releases/preview/latest.json"
+    ],
+    "partial_upload_behavior": "latest pointer unchanged",
+    "tool": "tools/ws12_launcher/release-channel.cjs promote"
+  },
+  "rollback": {
+    "method": "select a previously archived immutable pointer, re-verify its manifest/_complete/files, then perform the same atomic latest pointer swap",
+    "tool": "tools/ws12_launcher/release-channel.cjs rollback"
+  },
+  "ws09_publication_handoff": {
+    "publish_shell_files": [
+      "play-shell/index.html", "play-shell/launcher.css", "play-shell/launcher-core.js", "play-shell/release-channel.js", "play-shell/app.js", "play-shell/config.json"
+    ],
+    "mount_shell_at": "https://play.oldkoweb.com/",
+    "publish_release_root": "/releases/preview/immutable/<release-id>/",
+    "publish_latest_pointer_last": true,
+    "dns_or_tunnel_url_in_shell": false,
+    "note": "WS09 must supply the accepted client artifact bytes and generate the final WS38 publication manifest; this WS12 contract intentionally does not fabricate missing immutable binary bytes."
+  },
+  "readiness": {
+    "play_shell_contract": "READY",
+    "immutable_release_channel": "READY",
+    "atomic_promotion": "READY",
+    "rollback": "READY",
+    "production_publication": "HANDOFF_TO_WS09"
+  }
+}

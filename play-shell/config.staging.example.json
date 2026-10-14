@@ -4,19 +4,24 @@
     "game": "OldKO",
     "patch": "1298"
   },
-  "cacheVersion": "manifest-v1",
+  "cacheVersion": "preview-channel-v1",
+  "release": {
+    "enabled": true,
+    "channel": "preview",
+    "latestUrl": "/releases/preview/latest.json",
+    "canonicalUrl": "https://play.oldkoweb.com/",
+    "canonicalHost": "play.oldkoweb.com",
+    "allowLocalhost": true
+  },
   "publication": {
-    "latestUrl": "/latest.json",
+    "latestUrl": "/releases/preview/latest.json",
     "requirePublicationMarker": true,
     "verifyRequiredFiles": true,
     "strictContentType": true,
     "timeoutMs": 120000
   },
   "gateway": {
-    "endpoints": [
-      { "name": "auth", "url": "/auth" },
-      { "name": "game", "url": "/game" }
-    ],
+    "endpoints": [],
     "required": true,
     "timeoutMs": 12000
   },
@@ -27,7 +32,7 @@
     "timeoutMs": 90000
   },
   "mobile": {
-    "policy": "warn",
-    "message": "OldKO 1298 masaüstü klavye/fare akışı için tasarlandı. Mobilde launcher açılabilir ancak oyun kontrolü desteklenmeyebilir."
+    "policy": "block",
+    "message": "OldKO 1298 Preview şu anda masaüstü klavye/fare tarayıcı akışını destekliyor. Mobil gameplay henüz desteklenmiyor."
   }
 }

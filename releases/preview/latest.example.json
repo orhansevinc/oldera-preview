@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "channel": "preview",
+  "release_id": "preview-<accepted-content-version>",
+  "provider_set": "WS50-C5@sha256:7ac3b8a4c06b67e52b8d18518ef8c82209a60c6101c33609a4c16e64d84f119e",
+  "client_artifact": {
+    "name": "ws10-moradon-passing-client-26",
+    "digest": "sha256:ff9fb679ad1b3caa184ad098cff81cfb5469b0698d5e5f3b76ef4fab2ea775b3"
+  },
+  "manifest": "/releases/preview/immutable/<release-id>/manifest.json",
+  "content_digest": "sha256:<WS38-manifest-canonical-checksum>",
+  "published_at": "<ISO-8601-after-complete-verification>",
+  "contentVersion": "<accepted-content-version>",
+  "buildId": "<accepted-build-id>",
+  "manifestPath": "/releases/preview/immutable/<release-id>/manifest.json",
+  "manifestFileSha256": "<sha256-of-manifest-file-bytes>",
+  "manifestChecksum": "<WS38-manifest-canonical-checksum>",
+  "publicationMarkerPath": "/releases/preview/immutable/<release-id>/_complete.json",
+  "connection": { "auth": "/auth", "game": "/game" }
+}

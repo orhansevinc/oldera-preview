@@ -2,6 +2,7 @@
   'use strict';
 
   const core = window.WS12LauncherCore;
+  const releases = window.WS12ReleaseChannel;
   const script = document.currentScript;
   const configUrl = script && script.dataset ? script.dataset.config : '';
 
@@ -14,6 +15,9 @@
     error: document.getElementById('errorBox'),
     mobile: document.getElementById('mobileWarning'),
     build: document.getElementById('buildVersion'),
+    provider: document.getElementById('providerSet'),
+    progress: document.getElementById('releaseProgress'),
+    progressText: document.getElementById('releaseProgressText'),
     product: document.getElementById('productName'),
     title: document.getElementById('launcherTitle'),
     patch: document.getElementById('patchLabel'),
@@ -22,6 +26,7 @@
   };
 
   let config = null;
+  let releaseConfig = null;
   let runtimeTimer = 0;
   let activeEntryUrl = '';
   let activeVersion = '';
@@ -34,11 +39,26 @@
     if (value) value.textContent = text;
   }
 
+  function setProgress(event) {
+    if (!ui.progress || !ui.progressText) return;
+    if (!event || event.phase === 'pointer') {
+      ui.progress.value = 0;
+      ui.progressText.textContent = 'Release pointer doğrulanıyor…';
+      return;
+    }
+    const total = Number(event.totalBytes || 0);
+    const done = Number(event.completedBytes || 0);
+    const percent = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+    ui.progress.value = percent;
+    ui.progressText.textContent = `${percent}% · ${event.completedFiles}/${event.totalFiles} dosya doğrulandı`;
+  }
+
   function fail(error) {
     console.error('[WS12 launcher]', error);
     ui.error.hidden = false;
     ui.error.textContent = core.userMessage(error);
     ui.start.disabled = true;
+    setStep('runtime', 'warn', 'Oyun başlatılmadı');
   }
 
   function delay(ms) {
@@ -55,31 +75,23 @@
     if (!configUrl) throw new core.LauncherError('CONFIG_INVALID', 'Config URL tanımlı değil.');
     const response = await fetch(configUrl, { cache: 'no-store' });
     if (!response.ok) throw new core.LauncherError('CONFIG_INVALID', 'Launcher config dosyası bulunamadı.');
-    return core.normalizeConfig(await response.json());
+    const raw = await response.json();
+    releaseConfig = releases.normalizeReleaseConfig(raw.release);
+    return core.normalizeConfig(raw);
   }
 
   async function preflightClient() {
-    if (config.publication.enabled) {
-      setStep('build', 'pending', 'WS38 release doğrulanıyor…');
-      setStep('package', 'pending', 'SHA-256 doğrulanıyor…');
-      const release = await core.preflightPublication(config, window.fetch.bind(window), window.crypto, location.href);
-      activeEntryUrl = release.entryUrl;
-      activeVersion = release.contentVersion;
-      ui.build.textContent = `${config.brand.patch} / ${release.contentVersion}`;
-      setStep('build', 'ok', `${release.buildId} · ${release.sourceCommit.slice(0, 8)}`);
-      setStep('package', 'ok', `${release.requiredFileCount} dosya · WS38 integrity PASS`);
-      return;
-    }
-
-    const build = await core.fetchBuildMetadata(config, window.fetch.bind(window), location.href);
-    activeEntryUrl = core.versionedUrl(config.client.entryUrl, config.cacheVersion, location.href);
-    activeVersion = config.cacheVersion;
-    ui.build.textContent = build.sourceCommit ? `${config.brand.patch} / ${build.sourceCommit.slice(0, 12)}` : `${config.brand.patch} / ${config.cacheVersion}`;
-    setStep('build', 'ok', build.sourceBranch ? `${build.sourceBranch} · ${build.sourceCommit.slice(0, 8)}` : 'Build bilgisi hazır');
-
-    setStep('package', 'pending', 'Dosyalar doğrulanıyor…');
-    const packageResults = await core.checkClientPackage(config, window.fetch.bind(window), location.href);
-    setStep('package', 'ok', `${packageResults.length} gerçek paket dosyası hazır`);
+    setStep('build', 'pending', 'Preview release doğrulanıyor…');
+    setStep('package', 'pending', 'Manifest + _complete + SHA-256…');
+    const release = await releases.preflightRelease(core, config, releaseConfig, window.fetch.bind(window), window.crypto, location.href, setProgress);
+    activeEntryUrl = release.entryUrl;
+    activeVersion = release.contentDigest;
+    config.gateway.endpoints = release.connection.endpoints;
+    config.gateway.required = true;
+    ui.build.textContent = `${config.brand.patch} / ${release.contentVersion}`;
+    ui.provider.textContent = release.providerSet;
+    setStep('build', 'ok', `${release.channel.toUpperCase()} · ${release.buildId}`);
+    setStep('package', 'ok', `${release.requiredFileCount} dosya · immutable integrity PASS`);
   }
 
   async function gatewayHttpHealthOk() {
@@ -93,17 +105,13 @@
   }
 
   async function preflightGateways() {
-    if (!config.gateway.endpoints.length) {
-      setStep('gateway', 'warn', 'Henüz config edilmedi');
-      return;
-    }
-
+    if (!config.gateway.endpoints.length) throw new core.LauncherError('GATEWAY_UNREACHABLE', 'Release pointer auth/game endpointlerini sağlamadı.');
     setStep('gateway', 'pending', 'Auth/game erişimi kontrol ediliyor…');
     let lastError = null;
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       try {
         const results = await core.probeGateways(config.gateway, window.WebSocket, location.href);
-        setStep('gateway', 'ok', `${results.map((item) => item.name).join(' + ')} ulaşılabilir`);
+        setStep('gateway', 'ok', `${results.map((item) => item.name).join(' + ')} same-origin WSS hazır`);
         return;
       } catch (error) {
         lastError = error;
@@ -115,23 +123,21 @@
     }
 
     if (await gatewayHttpHealthOk()) {
-      console.warn('[WS12 launcher] browser WSS probe did not open, but both same-origin gateway health endpoints are healthy; allowing runtime to perform the authoritative WSS connection.', lastError);
-      setStep('gateway', 'warn', 'Gateway hazır · WSS oyunda doğrulanacak');
+      console.warn('[WS12 launcher] browser WSS probe did not open, but both same-origin gateway health endpoints are healthy; runtime will perform the authoritative WSS connection.', lastError);
+      setStep('gateway', 'warn', 'Gateway health hazır · WSS runtime doğrulayacak');
       return;
     }
-
-    setStep('gateway', config.gateway.required ? 'error' : 'warn', 'Ulaşılamıyor');
-    if (config.gateway.required) throw lastError || new core.LauncherError('GATEWAY_UNREACHABLE', 'Oyun gateway bağlantısına ulaşılamıyor.');
-    ui.error.hidden = false;
-    ui.error.textContent = core.userMessage(lastError);
+    setStep('gateway', 'error', 'Auth/game ulaşılamıyor');
+    throw lastError || new core.LauncherError('GATEWAY_UNREACHABLE', 'Oyun gateway bağlantısına ulaşılamıyor.');
   }
 
   async function preflight() {
     config = await loadConfig();
-    document.title = `${config.brand.product} — ${config.brand.game} Launcher`;
+    releases.assertCanonicalLocation(core, releaseConfig, location.href);
+    document.title = `${config.brand.product} — ${config.brand.game} Preview`;
     ui.product.textContent = config.brand.product;
     ui.title.textContent = config.brand.game;
-    ui.patch.textContent = `Gerçek Knight Online ${config.brand.patch} Web Client`;
+    ui.patch.textContent = `Knight Online ${config.brand.patch} Web Client · Alpha / Preview`;
 
     if (core.detectMobile(window)) {
       ui.mobile.hidden = false;
@@ -147,14 +153,14 @@
       setStep('browser', 'error', 'WebGL2 yok');
       throw new core.LauncherError('WEBGL2_UNSUPPORTED', 'WebGL2 desteklenmiyor.');
     }
-    setStep('browser', 'ok', 'WASM + WebGL2 hazır');
+    setStep('browser', 'ok', 'Desktop WASM + WebGL2 hazır');
 
     await preflightClient();
-    const cacheState = core.rememberCacheVersion(localStorage, 'oldkoweb.play-shell.cacheVersion', activeVersion || config.cacheVersion);
+    const cacheState = core.rememberCacheVersion(localStorage, 'oldkoweb.play-shell.releaseDigest', activeVersion);
     await clearNamedCachesOnVersionChange(cacheState);
     await preflightGateways();
 
-    if (cacheState.changed) setStep('build', 'ok', `Yeni release · ${activeVersion || config.cacheVersion}`);
+    if (cacheState.changed) setStep('build', 'ok', `Yeni accepted release · ${ui.build.textContent}`);
     ui.start.disabled = false;
   }
 
@@ -167,7 +173,6 @@
     stopRuntimeMonitor();
     const started = Date.now();
     ui.runtimeStrip.dataset.ready = 'false';
-
     runtimeTimer = window.setInterval(() => {
       try {
         const frameDoc = ui.frame.contentDocument;
@@ -175,18 +180,16 @@
         const selector = config.runtime.readySelector;
         const statusNode = selector ? frameDoc.querySelector(selector) : null;
         const text = statusNode ? statusNode.textContent || '' : '';
-
         if (config.runtime.errorText && text.includes(config.runtime.errorText)) {
           stopRuntimeMonitor();
           setStep('runtime', 'error', 'Runtime hata verdi');
           ui.runtimeText.textContent = text.split('\n').slice(-2).join(' · ') || core.userMessage(new core.LauncherError('RUNTIME_ERROR'));
           return;
         }
-
         if (config.runtime.readyText && text.includes(config.runtime.readyText)) {
           stopRuntimeMonitor();
           setStep('runtime', 'ok', 'WASM runtime hazır');
-          ui.runtimeText.textContent = `${config.brand.game} ${config.brand.patch} runtime hazır`;
+          ui.runtimeText.textContent = `${config.brand.game} ${config.brand.patch} Preview runtime hazır`;
           ui.runtimeStrip.dataset.ready = 'true';
           return;
         }
@@ -196,7 +199,6 @@
         ui.runtimeText.textContent = 'Client açıldı; cross-origin nedeniyle runtime telemetrisi okunamıyor.';
         return;
       }
-
       if (Date.now() - started > config.runtime.timeoutMs) {
         stopRuntimeMonitor();
         const error = new core.LauncherError('RUNTIME_TIMEOUT', 'Runtime hazır sinyali zaman aşımına uğradı.');
@@ -209,14 +211,13 @@
   function launch() {
     ui.error.hidden = true;
     ui.start.disabled = true;
-    setStep('runtime', 'pending', 'Client belgesi yükleniyor…');
-    ui.runtimeText.textContent = 'Gerçek 1298 client belgesi yükleniyor…';
+    setStep('runtime', 'pending', 'Accepted client yükleniyor…');
+    ui.runtimeText.textContent = 'Accepted Preview client yükleniyor…';
     ui.panel.hidden = true;
     ui.stage.hidden = false;
-
     ui.frame.onload = function () {
-      setStep('runtime', 'pending', 'Client belgesi açıldı; WASM bekleniyor…');
-      ui.runtimeText.textContent = 'Client belgesi açıldı; gerçek WASM runtime hazır sinyali bekleniyor…';
+      setStep('runtime', 'pending', 'Client açıldı; WASM bekleniyor…');
+      ui.runtimeText.textContent = 'Client açıldı; WASM runtime hazır sinyali bekleniyor…';
       monitorRuntime();
     };
     ui.frame.onerror = function () {
@@ -224,7 +225,7 @@
       setStep('runtime', 'error', 'Client açılamadı');
       ui.runtimeText.textContent = core.userMessage(error);
     };
-    ui.frame.src = activeEntryUrl || core.versionedUrl(config.client.entryUrl, config.cacheVersion, location.href);
+    ui.frame.src = activeEntryUrl;
   }
 
   function backToLauncher() {

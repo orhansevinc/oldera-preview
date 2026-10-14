@@ -5,6 +5,7 @@ on:
     branches: [ws12-browser-launcher]
     paths:
       - 'play-shell/**'
+      - 'releases/preview/**'
       - 'tools/ws12_launcher/**'
       - 'tests/ws12-launcher/**'
       - 'workstreams/ws12/**'
@@ -12,6 +13,7 @@ on:
   pull_request:
     paths:
       - 'play-shell/**'
+      - 'releases/preview/**'
       - 'tools/ws12_launcher/**'
       - 'tests/ws12-launcher/**'
       - 'workstreams/ws12/**'
@@ -32,27 +34,36 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Syntax and config validation
+      - name: Syntax and contract validation
         run: |
+          set -euo pipefail
           node --check play-shell/launcher-core.js
+          node --check play-shell/release-channel.js
           node --check play-shell/app.js
+          node --check tools/ws12_launcher/release-channel.cjs
           node tools/ws12_launcher/check-config.cjs
+          node -e "JSON.parse(require('node:fs').readFileSync('workstreams/ws12/PLAY_OLDKOWEB_RELEASE_CONTRACT.json','utf8'))"
+          node -e "JSON.parse(require('node:fs').readFileSync('releases/preview/release-pointer.schema.json','utf8'))"
+          if grep -Rni --exclude='*.example.json' 'trycloudflare.com' play-shell tools/ws12_launcher releases/preview; then
+            echo 'hardcoded trycloudflare URL/reference forbidden in runtime surfaces' >&2
+            exit 1
+          fi
 
-      - name: Launcher unit tests
+      - name: Launcher and atomic release tests
         run: node --test tests/ws12-launcher/*.test.cjs
 
-      - name: Checkout WS38 publication contract read-only
+      - name: Checkout exact WS38 publication contract read-only
         uses: actions/checkout@v4
         with:
-          ref: ws38-client-content-pipeline
+          ref: 683f6d55471d1b101371e5766ecf0ef21c8bf1e9
           path: .ws38
 
-      - name: Verify real1298 package with WS38 generator/verifier
+      - name: Verify WS38 manifest/cache compatibility on fixture package
         shell: bash
         run: |
           set -euo pipefail
-          VERSION="1298-ws12-${GITHUB_SHA:0:12}"
-          BUILD_ID="ws12-${GITHUB_RUN_ID}"
+          VERSION="1298-ws12-contract-${GITHUB_SHA:0:12}"
+          BUILD_ID="ws12-contract-${GITHUB_RUN_ID}"
           OUT="$RUNNER_TEMP/ws12-publication"
           mkdir -p "$OUT/client-content/v1/$VERSION"
           PYTHONPATH=.ws38 python -m tools.ws38_content.generate_manifest \
@@ -75,7 +86,7 @@ jobs:
             --require-publication-marker \
             --latest-pointer "$OUT/latest.json"
 
-      - name: Real 1298 package HTTP smoke
+      - name: Static shell HTTP smoke
         shell: bash
         run: |
           set -euo pipefail
@@ -84,8 +95,6 @@ jobs:
           trap 'kill "$server_pid"' EXIT
           sleep 1
           curl --fail --silent --show-error --head http://127.0.0.1:8129/play-shell/index.html >/dev/null
-          curl --fail --silent --show-error http://127.0.0.1:8129/play-shell/config.staging.example.json >/dev/null
-          curl --fail --silent --show-error --head http://127.0.0.1:8129/real1298/index.html >/dev/null
-          curl --fail --silent --show-error --head http://127.0.0.1:8129/real1298/KnightOnLine.js >/dev/null
-          curl --fail --silent --show-error --head http://127.0.0.1:8129/real1298/KnightOnLine.wasm >/dev/null
-          curl --fail --silent --show-error --head http://127.0.0.1:8129/real1298/KnightOnLine.data >/dev/null
+          curl --fail --silent --show-error http://127.0.0.1:8129/play-shell/config.json >/dev/null
+          curl --fail --silent --show-error http://127.0.0.1:8129/play-shell/release-channel.js >/dev/null
+          curl --fail --silent --show-error http://127.0.0.1:8129/releases/preview/release-pointer.schema.json >/dev/null

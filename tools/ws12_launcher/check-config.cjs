@@ -1,38 +1,26 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const core = require('../../play-shell/launcher-core.js');
+const releases = require('../../play-shell/release-channel.js');
 
 const root = path.resolve(__dirname, '../..');
-const forbiddenSchemes = [/^javascript:/i, /^data:/i];
+const forbidden = /trycloudflare|^javascript:|^data:/i;
 
-function readConfig(relativePath) {
-  const fullPath = path.join(root, relativePath);
-  return core.normalizeConfig(JSON.parse(fs.readFileSync(fullPath, 'utf8')));
+function readRaw(relativePath) {
+  return JSON.parse(fs.readFileSync(path.join(root, relativePath), 'utf8'));
 }
 
-function validateUrls(config, label) {
-  const urls = [];
-  if (config.client.entryUrl) urls.push(config.client.entryUrl, config.client.buildUrl, ...config.client.requiredFiles);
-  if (config.publication.latestUrl) urls.push(config.publication.latestUrl);
-  for (const endpoint of config.gateway.endpoints) urls.push(endpoint.url);
-  for (const url of urls) {
-    if (forbiddenSchemes.some((pattern) => pattern.test(url))) throw new Error(`${label}: unsafe URL: ${url}`);
-  }
+for (const relativePath of ['play-shell/config.json', 'play-shell/config.staging.example.json']) {
+  const raw = readRaw(relativePath);
+  const config = core.normalizeConfig(raw);
+  const release = releases.normalizeReleaseConfig(raw.release);
+  if (!config.publication.enabled || config.publication.latestUrl !== '/releases/preview/latest.json') throw new Error(`${relativePath}: preview latest pointer required`);
+  if (!config.publication.requirePublicationMarker || !config.publication.verifyRequiredFiles || !config.publication.strictContentType) throw new Error(`${relativePath}: publication checks must fail closed`);
+  if (release.channel !== 'preview' || release.latestUrl !== '/releases/preview/latest.json') throw new Error(`${relativePath}: preview release channel invalid`);
+  if (release.canonicalUrl !== 'https://play.oldkoweb.com/' || release.canonicalHost !== 'play.oldkoweb.com') throw new Error(`${relativePath}: canonical play URL invalid`);
+  if (config.mobile.policy !== 'block') throw new Error(`${relativePath}: unsupported mobile gameplay must be blocked`);
+  if (config.gateway.endpoints.length !== 0 || !config.gateway.required) throw new Error(`${relativePath}: gateway endpoints must come from accepted release pointer`);
+  if (forbidden.test(JSON.stringify(raw))) throw new Error(`${relativePath}: forbidden tunnel/unsafe URL found`);
 }
 
-const local = readConfig('play-shell/config.json');
-validateUrls(local, 'local');
-if (!/^ws12-|^[0-9a-z._-]+$/i.test(local.cacheVersion)) throw new Error('local cacheVersion invalid');
-if (local.publication.enabled) throw new Error('local config must stay runnable without a published WS38 pointer');
-
-const staging = readConfig('play-shell/config.staging.example.json');
-validateUrls(staging, 'staging');
-if (!staging.publication.enabled) throw new Error('staging publication.latestUrl required');
-if (!staging.publication.requirePublicationMarker || !staging.publication.verifyRequiredFiles || !staging.publication.strictContentType) {
-  throw new Error('staging WS38 checks must fail closed');
-}
-const endpointNames = staging.gateway.endpoints.map((item) => item.name).sort();
-if (endpointNames.join(',') !== 'auth,game' || !staging.gateway.required) throw new Error('staging auth/game gateway contract invalid');
-if (!staging.gateway.endpoints.every((item) => item.url === `/${item.name}`)) throw new Error('staging gateway paths must be same-origin /auth and /game');
-
-console.log(`WS12 config OK: local legacy package + staging WS38 publication; gateways=${endpointNames.join('+')}`);
+console.log('WS12 config OK: canonical play.oldkoweb.com + preview immutable release pointer');
