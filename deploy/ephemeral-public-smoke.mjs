@@ -30,7 +30,8 @@ function sha256(bytes) {
 function websocketUpgrade(path) {
   return new Promise((resolve, reject) => {
     const key = crypto.randomBytes(16).toString('base64');
-    const socket = tls.connect({ host: new URL(origin).hostname, port: 443, servername: new URL(origin).hostname });
+    const target = new URL(origin);
+    const socket = tls.connect({ host: target.hostname, port: 443, servername: target.hostname });
     const timer = setTimeout(() => {
       socket.destroy();
       reject(new Error(`WSS ${path} timeout`));
@@ -69,14 +70,13 @@ function websocketUpgrade(path) {
 await response('/healthz');
 await response('/play-shell/');
 const config = await json('/play-shell/config.json');
-
 const serializedConfig = JSON.stringify(config);
 if (!serializedConfig.includes('/auth') || !serializedConfig.includes('/game')) {
   throw new Error('launcher config does not contain same-origin /auth and /game endpoints');
 }
 
 const latestRes = await response('/latest.json');
-if ((latestRes.headers.get('cache-control') || '').toLowerCase().includes('no-store') === false) {
+if (!(latestRes.headers.get('cache-control') || '').toLowerCase().includes('no-store')) {
   throw new Error('latest.json is not served no-store');
 }
 const latestBytes = Buffer.from(await latestRes.arrayBuffer());
@@ -112,16 +112,21 @@ if (typeof basePath !== 'string' || !basePath.startsWith('/client-content/v1/'))
   throw new Error(`unexpected immutableBasePath: ${basePath}`);
 }
 
+// Edge smoke checks public existence, exact MIME, Content-Length and immutable caching.
+// The following exact WS12 preflight performs the large body download + SHA-256 validation once.
 for (const file of manifest.files || []) {
   if (!file.required) continue;
-  const res = await response(`${basePath}${file.path}`);
+  const res = await response(`${basePath}${file.path}`, { method: 'HEAD' });
   const contentType = res.headers.get('content-type') || '';
   if (contentType !== file.contentType) {
     throw new Error(`${file.path} content-type ${contentType} != ${file.contentType}`);
   }
-  const bytes = Buffer.from(await res.arrayBuffer());
-  if (bytes.length !== file.size) throw new Error(`${file.path} size mismatch`);
-  if (sha256(bytes) !== file.sha256) throw new Error(`${file.path} sha256 mismatch`);
+  const contentLength = Number(res.headers.get('content-length'));
+  if (Number.isFinite(contentLength) && contentLength !== file.size) {
+    throw new Error(`${file.path} content-length ${contentLength} != ${file.size}`);
+  }
+  const cacheControl = (res.headers.get('cache-control') || '').toLowerCase();
+  if (!cacheControl.includes('immutable')) throw new Error(`${file.path} is not served immutable`);
 }
 
 await response('/gateway-auth-healthz');
@@ -129,4 +134,4 @@ await response('/gateway-game-healthz');
 await websocketUpgrade('/auth');
 await websocketUpgrade('/game');
 
-console.log(`public staging smoke: PASS origin=${origin} contentVersion=${latest.contentVersion} auth=/auth game=/game`);
+console.log(`public staging edge smoke: PASS origin=${origin} contentVersion=${latest.contentVersion} auth=/auth game=/game`);
