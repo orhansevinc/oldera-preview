@@ -48,6 +48,8 @@ jobs:
           node test-scenarios/gameplay/reconcile-current-results.mjs \
             --provider-root "$RUNNER_TEMP/ws49-providers" \
             --output artifacts/ws49
+      - name: Normalize current provider blockers
+        run: node test-scenarios/gameplay/normalize-current-blockers.mjs --output artifacts/ws49
       - name: Publish human-readable summary
         if: always()
         run: |
