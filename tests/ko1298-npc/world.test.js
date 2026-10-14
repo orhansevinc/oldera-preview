@@ -29,15 +29,26 @@ function packetEvent(id) { const b = Buffer.alloc(3); b[0] = 0x20; b.writeUInt16
 function packetTarget(id) { const b = Buffer.alloc(4); b[0] = 0x22; b.writeUInt16LE(id, 1); b[3] = 1; return b; }
 
 function sample(overrides = {}) {
-  const base = { ...loadCaspy(), ...overrides };
-  const height = testHeightAuthority.resolveHeight(base.zoneId, base.x, base.z);
+  const source = loadCaspy();
+  const requestedRuntimeId = Object.prototype.hasOwnProperty.call(overrides, 'instanceId') ? overrides.instanceId : 10000;
+  const base = {
+    ...source,
+    instanceId: requestedRuntimeId,
+    runtimeId: requestedRuntimeId,
+    sourceInstanceKey: `test:${requestedRuntimeId}`,
+    ...overrides,
+  };
   const runtimeId = base.instanceId;
-  const sourceInstanceKey = base.sourceInstanceKey || `test:${runtimeId}`;
+  const sourceInstanceKey = Object.prototype.hasOwnProperty.call(overrides, 'sourceInstanceKey')
+    ? overrides.sourceInstanceKey
+    : `test:${runtimeId}`;
+  const height = testHeightAuthority.resolveHeight(base.zoneId, base.x, base.z);
   return {
     ...base,
-    y: height.height,
+    instanceId: runtimeId,
     runtimeId,
     sourceInstanceKey,
+    y: height.height,
     identity: Object.freeze({ templateSid: base.templateSid, instanceKey: sourceInstanceKey, runtimeId }),
     position: Object.freeze({ zoneId: base.zoneId, x: base.x, y: height.height, z: base.z }),
     positionAuthority: Object.freeze({
@@ -128,7 +139,7 @@ test('NpcWorld rejects finite but unauthoritative Y before any visibility is pro
 
 test('nearby uses verified 48-unit, 3x3 region neighborhood', () => {
   const world = new NpcWorld();
-  const caspy = loadCaspy();
+  const caspy = sample();
   world.add(caspy);
   world.add(sample({ instanceId: 10100, name: 'Near', x: 370, z: 398 }));
   world.add(sample({ instanceId: 10101, name: 'Far', x: 450, z: 398 }));
