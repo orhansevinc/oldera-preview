@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "requests": [
+    {
+      "request_id": "REQ-TERRAIN-HEIGHT-001",
+      "consumer": "WS16",
+      "owner": "UNASSIGNED",
+      "capability": "terrain.height-authority",
+      "provider_set": null,
+      "required_behavior": "Provide a source-verified Moradon terrain + shape height resolver usable by NPC placement and compatible terrain validation without guessed Y values.",
+      "current_behavior": "WS16 has the resolver port and policy but K_NPCPOS contains no Y; WS15 and WS25 also fail closed where terrain/height ownership is required.",
+      "acceptance_test": "Moradon NPC population resolves source-backed X/Z through the real height authority and produces deterministic finite Y while unresolved/missing terrain still fails closed.",
+      "milestone_impact": "Blocks canonical acceptance of MORADON NPC/MOB VISIBILITY even though registry/discovery tooling can operate.",
+      "evidence": ["workstreams/ws16/STATUS.md#Terrain-Y-evidence","workstreams/ws15/STATUS.md#BLOCKERS-EXTERNAL-OWNERS","workstreams/ws25/STATUS.md#Data-source-caveats","workstreams/ws31/STATUS.md#MORADON-SOURCE-SLICES"],
+      "state": "OPEN"
+    }
+  ]
+}

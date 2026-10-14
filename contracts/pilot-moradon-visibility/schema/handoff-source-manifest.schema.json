@@ -1,0 +1,8 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"oldkoweb.ws39.handoff-source-manifest.v1",
+  "type":"object",
+  "required":["ws","provides","consumes","contracts","protocol_requirements","data_requirements","tests","known_blockers","integration_status"],
+  "properties":{"ws":{"type":"string","pattern":"^WS[0-9]{2}$"},"provides":{"type":"array"},"consumes":{"type":"array"},"contracts":{"type":"array"},"protocol_requirements":{"type":"array"},"data_requirements":{"type":"array"},"tests":{"type":"array"},"known_blockers":{"type":"array"},"integration_status":{"type":"string"}},
+  "not":{"anyOf":[{"required":["source_head"]},{"required":["source_sha"]},{"required":["commit_sha"]},{"required":["exact_commit_sha"]}]}
+}

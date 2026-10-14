@@ -1,0 +1,7 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"oldkoweb.ws39.blocked-by-contract.v1",
+  "type":"object",
+  "required":["request_id","consumer","owner","capability","provider_set","required_behavior","current_behavior","acceptance_test","milestone_impact","evidence","state"],
+  "properties":{"request_id":{"type":"string","minLength":1},"consumer":{"type":"string","pattern":"^WS[0-9]{2}$"},"owner":{"type":"string","minLength":1},"capability":{"type":"string","minLength":1},"provider_set":{"type":["string","null"]},"required_behavior":{"type":"string","minLength":1},"current_behavior":{"type":"string","minLength":1},"acceptance_test":{"type":"string","minLength":1},"milestone_impact":{"type":"string","minLength":1},"evidence":{"type":"array","minItems":1},"state":{"enum":["OPEN","ACKNOWLEDGED","RESOLVED","REJECTED"]}}
+}

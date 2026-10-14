@@ -1,0 +1,217 @@
+{
+  "schema_version": 1,
+  "milestone": {
+    "id": "moradon-npc-mob-visibility",
+    "name": "MORADON NPC/MOB VISIBILITY",
+    "scope": "WS03 -> WS14 -> WS15 -> WS16 -> WS25",
+    "success_question": "Can WS16 discover world, movement, protocol and data dependencies without reading every workstream status?"
+  },
+  "workstreams": [
+    {
+      "ws": "WS03",
+      "branch": "ws03-ko1298-session",
+      "role": "provider",
+      "ownership_paths": ["services/ko1298-session/**", "workstreams/ws03/**"],
+      "handoff_location": "contracts/pilot-moradon-visibility/source-manifests.json#WS03",
+      "provides": ["session.world-ready"],
+      "consumes": ["world.session-lifecycle"],
+      "requires_protocol": ["WS11:gameplay-session"],
+      "requires_data": []
+    },
+    {
+      "ws": "WS14",
+      "branch": "ws14-world-session",
+      "role": "provider",
+      "ownership_paths": ["services/ko1298-world/**", "workstreams/ws14/**"],
+      "handoff_location": "contracts/pilot-moradon-visibility/source-manifests.json#WS14",
+      "provides": ["world.session-lifecycle"],
+      "consumes": ["npc.nearby", "npc.detail", "mob.visibility"],
+      "requires_protocol": ["WS11:world"],
+      "requires_data": ["WS31:zones"]
+    },
+    {
+      "ws": "WS15",
+      "branch": "ws15-movement-sync",
+      "role": "provider",
+      "ownership_paths": ["services/ko1298-movement/**", "workstreams/ws15/**"],
+      "handoff_location": "contracts/pilot-moradon-visibility/source-manifests.json#WS15",
+      "provides": ["world.position", "movement.region-membership"],
+      "consumes": ["session.world-ready", "terrain.height-authority"],
+      "requires_protocol": ["WS11:movement"],
+      "requires_data": ["WS31:zones"]
+    },
+    {
+      "ws": "WS16",
+      "branch": "ws16-npc-world",
+      "role": "provider",
+      "ownership_paths": ["services/ko1298-npc/**", "world-data/npc/**", "workstreams/ws16/**"],
+      "handoff_location": "contracts/pilot-moradon-visibility/source-manifests.json#WS16",
+      "provides": ["npc.population", "npc.nearby", "npc.detail"],
+      "consumes": ["session.world-ready", "world.position", "movement.region-membership", "terrain.height-authority"],
+      "requires_protocol": ["WS11:npc-world"],
+      "requires_data": ["WS31:npc", "WS31:zones"]
+    },
+    {
+      "ws": "WS25",
+      "branch": "ws25-mob-ai",
+      "role": "provider",
+      "ownership_paths": ["services/ko1298-mobs/**", "workstreams/ws25/**"],
+      "handoff_location": "contracts/pilot-moradon-visibility/source-manifests.json#WS25",
+      "provides": ["mob.population", "mob.visibility"],
+      "consumes": ["session.world-ready", "world.position", "movement.region-membership", "terrain.height-authority"],
+      "requires_protocol": ["WS11:world", "WS11:combat-world-events"],
+      "requires_data": ["WS31:monsters", "WS31:zones"]
+    },
+    {
+      "ws": "WS11",
+      "branch": "ws11-protocol-lab",
+      "role": "protocol-authority",
+      "ownership_paths": ["protocol-lab/**", "workstreams/ws11/**"],
+      "handoff_location": "contracts/pilot-moradon-visibility/source-manifests.json#WS11",
+      "provides": [], "consumes": [], "requires_protocol": [], "requires_data": []
+    },
+    {
+      "ws": "WS31",
+      "branch": "ws31-data-catalog",
+      "role": "data-authority",
+      "ownership_paths": ["data-catalog/**", "workstreams/ws31/**"],
+      "handoff_location": "contracts/pilot-moradon-visibility/source-manifests.json#WS31",
+      "provides": [], "consumes": [], "requires_protocol": [], "requires_data": []
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "session.world-ready",
+      "provider_ws": "WS03",
+      "semantic_version": "1.0.0",
+      "contract_hash": "sha256:6535ad323a357f512c761a0f3329dd9f967df0d3f4edb6fa0c6ca189c67389a6",
+      "contract": {
+        "behavior": "Gameplay packets that require world state are gated by the canonical session FSM and WORLD_READY state.",
+        "surface": ["services/ko1298-session/session-gameplay.js", "services/ko1298-session/session.js"],
+        "evidence": ["workstreams/ws03/STATUS.md"],
+        "notes": "WS03 coordinates; WS14 owns the world-session implementation behind the world port."
+      }
+    },
+    {
+      "id": "world.session-lifecycle",
+      "provider_ws": "WS14",
+      "semantic_version": "1.0.0",
+      "contract_hash": "sha256:cb84844afaea369121251af75630d5f0f04a12f95f4b492dc8b87cb35241e481",
+      "contract": {
+        "behavior": "WorldSessionService drives selected-character world entry, GAMESTART/zone transition, nearby bootstrap and exposes getSession/getCapabilities.",
+        "surface": ["WorldSessionService.beginSelectedCharacter", "WorldSessionService.handleClientPacket", "WorldSessionService.getSession", "WorldSessionService.getCapabilities"],
+        "bootstrap_order": ["USERS", "NPCS", "MOBS"],
+        "evidence": ["services/ko1298-world/src/world-session-service.js", "workstreams/ws14/STATUS.md"]
+      }
+    },
+    {
+      "id": "world.position",
+      "provider_ws": "WS15",
+      "semantic_version": "1.0.0",
+      "contract_hash": "sha256:f31b467163deb775220fcc3a2be64e57b2f922d25676c2a158b1d1fb2d8411a3",
+      "contract": {
+        "behavior": "Read-only authoritative entity position snapshot for world/gameplay consumers.",
+        "surface": ["getPositionSnapshot(sessionId)", "getEntityPositionSnapshot(entityId)"],
+        "fields": ["zoneId", "position", "targetPosition", "heading", "moving", "sequence", "region"],
+        "evidence": ["services/ko1298-movement/README.md", "workstreams/ws15/STATUS.md"]
+      }
+    },
+    {
+      "id": "movement.region-membership",
+      "provider_ws": "WS15",
+      "semantic_version": "1.0.0",
+      "contract_hash": "sha256:f9715653e2d8951387e5a7681b573b4a796a2478ca4244e3c1872c17b8f95d50",
+      "contract": {
+        "behavior": "Authoritative 48-unit region cells; crossings emit enter/leave membership and deterministic nearby recipients.",
+        "surface": ["onRegionMembership({leave, enter, ...})", "beginZoneTransition", "completeZoneTransition"],
+        "units": "48 world units per region cell",
+        "evidence": ["services/ko1298-movement/README.md", "workstreams/ws15/STATUS.md"]
+      }
+    },
+    {
+      "id": "npc.population",
+      "provider_ws": "WS16",
+      "semantic_version": "1.0.0",
+      "contract_hash": "sha256:ba33d8bae2311ed92f631615020dc6e1f259af4318e4acbdaac0272025541a5a",
+      "contract": {
+        "behavior": "NpcWorld owns verified NPC template/instance population lifecycle; reloadZone is deterministic and idempotent for unchanged input.",
+        "surface": ["NpcWorld.add", "NpcWorld.spawn", "NpcWorld.remove", "NpcWorld.despawn", "NpcWorld.reloadZone"],
+        "evidence": ["services/ko1298-npc/world.js", "workstreams/ws16/STATUS.md"]
+      }
+    },
+    {
+      "id": "npc.nearby",
+      "provider_ws": "WS16",
+      "semantic_version": "1.0.0",
+      "contract_hash": "sha256:73dd3971442de23995029561c45aef8824d484b7bb276789770457cadfb3dcfe",
+      "contract": {
+        "behavior": "NpcWorld.nearby and regionDelta return deterministic same-zone NPC visibility over the verified 48-unit 3x3 neighborhood.",
+        "surface": ["NpcWorld.nearby", "NpcWorld.regionDelta", "NpcInteractionRouter.regionSync", "NpcInteractionRouter.nearbyPacket"],
+        "evidence": ["services/ko1298-npc/world.js", "services/ko1298-npc/router.js"]
+      }
+    },
+    {
+      "id": "npc.detail",
+      "provider_ws": "WS16",
+      "semantic_version": "1.0.0",
+      "contract_hash": "sha256:3127983c8721fbdd5eba57257a7d7b2ab2362ee4cb24ad4198e80ed71244752a",
+      "contract": {
+        "behavior": "REQ_NPCIN resolves known same-zone NPC instances and encodes detail response; malformed input fails closed.",
+        "surface": ["NpcInteractionRouter.route", "parseNpcInRequest", "encodeNpcInResponse"],
+        "protocol_gate": "WS11 owns opcode/payload authority and resolves WIZ_REQ_NPCIN ownership semantics.",
+        "evidence": ["services/ko1298-npc/router.js", "workstreams/ws11/STATUS.md", "workstreams/ws16/STATUS.md"]
+      }
+    },
+    {
+      "id": "mob.population",
+      "provider_ws": "WS25",
+      "semantic_version": "1.0.0",
+      "contract_hash": "sha256:a0df170e4198afc09ef72050a77de62a540dbcb6e7b9a102cf0ed142f1f8e2f3",
+      "contract": {
+        "behavior": "MobService materializes source-backed world definitions and exposes deterministic initialize/list/get lifecycle snapshots.",
+        "surface": ["MobService.initialize", "MobService.list", "MobService.get", "loadVerifiedWorldDefinition"],
+        "evidence": ["services/ko1298-mobs/index.cjs", "services/ko1298-mobs/mob-service.cjs", "workstreams/ws25/STATUS.md"]
+      }
+    },
+    {
+      "id": "mob.visibility",
+      "provider_ws": "WS25",
+      "semantic_version": "1.0.0",
+      "contract_hash": "sha256:f4bce48978bb6269c21efe9d981d4362a8a2a4b551988089a7ed44e6c8a5bd43",
+      "contract": {
+        "behavior": "MobService emits nearby spawn/despawn and position visibility deltas for tracked players using the injected world visibility predicate.",
+        "surface": ["MobService.playerEnteredRegion", "MobService.playerLeftRegion", "ports.world.isMobVisibleToPlayer", "ports.world.onNearbyMobSpawn", "ports.world.onNearbyMobDespawn"],
+        "composition_requires": ["world.position", "movement.region-membership"],
+        "evidence": ["services/ko1298-mobs/mob-service.cjs", "workstreams/ws25/STATUS.md"]
+      }
+    },
+    {
+      "id": "terrain.height-authority",
+      "provider_ws": null,
+      "semantic_version": "0.0.0-unresolved",
+      "contract_hash": "sha256:94798ba37b3645f329c365cd59e38d87147cbc962015c9c9650b56181032e97e",
+      "contract": {
+        "behavior": "A verified terrain + shape height authority must resolve/validate runtime Y without guessed values.",
+        "surface": ["WS16 createTerrainHeightResolver input", "WS15 terrainAuthority.validateMovement", "WS25 world.resolveSpawnPosition"],
+        "state": "UNRESOLVED",
+        "evidence": ["workstreams/ws15/STATUS.md", "workstreams/ws16/STATUS.md", "workstreams/ws25/STATUS.md", "workstreams/ws31/STATUS.md"]
+      }
+    }
+  ],
+  "authorities": [
+    {"ws":"WS11","kind":"protocol","relation_key":"requires_protocol","rule":"Unsupported opcode, payload, field width, signedness, direction or state requirement remains UNKNOWN/PARTIAL and blocks production encoding."},
+    {"ws":"WS31","kind":"data","relation_key":"requires_data","rule":"Only source-proven catalog rows are VERIFIED; unresolved/conflicting data remains explicit and fail-closed."}
+  ],
+  "shared_types": [
+    {"id":"CharacterId","shape":"opaque string","reason":"session/world identity"},
+    {"id":"EntityId","shape":"opaque string|integer at adapter boundary","reason":"player/NPC/mob identity without mega-context"},
+    {"id":"ZoneId","shape":"integer","reason":"zone-scoped visibility"},
+    {"id":"Position","shape":{"x":"number","z":"number","y":"number"},"units":"world units; wire scaling remains protocol/provider-owned","reason":"world/movement/visibility"},
+    {"id":"CorrelationId","shape":"opaque string","reason":"coordination receipts/requests; no gameplay semantics"}
+  ],
+  "explicitly_not_shared": ["combat model", "mob AI state", "session FSM implementation", "Actor mega-context", "ItemSerial"],
+  "scenarios": [
+    {"id":"moradon.npc-visibility","requires":["session.world-ready","world.session-lifecycle","world.position","movement.region-membership","npc.population","npc.nearby","npc.detail","terrain.height-authority"]},
+    {"id":"moradon.mob-visibility","requires":["session.world-ready","world.session-lifecycle","world.position","movement.region-membership","mob.population","mob.visibility","terrain.height-authority"]}
+  ]
+}

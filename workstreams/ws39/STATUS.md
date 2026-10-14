@@ -1,44 +1,48 @@
-# WS39 Status
+# WS39 STATUS — Moradon NPC/MOB Visibility Coordination Pilot
 
-## State
+DURUM: **PILOT TOOLING READY / PRODUCT ACCEPTANCE WAITING FOR WS50 PROVIDER-SET**
 
-Implementation complete for the independent cross-service contract/compatibility test line.
+WS39 remains `ws39-contract-compatibility`. The previous broad 16-boundary compatibility registry remains intact; this change adds a separate minimum coordination pilot under `contracts/pilot-moradon-visibility/**` and does not change product code.
+
+## Pilot milestone
+
+`MORADON NPC/MOB VISIBILITY`
+
+Pilot provider chain: `WS03 -> WS14 -> WS15 -> WS16 -> WS25`.
+Authority dependencies: WS11 protocol and WS31 data.
 
 ## Delivered
 
-- Versioned contract registry for all 16 requested priority boundaries.
-- Provider/consumer ownership and read-only source provenance.
-- Contract/version standard and compatibility policy.
-- Breaking vs non-breaking rules including transaction, authority and idempotency semantics.
-- Missing interface and conflicting field/type detection library.
-- Automated Node.js contract tests.
-- Machine-readable and Markdown dependency graph.
-- `COMPATIBILITY_ISSUES.md` in the exact requested provider/consumer format.
-- Dedicated GitHub Actions workflow scoped to WS39-owned paths.
+- machine-readable pilot ownership registry with branch, ownership paths, handoff location, provides/consumes and authority requirements;
+- source HANDOFF manifest separated from automation-produced CI receipt identity;
+- capability catalog derived from existing provider exports/behavior, with semantic version and content fingerprint separated;
+- WS11/WS31 represented as protocol/data authorities rather than ordinary runtime providers;
+- one-source `BLOCKED_BY_CONTRACT` records with generated owner inbox views;
+- WS16 dependency discovery that returns direct contracts, authority requirements, accepted/candidate provider-set identity and open requests;
+- exact pilot impact analysis for capability changes;
+- ACCEPTED and CANDIDATE modeled independently and fail-closed;
+- minimal shared visibility types only.
 
-## Current assessment
+## Provider-set status
 
-- Priority contracts: **16**
-- Breaking contracts: **14**
-- Non-breaking/pending: **2**
-- Integration status: **CONDITIONAL**
+WS50 is the provider-set authority. At the observed WS50 state there is no immutable provider-set receipt covering the full visibility chain and both authorities. Therefore WS39 deliberately leaves both ACCEPTED and CANDIDATE unavailable and does not substitute latest branch HEADs.
 
-The two non-breaking items are: WS17→WS33, which is explicitly compatible through WS33’s WS17 item adapter; and WS29 observability adoption, which is a production-readiness gap rather than a functional payload/API break.
+## Blocker routing
 
-## Parallel-workstream freshness note
-
-WS32 and WS33 advanced to one commit during this audit and were re-read before the registry was finalized. WS34 and WS38 were still identical to `main` (`ahead_by=0`) at the refresh point. WS14 had no branch at audit time.
+Canonical blocker records live only in `contracts/pilot-moradon-visibility/blockers.json`. STATUS and generated inbox output do not maintain duplicate blocker bodies.
 
 ## Verification
 
-Run from repository root:
+Run:
 
 ```bash
 node --test contract-tests/*.test.cjs
+node contracts/pilot-moradon-visibility/tooling.cjs dependencies WS16
+node contracts/pilot-moradon-visibility/tooling.cjs impact npc.nearby
 ```
 
-Expected: all WS39 tests pass while the compatibility report can still contain known breaking contracts. A known breaking contract is data, not a test-suite failure; CI fails only when registry/schema/graph invariants or declared compatibility expectations become inconsistent.
+Success is measured by whether WS16 can discover the required world/movement/protocol/data dependencies without user mediation, and whether a WS16 capability change produces exact affected pilot consumers/scenarios. Manifest count across all 50 workstreams is not a success metric.
 
-## Scope compliance
+## Boundary
 
-Only `contracts/**`, `contract-tests/**`, `workstreams/ws39/**`, and `.github/workflows/ws39-contracts.yml` are changed. Product code, other WS interfaces, DB migrations, client/admin/site and `main` are untouched.
+No gameplay/product implementation, provider branch, database/client/admin/site code or `main` merge is part of this change.

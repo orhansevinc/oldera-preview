@@ -1,0 +1,8 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"oldkoweb.ws39.provider-sets.v1",
+  "type":"object",
+  "required":["schema_version","milestone","authority_ws","policy","accepted","candidate"],
+  "properties":{"schema_version":{"const":1},"authority_ws":{"const":"WS50"},"accepted":{"$ref":"#/$defs/slot"},"candidate":{"$ref":"#/$defs/slot"}},
+  "$defs":{"slot":{"type":"object","required":["state","provider_set_id","receipt","reason"],"properties":{"state":{"enum":["UNAVAILABLE","AVAILABLE"]},"provider_set_id":{"type":["string","null"]},"receipt":{"type":["string","null"]},"reason":{"type":"string"}}}}
+}

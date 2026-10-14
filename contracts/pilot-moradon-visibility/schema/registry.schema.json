@@ -1,0 +1,7 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"oldkoweb.ws39.moradon-visibility.registry.v1",
+  "type":"object",
+  "required":["schema_version","milestone","workstreams","capabilities","authorities","shared_types","scenarios"],
+  "properties":{"schema_version":{"const":1},"milestone":{"type":"object","required":["id","name","scope"]},"workstreams":{"type":"array","items":{"type":"object","required":["ws","branch","role","ownership_paths","handoff_location","provides","consumes","requires_protocol","requires_data"]}},"capabilities":{"type":"array","items":{"type":"object","required":["id","provider_ws","semantic_version","contract_hash","contract"]}},"authorities":{"type":"array"},"shared_types":{"type":"array"},"scenarios":{"type":"array"}}
+}

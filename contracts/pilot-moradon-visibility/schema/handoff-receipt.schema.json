@@ -1,0 +1,7 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"oldkoweb.ws39.handoff-ci-receipt.v1",
+  "type":"object",
+  "required":["exact_commit_sha","provider_set_id","resolved_dependencies","contract_fingerprints","test_run_ids","artifacts","blockers"],
+  "properties":{"exact_commit_sha":{"type":"string","pattern":"^[0-9a-f]{40}$"},"provider_set_id":{"type":"string","minLength":1},"resolved_dependencies":{"type":"array"},"contract_fingerprints":{"type":"array"},"test_run_ids":{"type":"array"},"artifacts":{"type":"array"},"blockers":{"type":"array"}}
+}

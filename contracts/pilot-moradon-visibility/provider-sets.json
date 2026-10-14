@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "milestone": "moradon-npc-mob-visibility",
+  "authority_ws": "WS50",
+  "policy": "WS39 never resolves branch HEADs into an accepted integration set. Only immutable WS50 provider-set receipts may populate accepted or candidate.",
+  "accepted": {"state":"UNAVAILABLE","provider_set_id":null,"receipt":null,"reason":"No WS50 provider-set receipt covering WS03/WS14/WS15/WS16/WS25 plus WS11/WS31 authorities exists on the observed WS50 branch."},
+  "candidate": {"state":"UNAVAILABLE","provider_set_id":null,"receipt":null,"reason":"WS50 has not yet published a canonical Moradon NPC/MOB visibility candidate provider-set for WS39 to consume."}
+}
