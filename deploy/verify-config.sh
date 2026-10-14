@@ -6,7 +6,7 @@ from pathlib import Path
 import yaml
 
 checks = {
-    'docker-compose.ws09.yml': {'reverse-proxy','admin-api','session-world','gateway-auth','gateway-game','db'},
+    'docker-compose.ws09.yml': {'reverse-proxy','account-api','admin-api','session-world','gateway-auth','gateway-game','db'},
     'docker-compose.ws09-staging.yml': {'reverse-proxy','session-world','gateway-auth','gateway-game'},
 }
 
@@ -26,7 +26,8 @@ for f in \
   deploy/production-smoke.sh \
   deploy/release-switch.sh \
   deploy/rollback-static.sh \
-  deploy/validate-production-env.sh
+  deploy/validate-production-env.sh \
+  deploy/migrate-production-db.sh
 do
   sh -n "$f"
 done
@@ -41,23 +42,30 @@ fi
 grep -Eq 'charset[[:space:]]+utf-8;' infra/nginx/nginx.conf
 grep -Eq 'charset_types[^;]*text/javascript' infra/nginx/nginx.conf
 
-# Binary client artifacts must keep their exact WS38 types.
 grep -Eq 'application/wasm[[:space:]]+wasm;' infra/nginx/mime.types
 grep -Eq 'application/octet-stream[[:space:]]+data' infra/nginx/mime.types
 
-# Production edge: official/play/admin only; same-origin auth/game; immutable content.
+# Production edge: official/play/admin only; same-origin account/auth/game/admin; immutable content.
 grep -q 'proxy_set_header Upgrade \$http_upgrade' infra/nginx/templates/production.conf.template
 grep -q 'proxy_set_header Connection \$connection_upgrade' infra/nginx/templates/production.conf.template
+grep -q 'proxy_pass http://account-api:${ACCOUNT_API_PORT}/;' infra/nginx/templates/production.conf.template
+grep -q 'location /api/account/' infra/nginx/templates/production.conf.template
 grep -q 'proxy_pass http://gateway-auth:${GATEWAY_INTERNAL_PORT}' infra/nginx/templates/production.conf.template
 grep -q 'proxy_pass http://gateway-game:${GATEWAY_INTERNAL_PORT}' infra/nginx/templates/production.conf.template
 grep -q 'location = /auth' infra/nginx/templates/production.conf.template
 grep -q 'location = /game' infra/nginx/templates/production.conf.template
+grep -q 'location /api/admin/' infra/nginx/templates/production.conf.template
 grep -q 'max-age=31536000, immutable' infra/nginx/templates/production.conf.template
 grep -q 'no-store, max-age=0' infra/nginx/templates/production.conf.template
 ! grep -q '\${API_HOST}' infra/nginx/templates/production.conf.template
 ! grep -q '\${GATEWAY_HOST}' infra/nginx/templates/production.conf.template
 ! grep -q 'Strict-Transport-Security' infra/nginx/templates/production.conf.template
 
+grep -q '^  account-api:' docker-compose.ws09.yml
+grep -q 'OLDKO_ACCOUNT_ALLOWED_ORIGINS: https://oldkoweb.com' docker-compose.ws09.yml
+grep -q 'OLDKO_TRUST_PROXY: "1"' docker-compose.ws09.yml
+grep -q 'OLDKO_ACCOUNT_REPOSITORY_MODULE:' docker-compose.ws09.yml
+grep -q 'OLDKO_ACCOUNT_DELIVERY_WEBHOOK_URL:' docker-compose.ws09.yml
 grep -q 'GATEWAY_MODE: auth' docker-compose.ws09.yml
 grep -q 'GATEWAY_MODE: game' docker-compose.ws09.yml
 grep -q 'WS_PATH: /auth' docker-compose.ws09.yml
