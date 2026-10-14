@@ -4,7 +4,7 @@
 
 **STAGING LINK CANDIDATE: READY**
 
-The latest WS50 staging-candidate rehearsal completed successfully after the canonical WS10 Moradon E2E PASS. This handoff freezes the exact passing client identity and the current publication provider set for WS09's ephemeral HTTPS/WSS publisher.
+The latest WS50 staging-candidate rehearsal completed successfully after the canonical WS10 Moradon E2E PASS and includes the WS09 public-smoke fix for tunnel edges that omit Content-Length on HEAD. This handoff freezes the exact passing client identity and the current publication provider set for WS09's ephemeral HTTPS/WSS publisher.
 
 ## Canonical WS10 PASS
 
@@ -33,14 +33,14 @@ The client must be consumed unchanged. WS50/WS09 must not rebuild or substitute 
 ## Final WS50 staging revalidation
 
 ```text
-WS50_STAGING_RUN_ID=38506189257
-WS50_STAGING_RUN_NUMBER=27
-WS50_STAGING_JOB_ID=115664127539
+WS50_STAGING_RUN_ID=38506533799
+WS50_STAGING_RUN_NUMBER=29
+WS50_STAGING_JOB_ID=115665234483
 WS50_STAGING_RESULT=SUCCESS
 WS50_STAGING_ARTIFACT_NAME=ws50-staging-candidate
-WS50_STAGING_ARTIFACT_ID=11867729377
-WS50_STAGING_ARTIFACT_SHA256=7dc496dd78e41d54d8b8c4241c420f298e07e7b6f92b966a777424522917cfa2
-CANDIDATE_TREE_SHA=22ef9c480a09ff9df9e9187862ef6f410fdf843d
+WS50_STAGING_ARTIFACT_ID=11868051858
+WS50_STAGING_ARTIFACT_SHA256=f0ba3a993ecbe5e85520ddfd64bc6870fee5bda0d8e0952ccb638b6027536217
+CANDIDATE_TREE_SHA=11d12e107090cf9f3f31225a84f9627a750cc075
 ```
 
 The run reported `all_required_contracts=true` and `blocker_owner=null`, and re-fetched every provider ref at run end with exact equality.
@@ -55,7 +55,7 @@ WS02_SHA=1738f60945b24e00bdd2266e6600b5c0cf3c64cf
 WS03_SHA=d634870bbcd2c541695516643d34e0ac119354d7
 WS04_SHA=32616b1b7ccbdc3de41c0949f182a65e03450d18
 WS05_SHA=0537c481383a69c534799b43810f35e7279c5578
-WS09_SHA=c5a73d76e967b8de1b63450045cdd6223b9e2ab6
+WS09_SHA=df0651f79338798f17b949b9bd42c2d634aa2e6e
 WS10_SNAPSHOT_SHA=4a81c6cf7e11514ca01f0730ecc57010c9ea37fb
 WS11_SHA=05562662d9d3f13a4b0500d0478e065fd802cfd0
 WS12_SHA=77f55b2949844e0fdd279526dab0fba4e8ab4f94
