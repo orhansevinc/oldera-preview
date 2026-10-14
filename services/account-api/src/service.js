@@ -41,7 +41,7 @@ export class AccountService {
 
   async usernameAvailability(rawUsername, context = { ip: 'unknown' }) {
     const now = this.clock();
-    this.securityGate.assertRate(`username-availability:ip:${context.ip}`, { limit: 30, windowMs: 60_000 }, now);
+    await this.securityGate.assertRate(`username-availability:ip:${context.ip}`, { limit: 30, windowMs: 60_000 }, now);
     const { username, canonical } = normalizeUsername(rawUsername);
     const exists = await this.repository.findByUsernameCanonical(canonical);
     return { username, available: !exists };
@@ -52,7 +52,7 @@ export class AccountService {
     const { username, canonical } = normalizeUsername(input.username);
     const email = normalizeEmail(input.email);
     validatePassword(input.password, username);
-    this.securityGate.assertRate(`register:ip:${context.ip}`, { limit: 5, windowMs: 60 * 60_000 }, now);
+    await this.securityGate.assertRate(`register:ip:${context.ip}`, { limit: 5, windowMs: 60 * 60_000 }, now);
 
     if (await this.repository.findByUsernameCanonical(canonical)) throw conflict('USERNAME_TAKEN', 'Username is already in use');
     if (await this.repository.findByEmail(email)) throw conflict('EMAIL_TAKEN', 'Email is already in use');
@@ -138,15 +138,15 @@ export class AccountService {
   async changePassword(input, context) {
     const now = this.clock();
     const { canonical, username } = normalizeUsername(input.username);
-    this.securityGate.assertCredentialAllowed(context.ip, canonical, now);
+    await this.securityGate.assertCredentialAllowed(context.ip, canonical, now);
     validatePassword(input.newPassword, username);
     const account = await this.repository.findByUsernameCanonical(canonical);
     if (!account || !(await this.hasher.verify(input.currentPassword ?? '', account.passwordHash))) {
-      this.securityGate.recordCredentialFailure(context.ip, canonical, now);
+      await this.securityGate.recordCredentialFailure(context.ip, canonical, now);
       this.audit.emit({ event: 'password_change_failed', usernameCanonical: canonical, requestId: context.requestId, ip: context.ip });
       throw unauthorized();
     }
-    this.securityGate.clearCredentialFailures(context.ip, canonical);
+    await this.securityGate.clearCredentialFailures(context.ip, canonical);
     if (await this.hasher.verify(input.newPassword, account.passwordHash)) throw new AppError(400, 'PASSWORD_REUSE', 'New password must be different');
     const passwordHash = await this.hasher.hash(input.newPassword);
     await this.repository.updateAccount(account.id, { passwordHash, passwordVersion: account.passwordVersion + 1, updatedAt: now });
@@ -156,7 +156,7 @@ export class AccountService {
 
   async requestPasswordReset(input, context) {
     const now = this.clock();
-    this.securityGate.assertRate(`reset:ip:${context.ip}`, { limit: 5, windowMs: 15 * 60_000 }, now);
+    await this.securityGate.assertRate(`reset:ip:${context.ip}`, { limit: 5, windowMs: 15 * 60_000 }, now);
     const account = await this.#findAccountSelector(input);
     if (account) {
       const token = newOpaqueToken();
@@ -170,7 +170,7 @@ export class AccountService {
 
   async confirmPasswordReset(input, context) {
     const now = this.clock();
-    this.securityGate.assertRate(`reset-confirm:ip:${context.ip}`, { limit: 10, windowMs: 15 * 60_000 }, now);
+    await this.securityGate.assertRate(`reset-confirm:ip:${context.ip}`, { limit: 10, windowMs: 15 * 60_000 }, now);
     const record = await this.repository.consumeActionToken('password_reset', digestToken(requireToken(input.token)), now);
     if (!record) throw new AppError(400, 'INVALID_OR_EXPIRED_TOKEN', 'Token is invalid or expired');
     const target = await this.#findById(record.accountId);
@@ -184,7 +184,7 @@ export class AccountService {
 
   async requestVerification(input, context) {
     const now = this.clock();
-    this.securityGate.assertRate(`verify:ip:${context.ip}`, { limit: 5, windowMs: 15 * 60_000 }, now);
+    await this.securityGate.assertRate(`verify:ip:${context.ip}`, { limit: 5, windowMs: 15 * 60_000 }, now);
     const account = await this.#findAccountSelector(input);
     if (account && !account.verifiedAt) await this.#issueVerification(account, context, now);
     return { accepted: true };
@@ -192,7 +192,7 @@ export class AccountService {
 
   async confirmVerification(input, context) {
     const now = this.clock();
-    this.securityGate.assertRate(`verify-confirm:ip:${context.ip}`, { limit: 10, windowMs: 15 * 60_000 }, now);
+    await this.securityGate.assertRate(`verify-confirm:ip:${context.ip}`, { limit: 10, windowMs: 15 * 60_000 }, now);
     const record = await this.repository.consumeActionToken('account_verification', digestToken(requireToken(input.token)), now);
     if (!record) throw new AppError(400, 'INVALID_OR_EXPIRED_TOKEN', 'Token is invalid or expired');
     const account = await this.#findById(record.accountId);
@@ -212,14 +212,14 @@ export class AccountService {
     } else {
       const { canonical } = normalizeUsername(rawIdentifier); credentialKey = `username:${canonical}`; account = await this.repository.findByUsernameCanonical(canonical);
     }
-    this.securityGate.assertCredentialAllowed(context.ip, credentialKey, now);
+    await this.securityGate.assertCredentialAllowed(context.ip, credentialKey, now);
     const valid = account && await this.hasher.verify(input.password ?? '', account.passwordHash);
     if (!valid) {
-      this.securityGate.recordCredentialFailure(context.ip, credentialKey, now);
+      await this.securityGate.recordCredentialFailure(context.ip, credentialKey, now);
       this.audit.emit({ event: 'access_check_failed', credentialKey, requestId: context.requestId, ip: context.ip });
       throw unauthorized();
     }
-    this.securityGate.clearCredentialFailures(context.ip, credentialKey);
+    await this.securityGate.clearCredentialFailures(context.ip, credentialKey);
     const ban = activeBan(account, now);
     if (ban) {
       this.audit.emit({ event: 'access_check_banned', accountId: account.id, requestId: context.requestId, ip: context.ip, banCode: ban.code });

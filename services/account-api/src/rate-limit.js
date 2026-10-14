@@ -1,7 +1,7 @@
 import { tooMany } from './errors.js';
 
 export class InMemoryRateLimitStore {
-  constructor() { this.entries = new Map(); }
+  constructor() { this.entries = new Map(); this.kind = 'memory'; }
 
   #active(key, now, windowMs) {
     let entry = this.entries.get(key);
@@ -12,7 +12,7 @@ export class InMemoryRateLimitStore {
     return entry;
   }
 
-  check(key, limit, windowMs, now = Date.now()) {
+  async check(key, limit, windowMs, now = Date.now()) {
     const entry = this.#active(key, now, windowMs);
     return {
       allowed: entry.count < limit,
@@ -21,7 +21,7 @@ export class InMemoryRateLimitStore {
     };
   }
 
-  consume(key, limit, windowMs, now = Date.now()) {
+  async consume(key, limit, windowMs, now = Date.now()) {
     const entry = this.#active(key, now, windowMs);
     entry.count += 1;
     this.entries.set(key, entry);
@@ -32,30 +32,32 @@ export class InMemoryRateLimitStore {
     };
   }
 
-  reset(key) { this.entries.delete(key); }
+  async reset(key) { this.entries.delete(key); }
+  async ready() { return true; }
+  async close() {}
 }
 
 export class SecurityGate {
   constructor(store = new InMemoryRateLimitStore()) { this.store = store; }
 
-  assertRate(key, { limit, windowMs }, now = Date.now()) {
-    const result = this.store.consume(`rate:${key}`, limit, windowMs, now);
+  async assertRate(key, { limit, windowMs }, now = Date.now()) {
+    const result = await this.store.consume(`rate:${key}`, limit, windowMs, now);
     if (!result.allowed) throw tooMany(result.retryAfterSeconds);
     return result;
   }
 
   #credentialKey(ip, usernameCanonical) { return `credential:${ip}:${usernameCanonical}`; }
 
-  assertCredentialAllowed(ip, usernameCanonical, now = Date.now()) {
-    const result = this.store.check(this.#credentialKey(ip, usernameCanonical), 8, 15 * 60_000, now);
+  async assertCredentialAllowed(ip, usernameCanonical, now = Date.now()) {
+    const result = await this.store.check(this.#credentialKey(ip, usernameCanonical), 8, 15 * 60_000, now);
     if (!result.allowed) throw tooMany(result.retryAfterSeconds);
   }
 
-  recordCredentialFailure(ip, usernameCanonical, now = Date.now()) {
-    this.store.consume(this.#credentialKey(ip, usernameCanonical), 8, 15 * 60_000, now);
+  async recordCredentialFailure(ip, usernameCanonical, now = Date.now()) {
+    return this.store.consume(this.#credentialKey(ip, usernameCanonical), 8, 15 * 60_000, now);
   }
 
-  clearCredentialFailures(ip, usernameCanonical) {
-    this.store.reset(this.#credentialKey(ip, usernameCanonical));
+  async clearCredentialFailures(ip, usernameCanonical) {
+    return this.store.reset(this.#credentialKey(ip, usernameCanonical));
   }
 }

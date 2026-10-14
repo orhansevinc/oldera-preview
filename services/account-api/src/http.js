@@ -4,6 +4,7 @@ import { AppError } from './errors.js';
 
 const MAX_BODY = 32 * 1024;
 const SESSION_COOKIE = 'oldko_session';
+const PUBLIC_PREFIX = '/api/account';
 
 async function readJson(req) {
   const type = req.headers['content-type'] || '';
@@ -67,7 +68,13 @@ function assertTrustedOrigin(req, allowedOrigins) {
   if (typeof origin !== 'string' || !allowedOrigins.includes(origin)) throw new AppError(403, 'ORIGIN_NOT_ALLOWED', 'Origin is not allowed');
 }
 
-export function createHttpServer({ service, openApiDocument, trustProxy = false, allowedOrigins = [] }) {
+function upstreamPath(pathname) {
+  if (pathname === PUBLIC_PREFIX) return '/';
+  if (pathname.startsWith(`${PUBLIC_PREFIX}/`)) return pathname.slice(PUBLIC_PREFIX.length);
+  return pathname;
+}
+
+export function createHttpServer({ service, openApiDocument, trustProxy = false, allowedOrigins = [], readinessCheck = async () => true }) {
   return http.createServer(async (req, res) => {
     const requestId = (typeof req.headers['x-request-id'] === 'string' && /^[A-Za-z0-9._-]{8,128}$/.test(req.headers['x-request-id']))
       ? req.headers['x-request-id'] : crypto.randomUUID();
@@ -89,21 +96,30 @@ export function createHttpServer({ service, openApiDocument, trustProxy = false,
       }
 
       const url = new URL(req.url, 'http://account-api.local');
-      if (req.method === 'GET' && url.pathname === '/healthz') return send(res, 200, { ok: true, service: 'oldko-account-api' }, { ...cors, 'x-request-id': requestId });
-      if (req.method === 'GET' && url.pathname === '/openapi.json') return send(res, 200, openApiDocument, { ...cors, 'x-request-id': requestId });
-      if (req.method === 'GET' && url.pathname === '/v1/accounts/username/availability') {
+      const pathname = upstreamPath(url.pathname);
+      if (req.method === 'GET' && pathname === '/healthz') return send(res, 200, { ok: true, service: 'oldko-account-api' }, { ...cors, 'x-request-id': requestId });
+      if (req.method === 'GET' && pathname === '/readyz') {
+        try {
+          await readinessCheck();
+          return send(res, 200, { ok: true, service: 'oldko-account-api' }, { ...cors, 'x-request-id': requestId });
+        } catch {
+          return send(res, 503, { ok: false, service: 'oldko-account-api' }, { ...cors, 'x-request-id': requestId });
+        }
+      }
+      if (req.method === 'GET' && pathname === '/openapi.json') return send(res, 200, openApiDocument, { ...cors, 'x-request-id': requestId });
+      if (req.method === 'GET' && pathname === '/v1/accounts/username/availability') {
         const result = await service.usernameAvailability(url.searchParams.get('username'), context);
         return send(res, 200, result, { ...cors, 'x-request-id': requestId });
       }
-      if (req.method === 'GET' && url.pathname === '/v1/session/current') {
+      if (req.method === 'GET' && pathname === '/v1/session/current') {
         const result = await service.currentUser(readCookie(req, SESSION_COOKIE), context);
         return send(res, 200, result, { ...cors, 'x-request-id': requestId });
       }
-      if (req.method === 'POST' && url.pathname === '/v1/session/login') {
+      if (req.method === 'POST' && pathname === '/v1/session/login') {
         const result = await service.login(await readJson(req), context);
         return send(res, 200, { user: result.user }, { ...cors, 'x-request-id': requestId, 'set-cookie': sessionCookie(result.token, result.expiresAt) });
       }
-      if (req.method === 'POST' && url.pathname === '/v1/session/logout') {
+      if (req.method === 'POST' && pathname === '/v1/session/logout') {
         assertTrustedOrigin(req, allowedOrigins);
         const result = await service.logout(readCookie(req, SESSION_COOKIE), context);
         return send(res, 200, result, { ...cors, 'x-request-id': requestId, 'set-cookie': clearSessionCookie() });
@@ -118,9 +134,9 @@ export function createHttpServer({ service, openApiDocument, trustProxy = false,
         ['/v1/accounts/verification/request', (body) => service.requestVerification(body, context)],
         ['/v1/accounts/verification/confirm', (body) => service.confirmVerification(body, context)]
       ]);
-      if (req.method === 'POST' && routes.has(url.pathname)) {
-        const result = await routes.get(url.pathname)(await readJson(req));
-        const status = url.pathname.endsWith('/request') ? 202 : (url.pathname === '/v1/accounts/register' ? 201 : 200);
+      if (req.method === 'POST' && routes.has(pathname)) {
+        const result = await routes.get(pathname)(await readJson(req));
+        const status = pathname.endsWith('/request') ? 202 : (pathname === '/v1/accounts/register' ? 201 : 200);
         return send(res, status, result, { ...cors, 'x-request-id': requestId });
       }
       throw new AppError(404, 'NOT_FOUND', 'Endpoint not found');

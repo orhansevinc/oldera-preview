@@ -1,34 +1,40 @@
-import path from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { InMemoryAccountRepository } from './repository.js';
 import { JsonAuditSink } from './audit.js';
-import { NullDelivery, WebhookDelivery } from './delivery.js';
+import { SecurityGate } from './rate-limit.js';
 import { AccountService } from './service.js';
 import { createHttpServer } from './http.js';
 import { openApiDocument } from './openapi.js';
+import { buildProductionRuntime } from './production-runtime.js';
 
-async function buildRepository() {
-  const modulePath = process.env.OLDKO_ACCOUNT_REPOSITORY_MODULE;
-  if (modulePath) {
-    const imported = await import(modulePath.startsWith('file:') ? modulePath : pathToFileURL(path.resolve(modulePath)).href);
-    if (typeof imported.createAccountRepository !== 'function') throw new Error('Repository module must export createAccountRepository()');
-    return imported.createAccountRepository({ env: process.env });
-  }
-  if (process.env.NODE_ENV === 'production') throw new Error('Production requires OLDKO_ACCOUNT_REPOSITORY_MODULE');
-  return new InMemoryAccountRepository();
-}
+const runtime = await buildProductionRuntime(process.env);
+const service = new AccountService({
+  repository: runtime.repository,
+  delivery: runtime.delivery,
+  audit: new JsonAuditSink(),
+  securityGate: new SecurityGate(runtime.rateLimitStore)
+});
 
-function buildDelivery() {
-  const url = process.env.OLDKO_ACCOUNT_DELIVERY_WEBHOOK_URL;
-  const secret = process.env.OLDKO_ACCOUNT_DELIVERY_WEBHOOK_SECRET;
-  if (url && secret) return new WebhookDelivery({ url, secret });
-  if (process.env.NODE_ENV === 'production') throw new Error('Production requires delivery webhook URL and secret');
-  return new NullDelivery();
-}
+if (process.env.NODE_ENV === 'production') await runtime.readinessCheck();
 
-const repository = await buildRepository();
-const service = new AccountService({ repository, delivery: buildDelivery(), audit: new JsonAuditSink() });
-const allowedOrigins = (process.env.OLDKO_ACCOUNT_ALLOWED_ORIGINS || '').split(',').map((v) => v.trim()).filter(Boolean);
-const server = createHttpServer({ service, openApiDocument, trustProxy: process.env.OLDKO_TRUST_PROXY === '1', allowedOrigins });
+const server = createHttpServer({
+  service,
+  openApiDocument,
+  trustProxy: runtime.trustProxy,
+  allowedOrigins: runtime.allowedOrigins,
+  readinessCheck: runtime.readinessCheck
+});
 const port = Number(process.env.PORT || 8080);
 server.listen(port, '0.0.0.0', () => console.log(JSON.stringify({ event: 'listening', service: 'oldko-account-api', port })));
+
+let shuttingDown = false;
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(JSON.stringify({ event: 'shutdown', service: 'oldko-account-api', signal }));
+  server.close();
+  await Promise.allSettled([
+    runtime.rateLimitStore?.close?.(),
+    runtime.repository?.db?.end?.()
+  ]);
+}
+process.once('SIGTERM', () => void shutdown('SIGTERM'));
+process.once('SIGINT', () => void shutdown('SIGINT'));
