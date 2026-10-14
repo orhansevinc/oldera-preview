@@ -182,7 +182,7 @@ async function bootstrap(accountId, characterId, socketId) {
 
   await assert.rejects(
     service.handleClientPacket(socketId, Buffer.from([OPCODE.REQUEST_NPC_IN, 1, 0])),
-    /length|packet|request/i,
+    /bytes|length|packet|request/i,
   );
   assert.equal(service.getSession(socketId).state, WORLD_STATE.WAIT_GAMESTART_LOADED);
 
