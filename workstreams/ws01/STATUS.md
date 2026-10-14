@@ -1,85 +1,140 @@
-# WS01 STATUS
+WS01
 
-## 1. Branch
+# STATUS — Public WSS Transport Control
 
-`ws01-runtime-build`
+## Decision
 
-## 2. Commit SHA
+**PUBLIC WSS TRANSPORT: READY**
 
-CI ile doğrulanan uygulama commit'i: `7a534a90eebb358761978116e0f871034aa7395e`
+Branch: `ws01-runtime-build`
+Validated implementation commit: `41097de4e6204b93da7b0c6ef3ef229fc41120c4`
 
-Not: Bu `STATUS.md` yalnızca teslim metadatasıdır ve doğrulanmış uygulama commit'inden sonra branch'e eklenmiştir; final branch HEAD teslim mesajında ayrıca verilecektir.
+This control session is the existing WS01 workstream from `coordination/inbox/WS01.md`; no new workstream was created.
 
-## 3. Ne yaptım
+## Problem closed
 
-- Gerçek OpenKO/KO 1298 browser build girdilerini sabitledim:
-  - OpenKO: `97eb0ea20207afc0c360bfed6915113572711be3`
-  - KO 1298 assets: `2055ee6ed77f1b5cfef23832dd5bc31909e14a66`
-  - Emscripten: `6.0.12`
-- WS01'e özel, read-only GitHub token ile çalışan tekrarlanabilir Emscripten/WarFare build workflow'u ekledim.
-- Browser bootstrap'ını WebGL2 ön kontrolü, deterministik `.wasm/.data` dosya çözümleme, runtime/preload/fatal durum gözlemi ve zorunlu `--renderer gl --data /data` ile sağlamlaştırdım.
-- `KnightOnLine.js`, `KnightOnLine.wasm`, `KnightOnLine.data` ve browser bootstrap için boyut, SHA-256, WASM header, loader referansları, WebGL2/GL ve Three.js yokluğu kontrolleri ekledim.
-- Gerçek Chromium içinde WASM + asset preload + `/data` + WebGL2/OpenGL + gerçek login bootstrap smoke testi ekledim.
-- Ortak workflow/runtime değişikliği gerektiren noktaları ortak dosyalara dokunmadan `INTEGRATION_PATCH.md` içine yazdım.
-- Admin, official website, Character Select/Create davranışı, Moradon mantığı, gateway/server/database kodu değiştirilmedi.
+WS50 isolated staging rehearsal proved that the real Emscripten/OpenKO browser transport still generated only:
 
-## 4. Hangi testler geçti
+```text
+ws://<server-host>:<port>
+```
 
-GitHub Actions `WS01 Runtime Build` run `38470465226` / run #2: **SUCCESS**.
+That could not satisfy WS09's public HTTPS staging topology, which publishes packet-agnostic gateways at same-origin:
 
-- Pinned OpenKO SHA doğrulaması: PASS.
-- Pinned genuine KO 1298 asset SHA ve gerekli asset dilimi: PASS.
-- Emscripten `6.0.12` toolchain doğrulaması: PASS.
-- Temiz `emcmake` configure: PASS.
-- Gerçek `WarFare` target Emscripten/WASM build: PASS.
-- Mevcut browser paket bütünlüğü: PASS.
-- Sıfırdan yeniden üretilen paket bütünlüğü: PASS.
-- Rebuilt `KnightOnLine.js/.wasm/.data` SHA-256 değerleri committed paketle birebir aynı: PASS.
-- `KnightOnLine.js`, `.wasm`, `.data` browser HTTP yüklemeleri: 200 / PASS.
-- `KnightOnLine.data` preload ve runtime ready: PASS.
-- Client data root `/data`: PASS.
-- Renderer: `WebGL 2.0 / OpenGL ES 3.0`, `render backend: OpenGL`: PASS.
-- `render backend: Null` bulunmaması: PASS.
-- Gerçek login scene bootstrap (`CGameProcedure brought up`): PASS.
-- Bootstrap state: `webgl2Available=true`, `runtimeReady=true`, `runDependencies=0`, `fatal=null`: PASS.
-- Page error / WASM abort / RuntimeError / GL_INVALID / WebGL invalid gate'leri: PASS.
+```text
+wss://<temporary-host>/auth
+wss://<temporary-host>/game
+```
 
-Doğrulanan paket hashleri:
+WS12 could resolve and probe those endpoints but intentionally did not rewrite native C++ `CAPISocket` transport. WS01 therefore owned the remaining structural browser transport blocker.
 
-- `KnightOnLine.js`: `9cc18d6a218dcfb8416c5f415deabe900b8b13bedb7fe8f6fb25d58f0ba11aa4`
-- `KnightOnLine.wasm`: `447513e1a26267e3e0f5db4244ce3abecbe9d83ceaa9a76db793ddca5fd10f72`
-- `KnightOnLine.data`: `7a08f9e204748b474de94d44d1831f97affe66c64ce53bcb362d667c950df385`
+The WS01 implementation now removes that hardcoded browser URL while retaining the real KO C++ packet/framing/cryption path.
 
-## 5. Hangi testler kaldı
+## Implementation
 
-- CI smoke testi SwiftShader WebGL2 ile geçti; farklı gerçek GPU/driver/browser kombinasyonlarından oluşan geniş cihaz matrisi WS01 içinde çalıştırılmadı.
-- Emscripten'in gerçek browser callback main-loop modeline geçişi ortak OpenKO browser-port kodunda yapılmadığı için aşağıdaki non-fatal timing uyarısının tamamen kalktığı test henüz yok.
-- Character Select/Create ve Moradon gameplay akışları WS01 görevi dışında olduğundan bu workstream tarafından davranışsal olarak değiştirilmedi veya yeniden kapsam testine alınmadı.
+### Browser transport selection
 
-İlk WS01 workflow run'ı (`38470337619`) yalnızca yeni verifier'ın `Server.ini`/`Server.Ini` mount casing beklentisi yanlış olduğu için fail oldu. Kontrol gerçek mevcut mount davranışına göre düzeltildi; ikinci run tam olarak geçti.
+`tools/ws01_runtime/prepare_browser_source.py` still runs after the existing `openko-browser-port` patches. It now additionally patches only the generated Emscripten `CAPISocket` source so that:
 
-## 6. Değiştirilen dosyalar
+- native desktop builds keep the original Asio/TCP `CAPISocket` path unchanged;
+- Emscripten builds call `OldKOWebResolveWebSocketUrl(serverHost, serverPort)` before creating the browser WebSocket;
+- a missing or invalid mapping returns `-1` and fails closed;
+- the old generated `const std::string url = "ws://" + szIP + ":" + ...` anchor is explicitly rejected by CI.
 
-- `.github/workflows/ws01-runtime.yml`
-- `tools/ws01_runtime/prepare_browser_source.py`
-- `tools/ws01_runtime/verify_package.py`
-- `tools/ws01_runtime/runtime_smoke.cjs`
-- `openko-web/index.html`
-- `workstreams/ws01/INTEGRATION_PATCH.md`
-- `workstreams/ws01/STATUS.md`
+The KO send/receive framing, cryption and binary WebSocket forwarding remain in the existing C++ `CAPISocket` implementation. No JavaScript packet parser, fake login response or gameplay/network protocol implementation was added.
 
-## 7. Ana hatta uygulanması gereken patch
+### Config-driven public endpoint contract
 
-Ayrıntı: `workstreams/ws01/INTEGRATION_PATCH.md`
+`tools/ws01_runtime/browser_transport_pre.js` is linked into the generated Emscripten JS with `--pre-js`. It performs endpoint selection only; it does not send or receive KO packets.
 
-- Ortak `.github/workflows/openko-browser-port.yml` içinde OpenKO ref, KO asset ref ve Emscripten sürümü mutable değerler yerine WS01'de doğrulanan exact sürümlere pinlenmeli.
-- Ortak publish adımı `openko-web/index.html` dosyasını inline heredoc ile yeniden üretmemeli; repository'deki canonical bootstrap korunmalı.
-- Ortak browser-port/upstream client tarafında native blocking `while` + `SDL_Delay` yaklaşımı ileride gerçek Emscripten main-loop/callback modeline taşınmalı. WS01 bu ortak dosyalara dokunmadı.
+The canonical bootstrap exposes this default domain-independent contract:
 
-## 8. Bilinen riskler
+```js
+Module.oldkoTransport = {
+  routes: {
+    auth: { serverPorts: [15100], endpoint: '/auth' },
+    game: { serverPorts: [15001], endpoint: '/game' }
+  }
+};
+```
 
-- Runtime başarılı olmasına rağmen şu mevcut non-fatal uyarı devam ediyor: `emscripten_set_main_loop_timing: Cannot set timing mode for main loop since a main loop does not exist!`.
-- Runtime login bootstrap sırasında mevcut asset setinde `/data/ui/cursor.uif` için bir `asset-open-fail` logu görülüyor; login bootstrap ve OpenGL renderer yine başarıyla çalışıyor. Bu WS01 paketleme değişikliğinden kaynaklanan yeni bir fatal değildir.
-- CI SwiftShader ortamında S3TC desteklenmiyor; renderer fallback ile başarıyla çalıştı. Gerçek GPU matrisi ayrıca doğrulanmalı.
-- Ortak publish workflow'u canonical `openko-web/index.html` dosyasını overwrite etmeye devam ederse WS01 bootstrap hardening kaybolabilir; integration patch uygulanmalı.
-- Pinned GitHub Action SHA'ları mevcut runner'da başarıyla geçti, ancak GitHub runner Node sürümü değişiklikleri ileride action uyumluluğu açısından takip edilmelidir.
+An embedding launcher/staging page may provide `window.__OLDKO_TRANSPORT_CONFIG__` before the canonical bootstrap executes to override those routes without rebuilding C++.
+
+Deterministic resolution rules:
+
+- server target `*:15100` -> configured `auth` route;
+- server target `*:15001` -> configured `game` route;
+- relative `/auth` or `/game` on an HTTP page -> same-origin `ws://...`;
+- relative `/auth` or `/game` on an HTTPS page -> same-origin `wss://...`;
+- explicit `ws://` remains valid for local HTTP testing;
+- explicit insecure `ws://` from an HTTPS page is rejected;
+- missing config, malformed endpoint, unknown target port or ambiguous port mapping is rejected instead of guessed.
+
+The server-provided host and port still enter the real `CAPISocket::Connect` call. For the browser staging boundary, the fixed KO target port deterministically selects the public auth/game gateway route while the public origin comes from the configured endpoint/page origin. Native desktop builds continue to connect directly to the server-provided host/port over TCP.
+
+## Dependency evidence consumed
+
+- `main` observed during control: `692c780451782310669646859a4dac4ec937661c`.
+- browser baseline `openko-browser-port`: `18282d0e70de7ccb30244a9f09e2b3bff3040155`.
+- WS02 packet-agnostic gateway: `1738f60945b24e00bdd2266e6600b5c0cf3c64cf`.
+- WS09 staging/deployment current head: `2d4ec8ab89637d08b1f37c12dde0c93b89f8dc70`; its strict MIME follow-up is now READY.
+- WS12 launcher: `77f55b2949844e0fdd279526dab0fba4e8ab4f94`.
+- WS50 integration rehearsal: `94715058fdedc0a4fbab3a5f5c2ab29602fe747b`.
+- pinned OpenKO source: `97eb0ea20207afc0c360bfed6915113572711be3`.
+- pinned genuine KO 1298 assets: `2055ee6ed77f1b5cfef23832dd5bc31909e14a66`.
+- Emscripten: `6.0.12`.
+
+Full dependency handoff is recorded in `workstreams/ws01/DEPENDENCY_SNAPSHOT.md`.
+
+## Verification actually run
+
+GitHub Actions:
+
+- workflow: `WS01 Runtime Build`
+- run: `38496614280` (run 3)
+- job: `runtime-build` / `115633714791`
+- implementation head: `41097de4e6204b93da7b0c6ef3ef229fc41120c4`
+- result: **SUCCESS**
+- evidence artifact: `ws01-runtime-evidence` / `11864182177`
+- artifact digest: `sha256:89e775de0cb059fbbb95c556de57aba579d85bf75b111afa5cfc35584f0d64f7`
+
+Passing evidence includes:
+
+- pinned OpenKO source verification: PASS
+- pinned genuine KO 1298 asset slice verification: PASS
+- transport mapping unit tests: **9/9 PASS**
+- committed browser package verification: PASS
+- real browser patch application + hardcoded `ws://host:port` absence gate: PASS
+- pinned Emscripten `6.0.12` setup/toolchain check: PASS
+- real WarFare Emscripten configure: PASS
+- real WarFare WASM build: PASS
+- rebuilt package verification: PASS
+- real Chromium WebGL2/OpenGL runtime bootstrap smoke: PASS
+- runtime evidence upload: PASS
+
+## WS50 handoff
+
+WS50's existing narrow composition rule remains valid: copy WS01 `openko-web/index.html` and `tools/ws01_runtime/**`, apply the browser baseline patches first, then run `python3 tools/ws01_runtime/prepare_browser_source.py` at the established point in the build order.
+
+No full merge of divergent browser branches is required. No WS02, WS09, WS12 or WS50 provider code change is required to consume this fix.
+
+The exact WS50 integration instructions and acceptance checks are in `workstreams/ws01/INTEGRATION_PATCH.md`.
+
+## Remaining gates outside WS01
+
+There is no remaining WS01 structural public-WSS blocker.
+
+Project publication still depends on downstream integration/acceptance gates owned elsewhere, including a current WS10 native browser/Moradon E2E PASS against the selected provider set and a WS50 rerun proving the composed staging candidate. WS01 does not claim those downstream gates here.
+
+## Boundaries
+
+- no merge to `main`
+- no force push
+- no other workstream branch modified
+- no WS02 gateway behavior modified
+- no WS09 infrastructure modified
+- no WS12 launcher implementation modified
+- no fake JS/HTML KO protocol implementation added
+- no production domain, DNS, certificate or secret assumed
+
+BU SOHBETE ARTIK GEREK VAR MI?: HAYIR
