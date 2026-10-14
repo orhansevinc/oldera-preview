@@ -1,0 +1,44 @@
+{
+  "contract_version": "oldko.account-mail.v1",
+  "release_id": "oldkoweb-domain-live-20261015",
+  "transport": {
+    "production_scheme": "https",
+    "method": "POST",
+    "content_type": "application/json",
+    "signature": "HMAC-SHA256(secret, x-oldko-timestamp + '.' + exact_body)",
+    "headers": ["x-oldko-timestamp", "x-oldko-signature"]
+  },
+  "request": {
+    "required_fields": ["contractVersion", "type", "from", "accountId", "email", "token", "expiresAt"],
+    "types": ["account_verification", "password_reset"],
+    "token_transport": "signed HTTPS JSON body only",
+    "token_in_url": false,
+    "token_in_logs": false
+  },
+  "provider_acknowledgement": {
+    "http_2xx_alone_is_success": false,
+    "required_json": {
+      "accepted": true,
+      "provider": "non-empty provider identifier",
+      "provider_message_id": "non-empty provider acceptance/message id"
+    },
+    "meaning": "provider accepted the message for processing; this is not proof that the mailbox received it"
+  },
+  "production_env": {
+    "OLDKO_ACCOUNT_DELIVERY_WEBHOOK_URL": "secret/config; HTTPS receiver endpoint",
+    "OLDKO_ACCOUNT_DELIVERY_WEBHOOK_SECRET": "secret; shared HMAC key",
+    "OLDKO_ACCOUNT_MAIL_FROM": "config; sender at verified oldkoweb.com domain"
+  },
+  "sender_domain_requirements": {
+    "domain": "oldkoweb.com",
+    "provider_domain_verification": true,
+    "spf_dkim_provider_setup": "WS09/receiver owner",
+    "recommended_sender": "accounts@oldkoweb.com"
+  },
+  "smoke": {
+    "owner_provider_acceptance": "WS09",
+    "owner_mailbox_delivery": "WS10",
+    "record_without_token": ["provider", "provider_message_id", "event_type", "test_address_class", "accepted_at"],
+    "ci_sink_is_production_delivery_proof": false
+  }
+}
