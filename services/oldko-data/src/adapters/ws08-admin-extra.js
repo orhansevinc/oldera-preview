@@ -4,7 +4,8 @@ import { commandRow, iso } from './ws08-admin-shared.js';
 
 export async function upsertAdminActor(repo,{id,username,passwordHash,roles=[],enabled=true}){
   const actorId=String(id??'').trim(), user=String(username??'').trim(); if(!actorId||!user||!passwordHash) throw new ValidationError('admin actor id, username and passwordHash are required');
-  const {rows}=await repo.db.query(`INSERT INTO oldko.admin_actors(id,username,username_key,password_hash,roles,enabled) VALUES($1,$2,lower($2),$3,$4::text[],$5) ON CONFLICT(id) DO UPDATE SET username=EXCLUDED.username,username_key=EXCLUDED.username_key,password_hash=EXCLUDED.password_hash,roles=EXCLUDED.roles,enabled=EXCLUDED.enabled,updated_at=now() RETURNING id,username,roles,enabled,created_at,updated_at,last_login_at`,[actorId,user,passwordHash,roles.map(r=>String(r).toUpperCase()),Boolean(enabled)]);
+  const userKey=user.toLowerCase();
+  const {rows}=await repo.db.query(`INSERT INTO oldko.admin_actors(id,username,username_key,password_hash,roles,enabled) VALUES($1,$2,$3,$4,$5::text[],$6) ON CONFLICT(id) DO UPDATE SET username=EXCLUDED.username,username_key=EXCLUDED.username_key,password_hash=EXCLUDED.password_hash,roles=EXCLUDED.roles,enabled=EXCLUDED.enabled,updated_at=now() RETURNING id,username,roles,enabled,created_at,updated_at,last_login_at`,[actorId,user,userKey,passwordHash,roles.map(r=>String(r).toUpperCase()),Boolean(enabled)]);
   return actorRow(rows[0]);
 }
 
