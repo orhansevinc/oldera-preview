@@ -1,60 +1,77 @@
 (()=>{
-  const uiStyle=document.createElement('style');
-  uiStyle.textContent=`
-    @media (min-width:1121px){
-      :root{--shell:1650px}
-      .nav{height:104px!important;gap:28px!important}
-      .crest{width:60px!important;height:72px!important}
-      .brand{gap:15px!important}
-      .brand strong{font-size:36px!important}
-      .brand small{font-size:10px!important;margin-top:8px!important}
-      .navlinks a{font-size:16px!important;padding:18px 15px!important}
-      .actions{gap:10px!important}
-      .btn{min-height:52px!important;padding:0 22px!important;font-size:13px!important}
-      .hero{height:calc(100vh - 104px)!important;min-height:760px!important;max-height:980px!important}
-      .hero-grid{width:min(1650px,calc(100% - 42px))!important;grid-template-columns:1.08fr .92fr!important;gap:72px!important;padding:72px 0 132px!important}
-      .hero-grid>div:first-child{max-width:860px!important}
-      .kicker{font-size:14px!important}
-      .title{font-size:clamp(94px,9vw,154px)!important}
-      .slogan{font-size:48px!important;margin:26px 0 22px!important}
-      .lead{font-size:19px!important;line-height:1.7!important;max-width:790px!important}
-      .play-stage{min-height:430px!important}
-      .playdisc{width:300px!important;height:300px!important}
-      .playicon{width:76px!important;height:76px!important;font-size:28px!important}
-      .playcopy strong{font-size:26px!important}
-      .playcopy small{font-size:10px!important}
-      .countdown{margin-top:-86px!important}
-      .count-card{min-height:204px!important}
-      .count-intro{padding:34px 44px!important}
-      .count-intro small{font-size:11px!important}
-      .count-intro h2{font-size:47px!important}
-      .count-intro b{font-size:19px!important}
-      .count-intro p{font-size:11px!important}
-      .time b{font-size:76px!important}
-      .time span{font-size:10px!important}
-      .section{padding-top:64px!important;padding-bottom:64px!important}
-      .section-head h2{font-size:39px!important}
-      .section-head p{font-size:13px!important}
-      .panel-head h3{font-size:23px!important}
-      .world-copy h3{font-size:34px!important}
-      .world-copy p{font-size:13px!important}
-    }
-  `;
-  document.head.appendChild(uiStyle);
-
-  const hero=document.querySelector('.hero');
-  if(hero){
-    hero.style.setProperty('background-image','url("https://s3.eu-central-1.amazonaws.com/images.gamesatis.com/app/public/content/705/content_knight-online-castle-siege-war-csw.jpg")','important');
-    hero.style.setProperty('background-size','cover','important');
-    hero.style.setProperty('background-position','center 48%','important');
-    hero.style.setProperty('background-repeat','no-repeat','important');
+  const config = window.OLDKOWEB_CONFIG || {};
+  const $ = (s, root=document) => root.querySelector(s);
+  const $$ = (s, root=document) => [...root.querySelectorAll(s)];
+  const nationName = (value) => value === 'karus' || Number(value) === 1 ? 'Karus' : value === 'el_morad' || Number(value) === 2 ? 'El Morad' : '—';
+  const toast = $('#toast');
+  let toastTimer;
+  function say(text){ if(!toast) return; toast.textContent=text; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>toast.classList.remove('show'),2600); }
+  async function getJson(url){
+    const controller=new AbortController(); const timer=setTimeout(()=>controller.abort(),7000);
+    try{ const res=await fetch(url,{headers:{accept:'application/json'},cache:'no-store',signal:controller.signal}); if(!res.ok) throw new Error(`HTTP ${res.status}`); return await res.json(); }
+    finally{clearTimeout(timer)}
   }
 
-  const target=new Date('2026-11-01T00:00:00+03:00').getTime(),pad=n=>String(Math.max(0,n)).padStart(2,'0');
-  function tick(){let q=Math.max(0,target-Date.now());const d=Math.floor(q/86400000);q%=86400000;const h=Math.floor(q/3600000);q%=3600000;const m=Math.floor(q/60000),s=Math.floor((q%60000)/1000);for(const [id,v] of [['d',d],['h',h],['m',m],['s',s]]){const el=document.getElementById(id);if(el)el.textContent=pad(v)}}
-  tick();setInterval(tick,1000);
-  const toast=document.getElementById('toast');let tt;
-  function say(t){if(!toast)return;toast.textContent=t;toast.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>toast.classList.remove('show'),2600)}
-  document.querySelectorAll('.guide-item').forEach(x=>x.onclick=()=>say('Bu bölüm hazırlandı; canlı database/API entegrasyonu sonraki aşamada bağlanacak.'));
-  document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');say(b.textContent+' sıralaması için API entegrasyonu bekleniyor.');});
+  $$('.play-link').forEach((a)=>a.href=config.playUrl || 'https://play.oldkoweb.com/');
+
+  const countdown=$('.countdown');
+  if(!config.showCountdown || !config.openingAt){ if(countdown) countdown.hidden=true; }
+  else {
+    const target=Date.parse(config.openingAt); const dateEl=$('#openingDate');
+    if(!Number.isFinite(target)){ if(countdown) countdown.hidden=true; }
+    else {
+      if(countdown) countdown.hidden=false;
+      if(dateEl) dateEl.textContent=new Intl.DateTimeFormat('tr-TR',{dateStyle:'long',timeZone:'Europe/Istanbul'}).format(new Date(target));
+      const pad=(n)=>String(Math.max(0,n)).padStart(2,'0');
+      const tick=()=>{ let q=Math.max(0,target-Date.now()); const d=Math.floor(q/86400000); q%=86400000; const h=Math.floor(q/3600000); q%=3600000; const m=Math.floor(q/60000); const s=Math.floor((q%60000)/1000); for(const [id,v] of [['d',d],['h',h],['m',m],['s',s]]){const el=$(`#${id}`); if(el) el.textContent=pad(v);} };
+      tick(); setInterval(tick,1000);
+    }
+  }
+
+  const rankRoutes={level:'/v1/rankings/levels?page=1&pageSize=5',np:'/v1/rankings/national-points?page=1&pageSize=5',clan:'/v1/rankings/clans?page=1&pageSize=5'};
+  const rankBody=$('#rankBody');
+  const rankState=$('#rankState');
+  function renderRank(kind,items){
+    if(!rankBody) return;
+    rankBody.innerHTML='';
+    if(!items?.length){ rankBody.innerHTML='<tr><td colspan="5" class="placeholder">Henüz sıralama verisi yok.</td></tr>'; return; }
+    items.slice(0,5).forEach((item,i)=>{
+      const tr=document.createElement('tr');
+      if(kind==='clan') tr.innerHTML=`<td>${item.rank ?? i+1}</td><td>${escapeHtml(item.name ?? '—')}</td><td>${item.memberCount ?? '—'}</td><td>${nationName(item.nation)}</td><td>${item.points ?? '—'}</td>`;
+      else tr.innerHTML=`<td>${item.rank ?? i+1}</td><td>${escapeHtml(item.name ?? '—')}</td><td>${item.level ?? '—'}</td><td>${nationName(item.nation)}</td><td>${item.nationalPoints ?? '—'}</td>`;
+      rankBody.appendChild(tr);
+    });
+  }
+  function escapeHtml(value){ const span=document.createElement('span'); span.textContent=String(value); return span.innerHTML; }
+  async function loadRank(kind='level'){
+    if(rankState) rankState.textContent='GÜNCELLENİYOR';
+    try{ const data=await getJson(`${config.rankingsApiBase || '/api/rankings'}${rankRoutes[kind]}`); renderRank(kind,data.items); if(rankState) rankState.textContent='CANLI VERİ'; }
+    catch{ renderRank(kind,[]); if(rankState) rankState.textContent='VERİ ALINAMADI'; }
+  }
+  $$('.tab[data-rank]').forEach((button)=>button.addEventListener('click',()=>{ $$('.tab[data-rank]').forEach((b)=>b.classList.remove('active')); button.classList.add('active'); loadRank(button.dataset.rank); }));
+
+  async function loadStatus(){
+    const total=$('#onlineTotal'), el=$('#onlineElMorad'), karus=$('#onlineKarus'), onlineState=$('#onlineState'), statusList=$('#statusList'), statusState=$('#statusState');
+    try{
+      const data=await getJson(`${config.statusApiBase || '/api/status'}/v1/realms`);
+      const realms=Array.isArray(data.realms)?data.realms:[];
+      const counts=realms.map((r)=>r.onlinePlayerCount).filter(Number.isFinite);
+      if(total) total.textContent=counts.length?String(counts.reduce((a,b)=>a+b,0)):'—';
+      if(el) el.textContent='—'; if(karus) karus.textContent='—';
+      if(onlineState) onlineState.textContent=counts.length?'CANLI TOPLAM':'IRK DAĞILIMI SUNULMUYOR';
+      if(statusList){
+        statusList.innerHTML='<div class="status-row"><b>Official Website</b><span class="up">● ÇEVRİMİÇİ</span></div>';
+        if(!realms.length) statusList.insertAdjacentHTML('beforeend','<div class="status-row"><b>Oyun Sunucusu</b><span>VERİ YOK</span></div>');
+        realms.forEach((r)=>{ const row=document.createElement('div'); row.className='status-row'; const up=r.availability==='online'; row.innerHTML=`<b>${escapeHtml(r.displayName || r.realmId)}</b><span class="${up?'up':''}">${up?'● ÇEVRİMİÇİ':r.availability==='maintenance'?'BAKIMDA':'ÇEVRİMDIŞI'}</span>`; statusList.appendChild(row); });
+      }
+      if(statusState) statusState.textContent='CANLI DURUM';
+    }catch{
+      if(total) total.textContent='—'; if(el) el.textContent='—'; if(karus) karus.textContent='—';
+      if(onlineState) onlineState.textContent='VERİ ALINAMADI';
+      if(statusState) statusState.textContent='VERİ ALINAMADI';
+      if(statusList) statusList.innerHTML='<div class="status-row"><b>Official Website</b><span class="up">● ÇEVRİMİÇİ</span></div><div class="status-row"><b>Oyun Sunucusu</b><span>DURUM ALINAMADI</span></div>';
+    }
+  }
+  $$('.guide-item').forEach((x)=>x.addEventListener('click',()=>say('Bu rehber içeriği henüz yayınlanmadı.')));
+  loadRank('level'); loadStatus();
 })();
