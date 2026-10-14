@@ -10,5 +10,6 @@
   "ws12_sha": "121bb7bdb82c364bf9459111096f5ff007873a61",
   "ws14_sha": "82cdcef40bed265ff4c4ce0fb7c8f6ad8cf2f52b",
   "ws38_sha": "5f323f3cf055ba7f96d928605a2f2faf84e609cb",
-  "keepalive_minutes": "45"
+  "keepalive_minutes": "45",
+  "request_nonce": "2026-10-14T08:10:00+03:00-fresh-edge"
 }
