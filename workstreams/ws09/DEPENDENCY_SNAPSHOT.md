@@ -1,80 +1,86 @@
 WS09
 
-# Dependency Snapshot — Staging MIME Contract Finalization
+# Dependency Snapshot — Ephemeral HTTPS/WSS Test Link
 
 ## SELF
 
 - Workstream: `WS09`
 - Branch: `ws09-production-infra`
-- Implementation head validated in this control session: `834f913c29d9678215fa00d9817ae79b12b7af2c`
-- Owned surfaces changed: `infra/nginx/**`, `deploy/**`, `.github/workflows/ws09-deploy.yml`, `workstreams/ws09/**`.
-- No provider/product/client/game source changed.
+- Ephemeral publisher implementation head before this snapshot: `4e7c16ac7979b1a0c768f542cc7941f96172e7fb`
+- Owned surfaces used: `infra/**`, `deploy/**`, `workstreams/ws09/**`, `.github/workflows/ws09-*.yml`, existing `docker-compose.ws09-staging.yml`.
+- No provider/game/client implementation was modified.
 
 ## UPSTREAM
 
+### WS01 — browser WSS transport
+
+- Current branch head checked: `ws01-runtime-build@25c2fcd9c59e8f7a704f7d2ac0d5c331d0042ff9`.
+- Its public-WSS control closes the browser transport contract: auth uses same-origin `/auth`, game uses same-origin `/game`, while legacy TCP ports remain backend-only.
+- WS09 consumes the exact WS01 SHA frozen by the future WS50 handoff; WS09 does not rewrite WS01 transport/provider code.
+
+### WS10 — real Moradon acceptance + frozen passing client
+
+- Latest observed run while this snapshot was written: `WS10 Moradon E2E Integration Gate` run #25, run id `38503397843`, head `419d52b363a73c8ab77ff8ad944a30968fda967d`, still `in_progress` at the observation point.
+- Previous run #24 (`38501204665`, head `b11929915d881e046ff50aa34695c9da70a5480a`) completed with `failure`; its artifact must not be used as a PASS release.
+- Ephemeral publisher requires an exact **completed successful** WS10 Moradon E2E run, exact head SHA, explicit PASS evidence artifact, and exact frozen client artifact containing one non-empty `KnightOnLine.js`, `.wasm`, and `.data`.
+- Stale/failed runs or artifacts fail closed before any public publication.
+
 ### WS12 — browser launcher / strict publication preflight
 
-- Branch/head checked: `ws12-browser-launcher@77f55b2949844e0fdd279526dab0fba4e8ab4f94`.
-- Evidence read: `workstreams/ws12/STATUS.md`, `workstreams/ws12/INTEGRATION_PATCH.md`.
-- Contract consumed: WS12 strict content validation compares the actual response Content-Type to WS38's manifest-declared value and must fail closed on mismatch.
-- Required WS09 response for the real loader: `text/javascript; charset=utf-8`.
+- Current branch head checked: `ws12-browser-launcher@77f55b2949844e0fdd279526dab0fba4e8ab4f94`.
+- WS09 materializes the exact WS12 SHA from the WS50 handoff and runs its own `check-config.cjs` plus its exact launcher-core publication preflight.
+- Required same-origin endpoints are `/auth` and `/game`.
+- The public preflight verifies WS38 pointer/manifest/marker identity, required-file bytes/hashes, strict MIME, and launchable HTML entry.
 
-### WS38 — client content publication / MIME contract
+### WS38 — immutable client publication
 
-- Branch/head checked: `ws38-client-content-pipeline@5f323f3cf055ba7f96d928605a2f2faf84e609cb`.
-- Evidence read: `workstreams/ws38/STATUS.md`, `content-pipeline/oldko1298.profile.json`.
-- Exact contract consumed:
+- Current branch head checked: `ws38-client-content-pipeline@5f323f3cf055ba7f96d928605a2f2faf84e609cb`.
+- Exact content contract consumed:
   - `KnightOnLine.js` -> `text/javascript; charset=utf-8`
   - `KnightOnLine.wasm` -> `application/wasm`
   - `KnightOnLine.data` -> `application/octet-stream`
-- Publication/cache sequencing remains WS38-owned and unchanged.
+- Publisher sequence is fail closed and ordered: immutable files -> manifest -> verify -> `_complete` -> verify -> `latest.json` last.
 
-### WS50 — integration rehearsal / staging evidence
+### WS50 — staging integration handoff
 
-- Current branch head checked: `ws50-integration-rehearsal@94715058fdedc0a4fbab3a5f5c2ab29602fe747b`.
-- Evidence read: `workstreams/ws50/STATUS.md`, `integration-rehearsal/STAGING_CANDIDATE.md`.
-- WS50 independently recorded the previous WS09 `.js/.mjs = application/javascript` mapping as incompatible with WS12 strict WS38 validation.
-- WS50's separate browser-native public-WSS/path-routing blocker remains outside WS09 ownership.
+- Current branch head checked: `ws50-integration-rehearsal@bfedd39a085494f229f6d602b4bb427ce4bbc288`.
+- At this observation point `integration-rehearsal/STAGING_LINK_HANDOFF.md` is not present yet.
+- WS09 will accept only an exact WS50 commit containing that handoff with `STAGING LINK CANDIDATE: READY`; `READY_PENDING_WS10` is rejected.
+- The handoff must contain the same WS10 run/head/artifact identities and exact WS01/WS02/WS03/WS12/WS14/WS38 SHAs supplied to the publisher.
 
-## DOWNSTREAM
+## EPHEMERAL PUBLISHER CONTRACT
 
-- WS12 strict staging/publication preflight consumes the Content-Type emitted by the WS09 edge.
-- WS50/integration owners can now rehearse WS09 without the prior JS MIME mismatch.
-- WS10 / Ana Kontrol Hattı may consume the staging edge after their separate browser/Moradon gates are satisfied.
+Workflow: `.github/workflows/ws09-ephemeral-staging.yml`
 
-## CONTRACTS
+The workflow:
 
-Current WS09 static MIME contract:
+1. verifies exact WS10 successful run identity and exact live artifacts through GitHub Actions metadata;
+2. verifies exact WS50 READY handoff and all frozen identities;
+3. downloads the frozen passing client without rebuilding provider/client code;
+4. materializes exact provider slices into a disposable runner composition;
+5. publishes the client with exact WS38 tools/order;
+6. builds WS02 gateway and integrated WS03+WS14 runtime images from exact frozen SHAs;
+7. creates a temporary HTTPS/WSS `*.trycloudflare.com` origin using pinned `cloudflared 2026.10.0` with verified linux-amd64 SHA-256;
+8. boots existing WS09 same-origin edge with `/play-shell/`, `/auth`, `/game`;
+9. runs public HTTPS/WS38/MIME/cache/WSS smoke plus exact WS12 full publication preflight;
+10. emits `TEST_LINK=https://<temporary-host>/play-shell/` only after every gate passes, then keeps the process alive for a bounded 5–45 minute window.
 
-```text
-.js   -> text/javascript; charset=utf-8
-.mjs  -> text/javascript; charset=utf-8
-.wasm -> application/wasm
-.data -> application/octet-stream
-```
+Public edge smoke intentionally uses HEAD for large immutable files. Exact WS12 preflight performs the full required-file body/hash verification once, avoiding a redundant ~587 MB class download through the temporary tunnel.
 
-Regression enforcement:
+## CURRENT DECISION
 
-- `deploy/verify-config.sh` statically rejects a return to `application/javascript` for `js`/`mjs` and checks charset handling.
-- `deploy/staging-smoke.sh` performs exact full-header comparison compatible with WS12 `strictContentType` semantics.
-- `.github/workflows/ws09-deploy.yml` runs a real Nginx staging smoke for `.js`, synthetic `.mjs`, `.wasm`, and `.data`.
+- `EPHEMERAL STAGING PIPELINE`: implementation ready, validation finishing on WS09 Actions.
+- `EPHEMERAL TEST LINK`: **NOT LIVE / NOT CLAIMED** because an exact successful WS10 PASS artifact and exact WS50 READY handoff are not both available at this snapshot point.
+- No production domain, DNS, production certificate, or repository secret is required by this path.
 
-## VERIFICATION
+## BOUNDARIES
 
-GitHub Actions implementation run:
-
-- workflow run: `38496243278`
-- job: `115632531458`
-- head: `834f913c29d9678215fa00d9817ae79b12b7af2c`
-- result: SUCCESS
-- strict staging MIME smoke: SUCCESS
-
-## BLOCKERS
-
-- **WS09 staging MIME contract blocker:** none.
-- Separate project/public-staging gates remain outside this inbox task: WS50's browser-native WSS/path-routing finding and the project-level current Moradon E2E acceptance state.
-- No production domain/DNS/certificate change is required or authorized by this task.
+- No merge to `main`.
+- No force push.
+- No provider/client/game implementation change.
+- No fake client or stale PASS artifact accepted.
+- No production DNS/certificate change.
 
 ## LAST_SYNC
 
-Checked on 2026-10-14 against current `main` coordination files and the WS12/WS38/WS50 staging evidence listed above.
+Checked on 2026-10-14 against current `main` test-link coordination, WS01/WS10/WS12/WS38/WS50 staging evidence, and current provider branch heads listed above.
