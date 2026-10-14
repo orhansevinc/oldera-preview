@@ -7,6 +7,40 @@ function sameIdentity(left, right) {
   return String(left) === String(right);
 }
 
+function projectWs17EquipmentForWs19(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') return snapshot;
+  const rightHand = snapshot.rightHand;
+  if (!rightHand || typeof rightHand !== 'object') return snapshot;
+  return Object.freeze({
+    ...snapshot,
+    weaponRange: snapshot.weaponRange,
+    attackDelayMs: snapshot.attackDelayMs,
+    damage: rightHand.damage,
+    weaponItemId: rightHand.itemId ?? rightHand.templateId,
+    weaponType: rightHand.weaponType ?? rightHand.weaponTypeId,
+  });
+}
+
+function createWs17EquipmentCombatPort({ service, characterId }) {
+  if (!service || typeof service.getCombatItemSnapshot !== 'function') {
+    throw new TypeError('WS17 ItemDomainService-compatible service is required');
+  }
+  if (characterId === null || characterId === undefined || String(characterId) === '') {
+    throw new TypeError('characterId is required');
+  }
+  let current = null;
+  return Object.freeze({
+    async refresh() {
+      current = projectWs17EquipmentForWs19(await service.getCombatItemSnapshot(characterId));
+      return current;
+    },
+    getCombatSnapshot() {
+      if (!current) throw new Error('WS17 equipment combat snapshot must be refreshed before combat');
+      return current;
+    },
+  });
+}
+
 function createPlayableCombatSessionAdapter({ service, mobCombatPort, playerCombatPort }) {
   if (!service || typeof service.normalAttack !== 'function' || typeof service.skill !== 'function' || typeof service.resolveMobAttackIntent !== 'function') {
     throw new TypeError('WS19 PlayablePveCombatService-compatible service is required');
@@ -53,4 +87,4 @@ function createPlayableCombatSessionAdapter({ service, mobCombatPort, playerComb
   });
 }
 
-module.exports = { createPlayableCombatSessionAdapter };
+module.exports = { createPlayableCombatSessionAdapter, createWs17EquipmentCombatPort, projectWs17EquipmentForWs19 };
