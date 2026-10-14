@@ -28,14 +28,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Checkout exact WS14 terrain/world consumer authority
+      - name: Checkout exact WS14 terrain/world authority
         uses: actions/checkout@v4
         with:
           repository: orhansevinc/oldera-preview
-          ref: 9b82adefb05a3cca32f430e25f8a1d9109db93b2
+          ref: ed5f806ce7505f4dfae406e4164735def63b6c86
           path: .authority/ws14
           sparse-checkout: |
             services/ko1298-world
+          fetch-depth: 1
+
+      - name: Checkout exact WS19 combat authority
+        uses: actions/checkout@v4
+        with:
+          repository: orhansevinc/oldera-preview
+          ref: 28eb4f38753ffbc54c60abbd2a32832301284c06
+          path: .authority/ws19
+          sparse-checkout: |
+            services/ko1298-combat
           fetch-depth: 1
 
       - name: Checkout exact WS11 visibility authority
@@ -77,15 +87,22 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Run WS25 deterministic unit and lifecycle tests
-        run: node --test tests/ko1298-mobs/mob-lifecycle.test.cjs tests/ko1298-mobs/mob-runtime.test.cjs
+      - name: Run WS25 deterministic unit, visibility and combat lifecycle tests
+        env:
+          WS25_WS19_COMBAT_MODULE: ${{ github.workspace }}/.authority/ws19/services/ko1298-combat
+          WS25_WS19_PROVIDER_SHA: 28eb4f38753ffbc54c60abbd2a32832301284c06
+        run: >-
+          node --test
+          tests/ko1298-mobs/mob-lifecycle.test.cjs
+          tests/ko1298-mobs/mob-runtime.test.cjs
+          tests/ko1298-mobs/mob-combat-lifecycle-real.test.cjs
 
       - name: Resolve all verified Moradon slots with real WS14 SMD
         env:
           WS25_WS14_WORLD_MODULE: ${{ github.workspace }}/.authority/ws14/services/ko1298-world
           WS25_MORADON_SMD: ${{ github.workspace }}/.authority/openko/assets/Server/MAP/moradon_0826.smd
           WS25_WS31_SUMMARY: ${{ github.workspace }}/.authority/ws31/data-catalog/generated/catalog-summary.json
-          WS25_WS14_PROVIDER_SHA: 9b82adefb05a3cca32f430e25f8a1d9109db93b2
+          WS25_WS14_PROVIDER_SHA: ed5f806ce7505f4dfae406e4164735def63b6c86
           WS25_WS31_PROVIDER_SHA: 546d2ab62cd46a97f3385ebcddbe0c775a02c2eb
         run: |
           set -o pipefail
@@ -97,7 +114,7 @@ jobs:
           WS25_MORADON_SMD: ${{ github.workspace }}/.authority/openko/assets/Server/MAP/moradon_0826.smd
           WS25_WS11_ROOT: ${{ github.workspace }}/.authority/ws11
           WS25_WS11_PROVIDER_SHA: 944b6ff9b6329af29f1048a74aa6e14fca141639
-          WS25_WS14_PROVIDER_SHA: 9b82adefb05a3cca32f430e25f8a1d9109db93b2
+          WS25_WS14_PROVIDER_SHA: ed5f806ce7505f4dfae406e4164735def63b6c86
         run: |
           set -o pipefail
           node --test tests/ko1298-mobs/mob-visibility-authority-real.test.cjs 2>&1 | tee ws25-visibility-authority.log
