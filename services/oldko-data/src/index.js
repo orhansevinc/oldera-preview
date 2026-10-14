@@ -69,9 +69,9 @@ export async function withTransaction(pool, operation, options = {}) {
 
 export class PgAccountRepository {
   constructor(db) { this.db=db; }
-  async findById(id) { const {rows}=await this.db.query(`SELECT id,username,email,status,created_at,last_login_at FROM oldko.accounts WHERE id=$1`,[id]); return rows[0]??null; }
-  async findByUsername(username) { const {rows}=await this.db.query(`SELECT id,username,password_hash,email,status,created_at,last_login_at FROM oldko.accounts WHERE username_key=lower($1)`,[username]); return rows[0]??null; }
-  async create({username,passwordHash,email=null}) { const {rows}=await this.db.query(`INSERT INTO oldko.accounts(username,username_key,password_hash,email) VALUES($1,lower($1),$2,$3) RETURNING id,username,email,status,created_at`,[username,passwordHash,email]); return rows[0]; }
+  async findById(id) { const {rows}=await this.db.query(`SELECT id,username,email,status,created_at,last_login_at FROM oldko.accounts WHERE id=$1 AND deleted_at IS NULL`,[id]); return rows[0]??null; }
+  async findByUsername(username) { const normalized=normalizeAccountUsername(username); const {rows}=await this.db.query(`SELECT id,username,password_hash,email,status,created_at,last_login_at FROM oldko.accounts WHERE username_key=lower($1::varchar(32)) AND deleted_at IS NULL`,[normalized]); return rows[0]??null; }
+  async create({username,passwordHash,email=null}) { const normalized=normalizeAccountUsername(username); const {rows}=await this.db.query(`INSERT INTO oldko.accounts(username,username_key,password_hash,email) VALUES($1::varchar(32),lower($1::varchar(32)),$2,$3) RETURNING id,username,email,status,created_at`,[normalized,passwordHash,email]); return rows[0]; }
   async getBanState(accountId, ip=null) {
     const {rows}=await this.db.query(`SELECT EXISTS(SELECT 1 FROM oldko.bans WHERE account_id=$1 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>now())) account_banned, CASE WHEN $2::inet IS NULL THEN false ELSE EXISTS(SELECT 1 FROM oldko.ip_bans WHERE $2::inet <<= network AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>now())) END ip_banned`,[accountId,ip]);
     return rows[0];
@@ -88,9 +88,9 @@ export class PgCharacterRepository {
   async createCharacter(accountId, input) {
     assertSlot(input.slot); validateCharacterName(input.name);
     return withTransaction(this.pool, async client=>{
-      await client.query(`SELECT id FROM oldko.accounts WHERE id=$1 FOR UPDATE`,[accountId]);
+      await client.query(`SELECT id FROM oldko.accounts WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`,[accountId]);
       try {
-        const {rows}=await client.query(`INSERT INTO oldko.characters(account_id,slot,name,name_key,nation,race,class_id,face,hair,zone_id,pos_x,pos_y,pos_z) VALUES($1,$2,$3,lower($3),$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,[accountId,input.slot,input.name,input.nation,input.race,input.classId,input.face??0,input.hair??0,input.zoneId??21,input.posX??0,input.posY??0,input.posZ??0]);
+        const {rows}=await client.query(`INSERT INTO oldko.characters(account_id,slot,name,name_key,nation,race,class_id,face,hair,zone_id,pos_x,pos_y,pos_z) VALUES($1,$2,$3::varchar(20),lower($3::varchar(20)),$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,[accountId,input.slot,input.name,input.nation,input.race,input.classId,input.face??0,input.hair??0,input.zoneId??21,input.posX??0,input.posY??0,input.posZ??0]);
         const c=rows[0];
         await client.query(`INSERT INTO oldko.character_stats(character_id,hp,mp,str,sta,dex,intel,cha) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,[c.id,input.hp??100,input.mp??100,input.str??50,input.sta??50,input.dex??50,input.intel??50,input.cha??50]);
         return c;
@@ -127,8 +127,17 @@ export class PgAdminRepository {
 }
 
 async function audit(client,actor,action,type,id,requestId,details) { await client.query(`INSERT INTO oldko.audit_log(actor_account_id,action,target_type,target_id,request_id,details) VALUES($1,$2,$3,$4,$5,$6::jsonb)`,[actor,action,type,id,requestId,JSON.stringify(details)]); }
+function normalizeAccountUsername(value) { if(typeof value!=='string') throw new ValidationError('username must be a string'); const trimmed=value.trim(); if(!trimmed||trimmed.length>32) throw new ValidationError('username must be 1..32 characters after trim'); return trimmed; }
 function assertSlot(slot) { if(!Number.isInteger(slot)||slot<0||slot>2) throw new ValidationError('character slot must be 0, 1, or 2'); }
 function validateCharacterName(name) { if(typeof name!=='string'||!/^[A-Za-z0-9_]{3,20}$/.test(name)) throw new ValidationError('character name must be 3..20 ASCII letters, digits, or underscore'); }
-function validateLocation(x) { if(!x||!Object.hasOwn(ITEM_TABLES,x.kind)) throw new ValidationError('invalid item location'); if(!Number.isInteger(x.ownerId)||x.ownerId<=0||!Number.isInteger(x.slot)||x.slot<0||x.slot>255) throw new ValidationError('invalid item location owner/slot'); if(x.kind==='inn'&&(!Number.isInteger(x.page)||x.page<0||x.page>31)) throw new ValidationError('invalid inn page'); }
+function validateLocation(x) {
+  if(!x||!Object.hasOwn(ITEM_TABLES,x.kind)) throw new ValidationError('invalid item location');
+  if(!Number.isInteger(x.ownerId)||x.ownerId<=0||!Number.isInteger(x.slot)||x.slot<0) throw new ValidationError('invalid item location owner/slot');
+  if(x.kind==='equipment'&&x.slot>13) throw new ValidationError('equipment slot must be 0..13');
+  if(x.kind==='inventory'&&x.slot>27) throw new ValidationError('inventory slot must be 0..27');
+  if(x.kind==='inn') {
+    if(!Number.isInteger(x.page)||x.page<0||x.page>6||x.slot>27||x.page*28+x.slot>195) throw new ValidationError('inn location must map to flat slot 0..195');
+  }
+}
 function deletePlacement(c,id,x) { if(x.kind==='equipment') return c.query(`DELETE FROM oldko.character_items WHERE character_id=$1 AND slot=$2 AND item_instance_id=$3`,[x.ownerId,x.slot,id]); if(x.kind==='inventory') return c.query(`DELETE FROM oldko.inventory WHERE character_id=$1 AND slot=$2 AND item_instance_id=$3`,[x.ownerId,x.slot,id]); return c.query(`DELETE FROM oldko.inn_storage WHERE account_id=$1 AND page=$2 AND slot=$3 AND item_instance_id=$4`,[x.ownerId,x.page,x.slot,id]); }
 function insertPlacement(c,id,x) { if(x.kind==='equipment') return c.query(`INSERT INTO oldko.character_items(character_id,slot,item_instance_id) VALUES($1,$2,$3)`,[x.ownerId,x.slot,id]); if(x.kind==='inventory') return c.query(`INSERT INTO oldko.inventory(character_id,slot,item_instance_id) VALUES($1,$2,$3)`,[x.ownerId,x.slot,id]); return c.query(`INSERT INTO oldko.inn_storage(account_id,page,slot,item_instance_id) VALUES($1,$2,$3,$4)`,[x.ownerId,x.page,x.slot,id]); }
