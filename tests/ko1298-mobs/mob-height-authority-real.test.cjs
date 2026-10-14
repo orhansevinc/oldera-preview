@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 
@@ -9,7 +10,8 @@ const { MobService, loadVerifiedWorldDefinition } = require('../../services/ko12
 
 const ws14ModulePath = process.env.WS25_WS14_WORLD_MODULE;
 const smdPath = process.env.WS25_MORADON_SMD;
-const hasAuthority = Boolean(ws14ModulePath && smdPath);
+const ws31SummaryPath = process.env.WS25_WS31_SUMMARY;
+const hasAuthority = Boolean(ws14ModulePath && smdPath && ws31SummaryPath);
 const authorityTest = hasAuthority ? test : test.skip;
 
 function assertWireRepresentable(position) {
@@ -23,6 +25,14 @@ function assertWireRepresentable(position) {
 
 authorityTest('all 135 deterministic Moradon mob slots materialize through exact WS14 height authority', () => {
   const ws14 = require(path.resolve(ws14ModulePath));
+  const ws31Summary = JSON.parse(fs.readFileSync(ws31SummaryPath, 'utf8'));
+  const ws31Slice = ws31Summary.coverage.moradon_monsters;
+  assert.deepEqual(ws31Slice.template_ids, [750, 751, 752, 754, 755, 850, 851, 852, 853, 854]);
+  assert.equal(ws31Slice.templates, 10);
+  assert.equal(ws31Slice.spawn_groups, 20);
+  assert.equal(ws31Slice.declared_population, 135);
+  assert.equal(ws31Slice.source_position_semantics, 'K_NPCPOS rectangle/count');
+
   const resolver = ws14.createMoradonHeightResolver({ smdPath });
   const world = loadVerifiedWorldDefinition(moradonVerified);
   const resolutions = [];
