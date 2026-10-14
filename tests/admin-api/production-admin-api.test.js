@@ -96,19 +96,19 @@ test('online character mutation is sent to runtime authority instead of reposito
   const after = await repository.getCharacter('runtimeOnline'); assert.equal(after.level, before.level);
 }));
 
-test('ws28 result is SUCCEEDED only after bus applies it; unsupported and downstream failure are distinct', async () => withFixture(async ({ login, request }) => {
+test('ws28 result is SUCCEEDED only after bus applies it; unsupported is distinct', async () => withFixture(async ({ login, request }) => {
   const auth = await login();
   let r = await request('/commands', { method: 'POST', cookie: auth.cookie, csrf: auth.data.csrfToken, idempotencyKey: 'cmd-count-0001', body: { command: 'COUNT', reason: 'count players now' } }); assert.equal(r.status, 200); let data = await r.json(); assert.equal(data.game.status, 'SUCCEEDED'); assert.equal(data.command.status, 'SUCCEEDED');
   r = await request('/commands', { method: 'POST', cookie: auth.cookie, csrf: auth.data.csrfToken, idempotencyKey: 'cmd-clean-0001', body: { command: 'CLEAN', reason: 'unsupported command test' } }); assert.equal(r.status, 422); data = await r.json(); assert.equal(data.game.status, 'UNSUPPORTED');
-}), { });
+}));
 
 test('ws28 service failure is returned as FAILED/503, never successful 202', async () => withFixture(async ({ login, request }) => {
   const auth = await login();
   const r = await request('/commands', { method: 'POST', cookie: auth.cookie, csrf: auth.data.csrfToken, idempotencyKey: 'cmd-fail-0001', body: { command: 'COUNT', reason: 'failure propagation test' } });
   assert.equal(r.status, 503); const data = await r.json(); assert.equal(data.game.status, 'FAILED'); assert.equal(data.game.code, 'SERVICE_UNAVAILABLE');
-}), { busResult: () => ({ status: 'failed', code: 'SERVICE_UNAVAILABLE', message: 'game unavailable' }) }));
+}, { busResult: () => ({ status: 'failed', code: 'SERVICE_UNAVAILABLE', message: 'game unavailable' }) }));
 
-test('session survives api recreation on same durable store and logout revokes it', async () => withFixture(async ({ login, request }) => {
+test('logout revokes persistent session server-side', async () => withFixture(async ({ login, request }) => {
   const auth = await login();
   let r = await request('/session', { cookie: auth.cookie }); assert.equal(r.status, 200);
   r = await request('/session/logout', { method: 'POST', cookie: auth.cookie, csrf: auth.data.csrfToken }); assert.equal(r.status, 200);
