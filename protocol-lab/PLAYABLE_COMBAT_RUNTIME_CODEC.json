@@ -1,0 +1,122 @@
+{
+  "format": "oldkoweb-ko1298-playable-combat-runtime-codec-v1",
+  "milestone": "MORADON_PLAYABLE_COMBAT_SLICE",
+  "blocker": "COMBAT_S2C_RUNTIME_ENCODER",
+  "status": "RESOLVED",
+  "authority": {
+    "profile": "protocol-lab/PLAYABLE_COMBAT_PROTOCOL_PROFILE.json",
+    "profile_preserved_from_ws11_head": "4e86f75c55e66bef3da5cb8aa037d69b9f5c4852",
+    "gameplay_authority": "protocol-lab/gameplay-authority.json",
+    "visibility_authority": "protocol-lab/VISIBILITY_PROTOCOL_PROFILE.json",
+    "exact_source": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5",
+    "golden_gameplay": "protocol-lab/gameplay-fixtures/manifest.json",
+    "golden_visibility": "protocol-lab/visibility-fixtures/manifest.json"
+  },
+  "consumer_snapshots": {
+    "WS03": "607f0079bd2daca28e94ec9ba88a9c8b60f0cd34",
+    "WS25": "18c9e9b8439fef88fc93d74bfec7981b0cb41958"
+  },
+  "runtime": {
+    "language": "JavaScript",
+    "module_format": "CommonJS",
+    "module": "protocol-lab/runtime/playable-combat-codec.cjs",
+    "payload_only": true,
+    "framing_policy": "No AA55 framing implementation is present here. Existing WS11 framing authority remains tools/ws11_protocol/gameplay.py::build_frame/parse_frame.",
+    "domain_policy": "No damage calculation, HP authority, target authority, lifecycle transition, range decision, or semantic failure-reason derivation is performed by this codec."
+  },
+  "exports": [
+    "encodeAttackResult",
+    "decodeAttackResult",
+    "decodeTargetHpQuery",
+    "encodeTargetHp",
+    "decodeTargetHp",
+    "encodeDead",
+    "decodeDead",
+    "encodePlayerHp",
+    "decodePlayerHp",
+    "encodePlayerMsp",
+    "decodePlayerMsp",
+    "encodeMagicProcess",
+    "decodeMagicProcess",
+    "encodeSlash101003Result",
+    "decodeSlash101003Result",
+    "encodeNpcDetailRecord",
+    "decodeNpcDetailRecord",
+    "encodeNpcIn",
+    "decodeNpcIn"
+  ],
+  "wire": {
+    "WIZ_ATTACK_S2C": {
+      "opcode": "0x08",
+      "bytes": 7,
+      "layout": ["u8 opcode", "u8 attack_type", "u8 result", "i16 attacker_id", "i16 target_id"],
+      "semantic_enums": {
+        "attack_type": {"DIRECT": 1, "MAGIC": 2, "DURATION": 3},
+        "result": {"FAIL": 0, "SUCCESS": 1, "SUCCESS_AND_DEAD": 2, "TARGET_DEAD_OK": 3, "MAGIC_ATTACK_TARGET_DEAD": 4}
+      }
+    },
+    "WIZ_TARGET_HP_C2S": {
+      "opcode": "0x22",
+      "bytes": 4,
+      "layout": ["u8 opcode", "i16 target_id", "u8 update_immediately"],
+      "runtime": "decodeTargetHpQuery"
+    },
+    "WIZ_TARGET_HP_S2C": {
+      "opcode": "0x22",
+      "bytes": 14,
+      "layout": ["u8 opcode", "i16 target_id", "u8 update_immediately", "u32 max_hp", "u32 current_hp", "i16 hp_delta"]
+    },
+    "WIZ_DEAD_S2C": {
+      "opcode": "0x11",
+      "bytes": 3,
+      "layout": ["u8 opcode", "i16 target_id"]
+    },
+    "WIZ_HP_CHANGE_S2C": {
+      "opcode": "0x17",
+      "bytes": 5,
+      "layout": ["u8 opcode", "i16 max_hp", "i16 current_hp"]
+    },
+    "WIZ_MSP_CHANGE_S2C": {
+      "opcode": "0x18",
+      "bytes": 5,
+      "layout": ["u8 opcode", "i16 max_msp", "i16 current_msp"]
+    },
+    "WIZ_MAGIC_PROCESS_FULL": {
+      "opcode": "0x31",
+      "bytes": 22,
+      "layout": ["u8 opcode", "u8 command", "u32 skill_id", "i16 source_id", "i16 target_id", "i16 data1", "i16 data2", "i16 data3", "i16 data4", "i16 data5", "i16 data6"],
+      "semantic_enums": {
+        "command": {"CASTING": 1, "FLYING": 2, "EFFECTING": 3, "MAGIC_FAIL": 4, "DURATION_EXPIRED": 5, "CANCEL": 6}
+      },
+      "slash_101003": {
+        "EFFECTING_SUCCESS": {"command": "EFFECTING", "data": [1, 1, 0, 0, 0, 0]},
+        "EFFECTING_MISS": {"command": "EFFECTING", "data": [1, 0, 0, 0, 0, -104]},
+        "MAGIC_FAIL": {"command": "MAGIC_FAIL", "data": [0, 0, 0, 0, 0, 0]}
+      }
+    },
+    "WIZ_NPC_INOUT_IN": {
+      "opcode": "0x0A",
+      "inout": 1,
+      "layout": "u8 opcode + u8 IN(1) + existing exact NPC_DETAIL_RECORD",
+      "record_schema_owner": "WS11 visibility authority",
+      "domain_record_owner": "WS16/WS25"
+    }
+  },
+  "strictness": {
+    "integer_ranges": ["i16", "u16", "u32", "u8"],
+    "overflow": "REJECT",
+    "truncation": "REJECT",
+    "unknown_semantic_enum": "REJECT",
+    "unknown_wire_enum": "REJECT"
+  },
+  "semantic_separation": {
+    "rule": "Wire result codes are explicit codec inputs and are never inferred from WS19 semantic reason strings.",
+    "example": "A range failure may retain semantic reason OUT_OF_RANGE while the explicit WIZ_ATTACK wire result is FAIL(0)."
+  },
+  "tests": {
+    "runtime": "tests/protocol-lab/test_playable_combat_runtime_codec.cjs",
+    "golden_byte_match": true,
+    "decoder_roundtrip": true,
+    "ws03_consumer_contract": true
+  }
+}
