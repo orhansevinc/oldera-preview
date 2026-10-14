@@ -1,94 +1,92 @@
 {
-  "schema_version": "ws09-domain-release-requests/v1",
-  "updated_at": "2026-10-14T20:33:00+03:00",
-  "release_target": "oldkoweb-ws50-c5-ws10-38604174659",
+  "schema_version": "ws09-domain-release-requests/v2",
+  "updated_at": "2026-10-15T02:35:00+03:00",
+  "release_target": "oldkoweb-domain-live-20261015",
   "requests": [
     {
       "id": "OFFICIAL_SITE_HANDOFF",
       "owner": "official-site-domain-release",
-      "state": "WAITING",
-      "handoff_path": "coordination/handoffs/official-site-release.json",
-      "acceptance": [
-        "handoff file exists on official-site-domain-release",
-        "exact website source commit is recorded",
-        "website artifact/digest is recorded",
-        "public account API route/config is explicit and same-origin",
-        "migration and backend source requirements are explicit",
-        "website verification results are recorded"
-      ]
-    },
-    {
-      "id": "WS03_WS07_PERSISTENT_GAME_REPOSITORY",
-      "owner": "WS03 with WS07 adapter dependency",
-      "state": "BLOCKING",
+      "state": "SATISFIED",
       "evidence": {
-        "ws03_head": "495de481726734d85cc28b3d432835799aff7e48",
-        "ws07_head": "10008ad1698b79c01d87cde54463d49f3bf623a2"
-      },
-      "acceptance": [
-        "WS03 repository call sites await the existing asynchronous repository contract",
-        "PgWs03SessionRepository is injected in production instead of MemoryRepository",
-        "login/nation/character list/create/select survive process restart",
-        "no gameplay packet contract is guessed or duplicated",
-        "because this changes the C5 runtime composition, C5 stays immutable and WS50 produces a child candidate",
-        "the child candidate passes affected contract/scenario/real-browser gates before production promotion"
-      ]
+        "handoff_commit": "8370de2ebfdfd319cf8a719da79cbdef9853fd2f",
+        "source_commit": "5f9a4f0ccd3d7d06e8b407bfca35266f1b2d3516",
+        "artifact_digest": "git-tree-sha1:ee3ba5bfd85ff6951017befb748b71c3e5851f97"
+      }
     },
     {
       "id": "WS13_WS07_SHARED_ACCOUNT_SOURCE",
-      "owner": "WS13 with WS07 persistence/schema coordination",
+      "owner": "WS13_WITH_WS07",
+      "state": "SATISFIED_FOR_DEPLOYMENT_COMPOSITION",
+      "evidence": {
+        "ws13_head": "1ef67bd7c0c98a588bce4db6c0f1305b820af008",
+        "ws13_green_run_id": 38650301600,
+        "ws07_commit": "1ae85c96319cbab11648a91ed28300e17d4c607f",
+        "ws07_adapter_blob": "022c32abde503a6dc3af1ff9429c206a1b20ca63"
+      },
+      "remaining_external": "real HTTPS verification/password-reset delivery webhook configuration plus backup-gated production migrations"
+    },
+    {
+      "id": "WS50_PERSISTENT_GAME_CHILD",
+      "owner": "WS50_THEN_WS10",
       "state": "BLOCKING",
       "evidence": {
-        "ws13_head": "23ac239b26e0353bf2da6f9c9649710db58e3a9a",
-        "ws07_head": "10008ad1698b79c01d87cde54463d49f3bf623a2"
+        "frozen_c5_ws03": "495de481726734d85cc28b3d432835799aff7e48",
+        "observed_newer_ws03_head": "7c5f5f3584e7d3621aa5a318ad65c011bd77276f",
+        "observed_newer_ws03_green_run_id": 38650070368,
+        "current_ws50_handoff": "7497087d4cf67e4e05a3a090f6edad3d206078cb"
       },
       "acceptance": [
-        "production createAccount/find/update/token operations use PostgreSQL and never the in-memory adapter",
-        "website registration writes the same oldko.accounts identity consumed by game authentication",
-        "password hash encoding/verification is one compatible authority for website and game login",
-        "account verification/password-version/action-token persistence has an explicit forward migration or compatible repository mapping",
-        "registration -> verification -> website login/access -> game login is integration-tested against one PostgreSQL database",
-        "production rate limiting is shared/durable or has an explicitly approved deployment-safe implementation"
+        "WS50 selects an immutable child candidate containing the persistent game/account composition",
+        "WS10 accepts that exact candidate with affected contract/scenario/real-browser gates",
+        "WS09 receives exact provider-set, server image and client identities",
+        "WS09 does not silently replace the WS03 pin inside frozen C5"
       ]
     },
     {
-      "id": "WS08_WS07_ADMIN_REPOSITORY",
-      "owner": "WS08 with WS07 persistence dependency",
+      "id": "WS08_WS07_ADMIN_PRODUCTION_ADAPTER",
+      "owner": "WS08_WITH_WS07_AND_GAME_COMMAND_BRIDGE",
       "state": "BLOCKING",
       "evidence": {
         "ws08_head": "239cdacf0fb6bacde5017fb3b787451595a3be0d",
-        "ws07_head": "10008ad1698b79c01d87cde54463d49f3bf623a2"
+        "current_repository": "MemoryAdminRepository for tests/development",
+        "current_command_forwarding": "not a real game-server bridge"
       },
       "acceptance": [
-        "MemoryAdminRepository is not used in production",
-        "WS07-backed adapter implements the WS08 REQUIRED_METHODS surface",
-        "login/session authorization remains server-side and fail-closed",
-        "admin reads/mutations/audit persist across service restart",
-        "admin frontend uses the real same-origin /api/admin route"
+        "production PostgreSQL adapter implements WS08 REQUIRED_METHODS",
+        "MemoryAdminRepository is impossible in production",
+        "admin login/session authorization remains server-side and fail-closed",
+        "admin reads/mutations/audit survive restart",
+        "real game command bridge is connected and verified"
       ]
     },
     {
-      "id": "PERSISTENT_HOST_TARGET",
-      "owner": "external infrastructure",
+      "id": "EXTERNAL_PRODUCTION_INFRASTRUCTURE",
+      "owner": "WS09_EXTERNAL",
       "state": "BLOCKING",
       "acceptance": [
-        "authorized persistent host/provider is connected",
-        "stable public target exists",
-        "Docker/Compose or equivalent long-running service runtime is available",
-        "persistent PostgreSQL disk/volume and backup destination are available",
-        "ports 80/443 can be exposed while database/game TCP internals remain private"
+        "authorized persistent Linux host with stable public IPv4 and Docker/Compose is connected",
+        "production secrets/configuration channel is available without exposing values in chat/repository",
+        "real WS13 delivery webhook URL/secret is configured through that channel",
+        "authoritative DNS zone is readable and can be snapshotted before changes",
+        "existing MX/TXT/mail/ownership/nameserver records are preserved",
+        "only apex/play/admin are changed after Host/SNI origin tests pass"
       ]
     },
     {
-      "id": "DNS_TLS_CUTOVER",
-      "owner": "WS09 after host access",
-      "state": "BLOCKED_BY_PERSISTENT_HOST_TARGET",
+      "id": "DNS_TLS_LIVE_ACCEPTANCE",
+      "owner": "WS09_THEN_WS10",
+      "state": "BLOCKED_BY_EXTERNAL_INFRASTRUCTURE_AND_OWNER_GATES",
       "acceptance": [
-        "existing authoritative DNS records are inspected before mutation",
-        "unrelated DNS/email/domain ownership records are preserved",
-        "apex/play/admin point only to the verified persistent host",
-        "SAN certificate covers apex/play/admin",
-        "HTTPS/WSS and real-domain browser E2E pass before cutover is declared complete"
+        "valid SAN TLS covers oldkoweb.com, play.oldkoweb.com and admin.oldkoweb.com and renewal is proven",
+        "API paths never fall through to static HTML",
+        "WSS /auth and /game work on the real hostname",
+        "WASM MIME, .data ranges and launcher manifest checks pass",
+        "registration/login/password flows and one-database game login pass",
+        "Moradon NPC/mob/movement real-browser acceptance passes",
+        "admin authentication/data/commands pass",
+        "account and character persistence survive service restart",
+        "application/static rollback is verified without destructive DB rollback",
+        "final WS10 domain gate is green"
       ]
     }
   ]
