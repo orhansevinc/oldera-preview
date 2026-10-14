@@ -10,6 +10,7 @@ on:
       - 'docker-compose.ws09.yml'
       - 'docker-compose.ws09-staging.yml'
       - '.github/workflows/ws09-deploy.yml'
+      - '.github/workflows/ws09-ephemeral-staging.yml'
   pull_request:
     paths:
       - 'infra/**'
@@ -18,6 +19,7 @@ on:
       - 'docker-compose.ws09.yml'
       - 'docker-compose.ws09-staging.yml'
       - '.github/workflows/ws09-deploy.yml'
+      - '.github/workflows/ws09-ephemeral-staging.yml'
 
 permissions:
   contents: read
@@ -46,6 +48,21 @@ jobs:
 
       - name: Static validation
         run: sh deploy/verify-config.sh
+
+      - name: Ephemeral publisher fail-closed contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check deploy/ephemeral-public-smoke.mjs
+          grep -Fq 'READY_PENDING_WS10' .github/workflows/ws09-ephemeral-staging.yml
+          grep -Fq '.conclusion == "success"' .github/workflows/ws09-ephemeral-staging.yml
+          grep -Fq 'WS10_PASS_ARTIFACT' .github/workflows/ws09-ephemeral-staging.yml
+          grep -Fq 'STAGING_LINK_HANDOFF.md' .github/workflows/ws09-ephemeral-staging.yml
+          grep -Fq 'client-content/v1/${CONTENT_VERSION}/_complete.json' .github/workflows/ws09-ephemeral-staging.yml
+          grep -Fq 'trycloudflare.com' .github/workflows/ws09-ephemeral-staging.yml
+          grep -Fq 'websocketUpgrade('\''/auth'\'')' deploy/ephemeral-public-smoke.mjs
+          grep -Fq 'websocketUpgrade('\''/game'\'')' deploy/ephemeral-public-smoke.mjs
+          grep -Fq 'TEST_LINK=$TEST_LINK' .github/workflows/ws09-ephemeral-staging.yml
 
       - name: Production compose validation
         run: docker compose --env-file deploy/.env.example -f docker-compose.ws09.yml config --quiet
