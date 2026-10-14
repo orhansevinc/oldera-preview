@@ -6,9 +6,24 @@ const { GAME, Writer } = require('../../services/ko1298-session/protocol');
 const { MemoryRepository } = require('../../services/ko1298-session/repository');
 const { GameSession } = require('../../services/ko1298-session/session');
 const { SESSION_STATES } = require('../../services/ko1298-session/contracts');
-const { WorldSessionService } = require('../../services/ko1298-world');
+const {
+  DOMAIN_LIVE_PROVIDER_PINS,
+} = require('../../services/ko1298-session/production-composition');
+const {
+  WorldSessionService,
+  createSharedNpcRuntimeIdNamespace,
+} = require('../../services/ko1298-world');
 const { MovementService } = require('../../services/ko1298-movement');
-const { NpcInteractionRouter } = require('../../services/ko1298-npc');
+const {
+  NpcInteractionRouter,
+  NpcWorld,
+  materializeNpcPopulation,
+} = require('../../services/ko1298-npc');
+const {
+  MobVisibilityService,
+  RUNTIME_ID_CONTRACT,
+  loadVerifiedWorldDefinition,
+} = require('../../services/ko1298-mobs');
 const { SessionOwnershipService, InMemoryLeaseStore } = require('../../services/session-ownership');
 
 function login() {
@@ -145,4 +160,30 @@ test('real WS14 + WS15 + WS16 + WS45 contracts compose through WS03', async () =
   assert.equal(worldSession.getSession(500), null);
   assert.equal(movementSession.hasSession('game:500'), false);
   assert.equal(await ownership.getAccountOwner('osevinc'), null);
+});
+
+test('domain-live immutable provider surfaces match the C5-compatible production composition contract', () => {
+  assert.equal(DOMAIN_LIVE_PROVIDER_PINS.WS14, 'ed5f806ce7505f4dfae406e4164735def63b6c86');
+  assert.equal(DOMAIN_LIVE_PROVIDER_PINS.WS15, 'ce9bed13b8d45c32ff0592595aa3a0d1e7b3964d');
+  assert.equal(DOMAIN_LIVE_PROVIDER_PINS.WS16, '5ed48ff32187000312652838674388df52fc3fb7');
+  assert.equal(DOMAIN_LIVE_PROVIDER_PINS.WS25, '18c9e9b8439fef88fc93d74bfec7981b0cb41958');
+
+  assert.equal(typeof WorldSessionService, 'function');
+  assert.equal(typeof createSharedNpcRuntimeIdNamespace, 'function');
+  assert.equal(typeof MovementService, 'function');
+  assert.equal(typeof NpcWorld, 'function');
+  assert.equal(typeof materializeNpcPopulation, 'function');
+  assert.equal(typeof MobVisibilityService, 'function');
+  assert.equal(typeof loadVerifiedWorldDefinition, 'function');
+  assert.equal(RUNTIME_ID_CONTRACT.NPC_BAND, 10000);
+  assert.equal(RUNTIME_ID_CONTRACT.INVALID_BAND, 30000);
+
+  const namespace = createSharedNpcRuntimeIdNamespace({
+    minInclusive: RUNTIME_ID_CONTRACT.NPC_BAND,
+    maxExclusive: RUNTIME_ID_CONTRACT.INVALID_BAND,
+    reserved: [{ runtimeId: 10000, sourceInstanceKey: 'contract:npc' }],
+  });
+  const mobId = namespace.claim({ namespace: 'KO1298_NPC', kind: 'mob', sourceIdentity: 'contract:mob' });
+  assert.equal(mobId, 10001);
+  assert.deepEqual(namespace.snapshot().ids, [10000, 10001]);
 });
