@@ -128,15 +128,17 @@ jobs:
       - name: Nginx production template syntax
         run: |
           docker run --rm \
+            --add-host account-api:127.0.0.1 \
             --add-host gateway-auth:127.0.0.1 \
             --add-host gateway-game:127.0.0.1 \
             --add-host admin-api:127.0.0.1 \
             -e OFFICIAL_HOST=oldkoweb.com \
             -e PLAY_HOST=play.oldkoweb.com \
             -e ADMIN_HOST=admin.oldkoweb.com \
+            -e ACCOUNT_API_PORT=8081 \
             -e ADMIN_API_PORT=8080 \
             -e GATEWAY_INTERNAL_PORT=8080 \
-            -e 'NGINX_ENVSUBST_FILTER=^(OFFICIAL_HOST|PLAY_HOST|ADMIN_HOST|ADMIN_API_PORT|GATEWAY_INTERNAL_PORT)$' \
+            -e 'NGINX_ENVSUBST_FILTER=^(OFFICIAL_HOST|PLAY_HOST|ADMIN_HOST|ACCOUNT_API_PORT|ADMIN_API_PORT|GATEWAY_INTERNAL_PORT)$' \
             -v "$PWD/infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" \
             -v "$PWD/infra/nginx/mime.types:/etc/nginx/oldkoweb-mime.types:ro" \
             -v "$PWD/infra/nginx/templates/production.conf.template:/etc/nginx/templates/default.conf.template:ro" \
