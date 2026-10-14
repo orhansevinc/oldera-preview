@@ -4,106 +4,113 @@ WS25
 
 - Workstream: `WS25`
 - Branch: `ws25-mob-ai`
-- State: `STAGE 2/3 IMPLEMENTED / INTEGRATION-READY WITH DATA CAVEATS`
-- Scope: deterministic production mob runtime and source-backed monster/spawn adapters
+- State: `MORADON MOB HEIGHT PASS / INTEGRATION-READY`
+- Scope: verified Moradon mob population + authoritative WS14 terrain/shape height materialization
 
-## Delivered
+## Result
 
-### Real data boundary
+WS25 now consumes WS14 through an explicit `terrain.resolveHeight(zoneId, x, z)` dependency. It does not copy WS14 terrain/SMD logic.
 
-- strict `fixture` vs `real` validation retained and hardened;
-- WS31 monster catalog -> verified K_MONSTER template loader;
-- source-backed K_MONSTER/K_NPCPOS world loader;
-- duplicate monster ID, spawn row, spawn geometry, spawn ID and cross-zone validation;
-- unsafe integer rejection on runtime data paths;
-- real terrain Y fails closed until an authoritative resolver is supplied;
-- source K_NPCPOS spawn rectangles converted to deterministic X/Z slots without claiming original RNG equivalence.
+For every production `dataClass=real` mob spawn:
 
-### Verified Moradon slice
+1. WS25 keeps its deterministic X/Z projection inside the verified K_NPCPOS source rectangle.
+2. WS25 calls the WS14 height resolver with exactly that zone/X/Z.
+3. Only `status=authoritative` with finite `height` is accepted.
+4. No y=0, constant-Y, manual source-Y or guessed fallback exists in the production path.
+5. Initial materialization fails closed before emitting a spawn when height is not authoritative.
+6. Respawn stays despawned/deferred and retries with a fresh WS14 height resolve until authoritative.
 
-Pinned source: `Open-KO/OpenKO-db@bec619466938d278339c30e5b1a4bff3c9413bab`.
+## Exact authorities used by CI
 
-Moradon zone 21 is verified to contain attackable mobs. Checked-in production-source slice:
+- WS14 height authority: `ws14-world-session@9b82adefb05a3cca32f430e25f8a1d9109db93b2`
+- 1298 Moradon SMD authority: `Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5`, `assets/Server/MAP/moradon_0826.smd`
+- SMD git blob: `cf47772b8e42a8bad71032419f47978c8bbd6142`
+- WS31 catalog authority: `ws31-data-catalog@546d2ab62cd46a97f3385ebcddbe0c775a02c2eb`
+- WS11 visibility authority: `ws11-protocol-lab@944b6ff9b6329af29f1048a74aa6e14fca141639`
 
-- 10 K_MONSTER templates: 750, 751, 752, 754, 755, 850, 851, 852, 853, 854;
-- 20 K_NPCPOS source rows;
-- 135 expanded deterministic spawn slots;
-- source HP, attack delay, attack/search/tracing ranges, group/family and RegTime provenance.
+## Verified Moradon regression
 
-The old `fixture:moradon` data remains synthetic test-only data and is not promoted to production.
+Current WS31/WS25 slice:
 
-### Lifecycle / AI
+- 10 verified monster templates: 750, 751, 752, 754, 755, 850, 851, 852, 853, 854;
+- 20 selected verified K_NPCPOS source rows/groups;
+- 135 deterministic runtime spawn slots;
+- deterministic X/Z stays inside source rectangle;
+- deterministic projection is not claimed to reproduce original 1298 RNG sequence.
 
-States:
-
-`idle`, `patrolling`, `aggro`, `chasing`, `attack-intent`, `returning`, `dead`, `corpse`, `despawned`.
-
-Implemented:
-
-- deterministic fixed-tick scheduler with bounded catch-up;
-- deterministic nearest-target selection + lexical ID tie break;
-- wrong-zone/dead/missing target rejection;
-- source-backed aggro/search, attack and tracing/leash values;
-- attack-intent cadence from source attack delay;
-- return-home lifecycle;
-- target lost/dead/zone-leave handling;
-- stuck count and no-path outcome handling via movement adapter only;
-- optional patrol intent only when a path is supplied;
-- stable instance ID + respawn `spawnEpoch`;
-- source-backed assist signal using OpenKO same group/family + search-range evidence;
-- no invented generic threat table.
-
-OpenKO's `m_DamagedUserList` is documented for XP distribution, while attacker retargeting is a separate `ChangeTarget()` path. Exact level/HP retarget scoring is therefore intentionally not guessed.
-
-### World hooks
-
-- player enter/leave region;
-- multiple tracked players;
-- nearby mob spawn/despawn;
-- mob visibility delta after authoritative position sync;
-- corpse despawn and respawn visibility events;
-- region/cell membership stays owned by WS14 through `isMobVisibleToPlayer()`.
-
-### Movement/combat boundaries
-
-- WS15 movement implementation is not copied. WS25 emits chase/return/patrol/stop intents and consumes authoritative `syncPosition()` / movement outcomes.
-- WS19 damage implementation is not copied. WS25 emits attack intents and consumes authoritative absolute HP.
-- WS26 integration point is the one-shot `dead` event; no drop logic is embedded.
-- WS27 integration point is the same authoritative death context; no XP formula is embedded.
-
-## Test / load result
-
-Local Node.js `v22.16.0`:
+Real-SMD CI result:
 
 ```text
-node --test tests/ko1298-mobs/*.test.cjs
-23 tests / 23 pass / 0 fail
+verified templates:       10
+verified spawn rows:      20
+deterministic slots:     135
+resolved slots:          135
+authoritative slots:     135
+terrain surface:         130
+shape surface:             5
 ```
 
-Coverage includes lifecycle transitions, real-data provenance/validation, source-backed Moradon expansion, terrain fail-closed behavior, deterministic targeting, combat/movement boundaries, assist signal, region visibility, player cleanup, scheduler monotonicity, multiple players, stuck/no-path, death/respawn churn and stable IDs.
+All 135 slots therefore materialize with real WS14 authoritative Y. No slot used fallback height.
 
-Latest local load diagnostic from the test suite (not a production SLA):
+## Coordinate basis
+
+Each real mob carries:
+
+- `spawnAnchor`: deterministic verified-rectangle X/Z + heading;
+- `spawnOrigin`: current authoritative materialization of that anchor;
+- `position`: runtime authoritative position;
+- `home`: authoritative home used by AI leash/chase/return-home.
+
+At spawn, `position == spawnOrigin == home` after WS14 height resolution. X/Z remain equal to `spawnAnchor`.
+
+At respawn, the same deterministic verified X/Z slot is retained, but WS14 is called again and the new authoritative Y is applied atomically to `position`, `spawnOrigin` and `home` before the spawn event.
+
+## WS15 movement boundary
+
+WS25 still emits only movement intents:
+
+- chase;
+- return-home;
+- patrol;
+- stop;
+- no-path/stuck outcomes.
+
+WS15 remains the movement authority and feeds runtime positions back through `syncPosition()`. No WS15 pathfinding/movement implementation was copied.
+
+## WS19 combat boundary
+
+WS25 still emits attack intents and consumes authoritative absolute HP. No WS19 damage/combat implementation was copied.
+
+## Visibility protocol
+
+WS25 does not encode browser packets.
+
+Current WS11 visibility authority verifies the mob/NPC visibility family (`WIZ_NPC_REGION`, `WIZ_REQ_NPCIN`, `WIZ_NPC_INOUT`, NPC detail record) and reports no remaining WS50 visibility-evidence blocker. WS25 therefore leaves protocol encoding to the WS11/composition boundary rather than adding a local encoder.
+
+Historical `WS50-C3` remains immutable and still records the blocker state that existed when C3 was frozen. This branch is for a subsequent provider-set candidate; C3 must not be mutated.
+
+## Test / CI
+
+GitHub Actions run `38585109050`, job `115924879964`:
 
 ```text
-100 mobs  x 50 ticks: ~10 ms
-500 mobs  x 50 ticks: ~22 ms
-1000 mobs x 50 ticks: ~35 ms
+WS25 deterministic unit + lifecycle suite
+25 tests / 25 pass / 0 fail
+
+real WS14 SMD height integration
+1 test / 1 pass / 0 fail
+135 / 135 authoritative slots
+surface split: terrain=130, shape=5
 ```
 
-A 500-mob death -> corpse -> despawn -> respawn churn test returns to exactly 500 live instances with cleared death/target state; 50 tracked players enter/leave with tracked-player count returning to zero.
+The workflow checks out the exact WS14 provider, exact WS31 catalog provider and pinned OpenKO Moradon SMD before running the real height integration test.
 
-## CI
+## Handoff
 
-Dedicated workflow remains `.github/workflows/ws25-mobs.yml` and runs the complete `tests/ko1298-mobs/*.test.cjs` suite on Node 22 for WS25 paths.
+```text
+requires terrain.height-authority -> WS14@9b82adefb05a3cca32f430e25f8a1d9109db93b2
+requires visibility.protocol       -> WS11@944b6ff9b6329af29f1048a74aa6e14fca141639
+requires WS31 monster catalog      -> WS31@546d2ab62cd46a97f3385ebcddbe0c775a02c2eb
+```
 
-## Data/source caveats
-
-1. WS31's current canonical `data-catalog/mobs.json` does not yet include the committed Moradon 750-854 subset. The WS25 data is directly source-backed, but remains marked `upstream-verified-pending-ws31-catalog-expansion` until WS31 imports those IDs.
-2. Exact terrain Y for K_NPCPOS rectangles is not present in this dataset; production initialization requires the WS14/world height resolver.
-3. K_NPCPOS defines spawn rectangles and counts; OpenKO randomizes points inside those rectangles. WS25 uses a deterministic hash inside the same verified rectangles, not the original RNG sequence.
-4. Exact attacker retarget scoring from OpenKO `ChangeTarget()` is not yet frozen into WS25. No synthetic threat scores were added.
-5. Assist is exposed as a source-backed signal; the remaining friend-target propagation should be wired only after the exact region behavior is frozen.
-
-## Boundary audit
-
-No WS14/WS15/WS19/WS26/WS27 implementation code, DB migration, client, admin/site, or `main` merge is part of this change. No force push is required.
+No browser encoder, WS15 movement implementation, WS19 combat implementation, WS14 height logic copy, main merge or new workstream is part of this change.
