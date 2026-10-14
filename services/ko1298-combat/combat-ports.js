@@ -1,5 +1,4 @@
 'use strict';
-
 function createAuthoritativeWorldPort({getSnapshot,distance}){
   if(typeof getSnapshot!=='function'||typeof distance!=='function')throw new TypeError('getSnapshot and distance are required');
   const validate=(source,target,maxRange,rangeName)=>{
@@ -9,7 +8,7 @@ function createAuthoritativeWorldPort({getSnapshot,distance}){
     if(!a||!b||a.zoneId!==b.zoneId)return {ok:false,reason:!a||!b?'POSITION_UNAVAILABLE':'ZONE_MISMATCH'};
     if(!Number.isFinite(maxRange))return {ok:false,reason:`${rangeName}_UNAVAILABLE`};
     const d=distance(a.position,b.position);
-    return {ok:d<=maxRange,reason:d<=maxRange?null:'OUT_OF_RANGE',distance:d,maxRange};
+    return {ok:d<=maxRange,distance:d,maxRange};
   };
   return {
     getZoneId(entity){const entityId=entity?.id??entity?.runtimeId??entity?.instanceId;return getSnapshot(entityId)?.zoneId??entity?.zoneId??null;},
@@ -26,7 +25,12 @@ function createWs17EquipmentCombatPort({getEquipmentSnapshot}){
       const entityId=entity?.id??entity;
       const s=getEquipmentSnapshot(entityId);
       if(!s)return null;
-      return Object.freeze({weaponRange:s.weaponRange??null,attackDelayMs:s.attackDelayMs??null,damage:s.damage??null,weaponItemId:s.weaponItemId??null,weaponType:s.weaponType??null,weaponClass:s.weaponClass??null,weapon:s.weapon??null,attack:s.attack??null,armor:s.armor??null,raw:s});
+      const projected={weaponRange:s.weaponRange??null,attackDelayMs:s.attackDelayMs??null,weaponClass:s.weaponClass??null,attack:s.attack??null,armor:s.armor??null,raw:s};
+      if(Object.prototype.hasOwnProperty.call(s,'damage'))projected.damage=s.damage;
+      if(Object.prototype.hasOwnProperty.call(s,'weaponItemId'))projected.weaponItemId=s.weaponItemId;
+      if(Object.prototype.hasOwnProperty.call(s,'weaponType'))projected.weaponType=s.weaponType;
+      if(Object.prototype.hasOwnProperty.call(s,'weapon'))projected.weapon=s.weapon;
+      return Object.freeze(projected);
     },
     hasRequiredItemClass(entity,requiredClass){
       const entityId=entity?.id??entity;
