@@ -202,11 +202,10 @@ server {
         try_files $uri =404;
     }
 
-    # Same-origin API. No CORS header is added at the edge.
-    # Integrate authentication-aware rate limits here once WS48/WS08 expose the
-    # final mutation/login endpoint list; do not rate-limit WebSocket traffic by guess.
+    # WS08 production handler owns the /api/admin prefix; preserve it upstream.
+    # No CORS header is added at the edge.
     location /api/admin/ {
-        proxy_pass http://admin-api:${ADMIN_API_PORT}/;
+        proxy_pass http://admin-api:${ADMIN_API_PORT};
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Host $host;
