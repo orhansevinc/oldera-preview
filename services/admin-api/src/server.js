@@ -1,30 +1,65 @@
 'use strict';
 
 const http = require('node:http');
+const path = require('node:path');
 const { createAdminApi } = require('./app');
 const { MemoryAdminRepository } = require('./repository');
+const { createProductionAdminApi } = require('./production-app');
+const { createWs28CommandExecutor } = require('./ws28-command-executor');
+const { assertProductionRepository, assertRuntimeAuthority, assertCommandBus } = require('./production-contract');
 
 function loadUsers() {
   const raw = process.env.ADMIN_USERS_JSON;
-  if (!raw) throw new Error('ADMIN_USERS_JSON is required. Example: [{"id":"owner-1","username":"ORHAN","passwordHash":"scrypt$...","roles":["OWNER"]}]');
+  if (!raw) throw new Error('ADMIN_USERS_JSON is required');
   const users = JSON.parse(raw);
-  if (!Array.isArray(users) || !users.length) throw new Error('ADMIN_USERS_JSON must contain at least one user');
+  if (!Array.isArray(users) || !users.length) throw new Error('ADMIN_USERS_JSON must contain at least one explicit admin identity');
   return users;
 }
 
-function loadRepository() {
-  // WS07 integration point: replace this factory with a repository implementing
-  // services/admin-api/src/repository.js REQUIRED_METHODS. Admin API contains no DB migrations.
-  const mode = process.env.ADMIN_REPOSITORY || (process.env.NODE_ENV === 'production' ? 'ws07' : 'memory');
-  if (mode === 'memory') {
-    if (process.env.NODE_ENV === 'production') throw new Error('Refusing to start production admin-api with MemoryAdminRepository');
-    return new MemoryAdminRepository();
-  }
-  if (mode === 'ws07') throw new Error('WS07 repository adapter is not wired yet; refusing to start with fake production persistence');
-  throw new Error(`Unknown ADMIN_REPOSITORY=${mode}`);
+function requireModule(envName) {
+  const configured = process.env[envName];
+  if (!configured) throw new Error(`${envName} is required in production`);
+  const resolved = path.isAbsolute(configured) ? configured : path.resolve(process.cwd(), configured);
+  return require(resolved);
 }
 
-const repository = loadRepository();
-const api = createAdminApi({ repository, users: loadUsers(), sessionSecret: process.env.ADMIN_SESSION_SECRET, secureCookies: process.env.NODE_ENV === 'production' });
-const port = Number(process.env.PORT || 8088);
-http.createServer(api.handler).listen(port, '0.0.0.0', () => console.log(`OldKOWeb admin-api listening on :${port}`));
+async function callFactory(mod, factoryName, label) {
+  const factory = mod?.[factoryName];
+  if (typeof factory !== 'function') throw new Error(`${label} must export ${factoryName}()`);
+  return factory({ env: process.env });
+}
+
+async function createProductionComposition() {
+  const repository = assertProductionRepository(await callFactory(requireModule('ADMIN_REPOSITORY_MODULE'), 'createAdminRepository', 'WS07 admin adapter module'));
+  const runtimeAuthority = assertRuntimeAuthority(await callFactory(requireModule('ADMIN_RUNTIME_AUTHORITY_MODULE'), 'createAdminRuntimeAuthority', 'WS03/WS45 runtime module'));
+  const commandBus = assertCommandBus(await callFactory(requireModule('ADMIN_COMMAND_BUS_MODULE'), 'createAdminCommandBus', 'WS28 command composition module'));
+  const commandExecutor = createWs28CommandExecutor({ repository, commandBus });
+  const allowedOrigins = String(process.env.ADMIN_ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
+  return createProductionAdminApi({
+    repository,
+    runtimeAuthority,
+    commandExecutor,
+    users: loadUsers(),
+    rootOwnerId: process.env.ADMIN_ROOT_OWNER_ID,
+    sessionSecret: process.env.ADMIN_SESSION_SECRET,
+    allowedOrigins,
+    secureCookies: true
+  });
+}
+
+async function main() {
+  let api;
+  if (process.env.NODE_ENV === 'production') {
+    api = await createProductionComposition();
+  } else {
+    const repository = new MemoryAdminRepository();
+    api = createAdminApi({ repository, users: loadUsers(), sessionSecret: process.env.ADMIN_SESSION_SECRET, secureCookies: false });
+  }
+  const port = Number(process.env.PORT || 8088);
+  http.createServer(api.handler).listen(port, '0.0.0.0', () => console.log(`OldKOWeb admin-api listening on :${port}`));
+}
+
+main().catch((error) => {
+  console.error('OldKOWeb admin-api refused to start:', error.message);
+  process.exitCode = 1;
+});
