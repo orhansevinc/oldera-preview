@@ -27,6 +27,16 @@ do
   sh -n "$f"
 done
 
+# WS38 manifest + WS12 strictContentType publication contract.
+grep -Eq 'text/javascript[[:space:]]+js mjs;' infra/nginx/mime.types
+if grep -Eq 'application/javascript[[:space:]]+js([[:space:]]|;)|application/javascript[[:space:]]+mjs([[:space:]]|;)' infra/nginx/mime.types; then
+  echo 'legacy application/javascript mapping for js/mjs is forbidden by WS38/WS12 strict MIME contract' >&2
+  exit 1
+fi
+grep -Eq 'charset[[:space:]]+utf-8;' infra/nginx/nginx.conf
+grep -Eq 'charset_types[^;]*text/javascript' infra/nginx/nginx.conf
+
+# Binary client artifacts must keep their exact WS38 types.
 grep -Eq 'application/wasm[[:space:]]+wasm;' infra/nginx/mime.types
 grep -Eq 'application/octet-stream[[:space:]]+data' infra/nginx/mime.types
 
