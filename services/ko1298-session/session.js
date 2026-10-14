@@ -3,13 +3,17 @@
 const {
   LOGIN,
   GAME,
-  Reader,
   Writer,
   parseCredentials,
-  parseCharacterCreate,
-  parseCharacterSelect,
   buildCharacterList,
 } = require('./protocol');
+const {
+  SESSION_STATES,
+  OWNER,
+  getOpcodeContract,
+} = require('./contracts');
+const { SessionError, ERROR_CATEGORY } = require('./errors');
+const { malformedPacket, clientPacketsFrom, domainOwner } = require('./session-helpers');
 
 const WORLD_OPCODES = new Set([
   GAME.GAMESTART,
@@ -17,27 +21,38 @@ const WORLD_OPCODES = new Set([
   GAME.REQUEST_NPC_IN,
   GAME.ZONE_CHANGE,
 ]);
+const MOVEMENT_OPCODES = new Set([GAME.MOVE, GAME.ROTATE]);
+const NPC_OPCODES = new Set([GAME.NPC_EVENT, GAME.TARGET_HP]);
+const DOMAIN_EVENT_SOURCES = new Set(['WS25', 'WS26', 'WS27']);
 
 class AuthSession {
-  constructor(repo, { gameHost = '127.0.0.1', gameName = 'OldKO', concurrent = 0 } = {}) {
+  constructor(repo, { gameHost = '127.0.0.1', gameName = 'OldKO', concurrent = 0, logger = () => {} } = {}) {
     this.repo = repo;
     this.gameHost = gameHost;
     this.gameName = gameName;
     this.concurrent = concurrent;
+    this.logger = typeof logger === 'function' ? logger : () => {};
   }
 
   handle(payload) {
-    switch (payload[0]) {
-      case LOGIN.SERVER_LIST:
-        return [new Writer().u8(LOGIN.SERVER_LIST).u8(1).str16(this.gameHost).str16(this.gameName).i16(this.concurrent).done()];
-      case LOGIN.LOGIN_REQ: {
-        const { username, password } = parseCredentials(payload, LOGIN.LOGIN_REQ);
-        return [new Writer().u8(LOGIN.LOGIN_REQ).u8(this.repo.authenticate(username, password) ? 1 : (this.repo.accounts?.has(username) ? 3 : 2)).done()];
+    const packet = Buffer.from(payload || []);
+    if (packet.length === 0) return [];
+    try {
+      switch (packet[0]) {
+        case LOGIN.SERVER_LIST:
+          return [new Writer().u8(LOGIN.SERVER_LIST).u8(1).str16(this.gameHost).str16(this.gameName).i16(this.concurrent).done()];
+        case LOGIN.LOGIN_REQ: {
+          const { username, password } = parseCredentials(packet, LOGIN.LOGIN_REQ);
+          return [new Writer().u8(LOGIN.LOGIN_REQ).u8(this.repo.authenticate(username, password) ? 1 : (this.repo.accounts?.has(username) ? 3 : 2)).done()];
+        }
+        case LOGIN.NEWS:
+          return [new Writer().u8(LOGIN.NEWS).str16('Login Notice').str16('#\0\nOldKO development server\0\n#\0\n').done()];
+        default:
+          this.logger('unknown_opcode', { channel: 'auth', opcode: packet[0], length: packet.length });
+          return [];
       }
-      case LOGIN.NEWS:
-        return [new Writer().u8(LOGIN.NEWS).str16('Login Notice').str16('#\0\nOldKO development server\0\n#\0\n').done()];
-      default:
-        return [];
+    } catch (error) {
+      throw malformedPacket(error, packet[0], packet.length, 'auth');
     }
   }
 }
@@ -47,8 +62,21 @@ class GameSession {
     version = 1298,
     publicKey = 0n,
     worldSession = null,
+    movementSession = null,
+    npcRouter = null,
+    inventoryAdapter = null,
+    combatAdapter = null,
+    economyAdapter = null,
+    domainEventAdapter = null,
+    ownership = null,
     socketId = 0,
+    sessionId = `game:${socketId}`,
+    serverId = 'oldko-game',
+    npcRoutesRequestNpcIn = false,
     onWorldBroadcast = () => {},
+    onGameplayBroadcast = () => {},
+    onStateChange = () => {},
+    logger = () => {},
   } = {}) {
     this.repo = repo;
     this.version = version;
@@ -56,103 +84,172 @@ class GameSession {
     if (this.publicKey !== 0n) {
       throw new Error('non-zero JV publicKey is unsupported by WS03; use zero to keep the verified client plaintext');
     }
-    this.worldSession = worldSession;
+    if (!Number.isInteger(socketId) || socketId < 0 || socketId > 0xffff) throw new RangeError('socketId must fit uint16');
     this.socketId = socketId;
-    this.onWorldBroadcast = onWorldBroadcast;
-    this.account = null;
-    this.selectedCharacterId = null;
-    this.worldStarted = false;
+    this.sessionId = sessionId;
+    this.serverId = serverId;
+    this.worldSession = worldSession;
+    this.movementSession = movementSession;
+    this.npcRouter = npcRouter;
+    this.inventoryAdapter = inventoryAdapter;
+    this.combatAdapter = combatAdapter;
+    this.economyAdapter = economyAdapter;
+    this.domainEventAdapter = domainEventAdapter;
+    this.ownership = ownership;
+    this.npcRoutesRequestNpcIn = Boolean(npcRoutesRequestNpcIn);
+    this.onWorldBroadcast = typeof onWorldBroadcast === 'function' ? onWorldBroadcast : () => {};
+    this.onGameplayBroadcast = typeof onGameplayBroadcast === 'function' ? onGameplayBroadcast : () => {};
+    this.onStateChange = typeof onStateChange === 'function' ? onStateChange : () => {};
+    this.logger = typeof logger === 'function' ? logger : () => {};
+    this.state = {
+      phase: SESSION_STATES.CONNECTED,
+      socketId,
+      sessionId,
+      accountId: null,
+      characterId: null,
+      zoneId: null,
+      entityId: null,
+      position: null,
+      headingRaw: 0,
+    };
+    this.movementRegistered = false;
+    this._disconnectPromise = null;
+  }
+
+  get account() { return this.state.accountId; }
+  get selectedCharacterId() { return this.state.characterId; }
+  get worldStarted() {
+    return this.state.phase === SESSION_STATES.WORLD_LOADING || this.state.phase === SESSION_STATES.WORLD_READY;
+  }
+  get phase() { return this.state.phase; }
+
+  actorContext() {
+    return Object.freeze({
+      socketId: this.state.socketId,
+      sessionId: this.state.sessionId,
+      accountId: this.state.accountId,
+      characterId: this.state.characterId,
+      zoneId: this.state.zoneId,
+      entityId: this.state.entityId,
+      position: this.state.position ? Object.freeze({ ...this.state.position }) : null,
+      state: this.state.phase,
+    });
   }
 
   async handle(payload) {
-    if (!payload || payload.length === 0) return [];
-    if (WORLD_OPCODES.has(payload[0])) return this.#handleWorldPacket(payload);
+    const packet = Buffer.from(payload || []);
+    if (packet.length === 0) return [];
+    const opcode = packet[0];
+    const contract = getOpcodeContract(opcode);
+    if (!contract) {
+      this.logger('unknown_opcode', this._packetMeta(packet, { owner: 'UNOWNED' }));
+      return [];
+    }
+    if (!contract.allowedStates.has(this.state.phase)) {
+      this.logger('wrong_state', this._packetMeta(packet, { owner: contract.owner, expected: [...contract.allowedStates].join(','), actual: this.state.phase }));
+      return this._wrongStateResponse(opcode);
+    }
 
-    switch (payload[0]) {
-      case GAME.VERSION_CHECK:
-        // WS11 verified that the actual browser client variant reads an 8-byte
-        // JvCryption key after version. A zero key keeps its cryption flag off.
-        return [new Writer().u8(GAME.VERSION_CHECK).i16(this.version).u64(this.publicKey).done()];
+    try {
+      if (WORLD_OPCODES.has(opcode)) return await this._handleWorldPacket(packet);
+      if (MOVEMENT_OPCODES.has(opcode)) return await this._handleMovementPacket(packet);
+      if (NPC_OPCODES.has(opcode)) return await this._handleNpcPacket(packet);
 
-      case GAME.LOGIN: {
-        const { username, password } = parseCredentials(payload, GAME.LOGIN);
-        if (!this.repo.authenticate(username, password)) return [new Writer().u8(GAME.LOGIN).u8(0xff).done()];
-        this.account = username;
-        return [new Writer().u8(GAME.LOGIN).u8(this.repo.getNation(username)).done()];
+      switch (opcode) {
+        case GAME.VERSION_CHECK:
+          if (packet.length !== 1) throw Error('WIZ_VERSION_CHECK must be opcode-only');
+          return [new Writer().u8(GAME.VERSION_CHECK).i16(this.version).u64(this.publicKey).done()];
+
+        case GAME.LOGIN:
+          return await this._gameLogin(packet);
+
+        case GAME.SEL_NATION:
+          return this._selectNation(packet);
+
+        case GAME.ALLCHAR_INFO_REQ:
+          if (packet.length !== 1) throw Error('WIZ_ALLCHAR_INFO_REQ must be opcode-only');
+          return [buildCharacterList(this.repo.listCharacters(this.state.accountId))];
+
+        case GAME.NEW_CHAR:
+          return this._createCharacter(packet);
+
+        case GAME.SEL_CHAR:
+          return await this._selectCharacter(packet);
+
+        default:
+          this.logger('unrouted_owned_opcode', this._packetMeta(packet, { owner: contract.owner }));
+          return [];
       }
-
-      case GAME.SEL_NATION: {
-        if (!this.account) return [new Writer().u8(GAME.SEL_NATION).u8(0).done()];
-        const r = new Reader(payload);
-        r.u8();
-        const nation = r.u8();
-        r.assertEnd();
-        const ok = (nation === 1 || nation === 2) && this.repo.setNation(this.account, nation);
-        return [new Writer().u8(GAME.SEL_NATION).u8(ok ? nation : 0).done()];
-      }
-
-      case GAME.ALLCHAR_INFO_REQ:
-        if (!this.account) return [Buffer.from([GAME.ALLCHAR_INFO_REQ, 0])];
-        if (payload.length !== 1) throw Error('WIZ_ALLCHAR_INFO_REQ must be opcode-only');
-        return [buildCharacterList(this.repo.listCharacters(this.account))];
-
-      case GAME.NEW_CHAR:
-        return this.#createCharacter(payload);
-
-      case GAME.SEL_CHAR:
-        return this.#selectCharacter(payload);
-
-      default:
-        return [];
+    } catch (error) {
+      if (error instanceof SessionError) throw error;
+      throw malformedPacket(error, opcode, packet.length, 'game');
     }
   }
 
-  #createCharacter(payload) {
-    if (!this.account) return [Buffer.from([GAME.NEW_CHAR, 1])];
-    const request = parseCharacterCreate(payload);
-    const result = this.repo.createCharacter(this.account, request);
-    return [Buffer.from([GAME.NEW_CHAR, result.ok ? 0 : (result.code || 1)])];
-  }
-
-  async #selectCharacter(payload) {
-    if (!this.account) return [Buffer.from([GAME.SEL_CHAR, 0])];
-    const request = parseCharacterSelect(payload);
-    if (request.accountId !== this.account || request.zoneInit !== 1) return [Buffer.from([GAME.SEL_CHAR, 0])];
-
-    const character = this.repo.getCharacter(this.account, request.characterId);
-    if (!character) return [Buffer.from([GAME.SEL_CHAR, 0])];
-    if (!this.worldSession || typeof this.worldSession.beginSelectedCharacter !== 'function') {
-      return [Buffer.from([GAME.SEL_CHAR, 0])];
+  async trustedDomainCall(domain, operation) {
+    if (this.state.phase !== SESSION_STATES.WORLD_READY) {
+      throw new SessionError('WRONG_STATE', `trusted ${domain} call requires WORLD_READY`, {
+        category: ERROR_CATEGORY.WRONG_STATE,
+        details: { domain, state: this.state.phase },
+      });
     }
-
-    const outcome = await this.worldSession.beginSelectedCharacter({
-      accountId: this.account,
-      characterId: character.characterId,
-      socketId: this.socketId,
-    });
-    const packets = Array.isArray(outcome?.clientPackets) ? outcome.clientPackets.map(Buffer.from) : [];
-    if (packets.length === 0 || packets[0][0] !== GAME.SEL_CHAR || packets[0][1] !== 1) {
-      throw new Error('WS14 beginSelectedCharacter did not return WIZ_SEL_CHAR success first');
+    const adapters = {
+      inventory: this.inventoryAdapter,
+      combat: this.combatAdapter,
+      economy: this.economyAdapter,
+    };
+    const adapter = adapters[domain];
+    if (!adapter || typeof adapter.execute !== 'function') {
+      throw new SessionError('DOMAIN_ADAPTER_UNAVAILABLE', `${domain} adapter is unavailable`, {
+        category: ERROR_CATEGORY.DOWNSTREAM,
+        details: { domain },
+      });
     }
-
-    this.selectedCharacterId = character.characterId;
-    this.worldStarted = true;
-    this.#emitWorldBroadcast(outcome);
-    return packets;
-  }
-
-  async #handleWorldPacket(payload) {
-    if (!this.worldStarted || !this.worldSession || typeof this.worldSession.handleClientPacket !== 'function') return [];
-    const outcome = await this.worldSession.handleClientPacket(this.socketId, Buffer.from(payload));
-    this.#emitWorldBroadcast(outcome);
-    return Array.isArray(outcome?.clientPackets) ? outcome.clientPackets.map(Buffer.from) : [];
-  }
-
-  #emitWorldBroadcast(outcome) {
-    for (const packet of outcome?.broadcastPackets || []) {
-      this.onWorldBroadcast({ packet: Buffer.from(packet), snapshot: outcome.snapshot || null });
+    try {
+      return await adapter.execute({ actor: this.actorContext(), operation });
+    } catch (error) {
+      this.logger('downstream_error', { owner: domainOwner(domain), code: error?.code || 'ERROR', state: this.state.phase });
+      throw new SessionError('DOWNSTREAM_DOMAIN_FAILURE', `${domain} adapter failed`, {
+        category: ERROR_CATEGORY.DOWNSTREAM,
+        fatal: false,
+        details: { domain, downstreamCode: error?.code || null },
+        cause: error,
+      });
     }
   }
+
+  async deliverDomainEvent(source, event) {
+    if (!DOMAIN_EVENT_SOURCES.has(source)) {
+      throw new SessionError('UNSUPPORTED_EVENT_SOURCE', `unsupported domain event source ${source}`, {
+        category: ERROR_CATEGORY.DOWNSTREAM,
+        details: { source },
+      });
+    }
+    if (this.state.phase !== SESSION_STATES.WORLD_READY) return [];
+    if (!this.domainEventAdapter || typeof this.domainEventAdapter.encode !== 'function') {
+      this.logger('domain_event_unencoded', { source, state: this.state.phase });
+      return [];
+    }
+    try {
+      const outcome = await this.domainEventAdapter.encode({ source, event, actor: this.actorContext() });
+      this._emitGameplayOutcome(source, outcome);
+      return clientPacketsFrom(outcome);
+    } catch (error) {
+      this.logger('downstream_error', { owner: source, code: error?.code || 'ERROR', state: this.state.phase });
+      return [];
+    }
+  }
+
+  disconnect({ reason = 'TRANSPORT_LOST', useGrace = true } = {}) {
+    if (this._disconnectPromise) return this._disconnectPromise;
+    this._disconnectPromise = this._disconnectOnce({ reason, useGrace });
+    return this._disconnectPromise;
+  }
+
 }
 
-module.exports = { AuthSession, GameSession, WORLD_OPCODES };
+require('./session-auth').install(GameSession);
+require('./session-gameplay').install(GameSession);
+require('./session-lifecycle').install(GameSession);
+
+module.exports = { AuthSession, GameSession, WORLD_OPCODES, MOVEMENT_OPCODES, NPC_OPCODES, DOMAIN_EVENT_SOURCES };

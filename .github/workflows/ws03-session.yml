@@ -5,6 +5,7 @@ on:
     paths: ['services/ko1298-session/**','tests/ko1298-session/**','workstreams/ws03/**','.github/workflows/ws03-session.yml']
   pull_request:
     paths: ['services/ko1298-session/**','tests/ko1298-session/**','workstreams/ws03/**','.github/workflows/ws03-session.yml']
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -12,5 +13,35 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: {node-version: '20'}
-      - run: npm test
+      - name: Syntax check
+        run: find services/ko1298-session tests/ko1298-session -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: WS03 regression and production-session suite
+        run: npm test
         working-directory: services/ko1298-session
+
+  composed-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 1}
+      - uses: actions/setup-node@v4
+        with: {node-version: '20'}
+      - name: Fetch pinned downstream contract branches
+        run: |
+          git fetch --no-tags origin \
+            ws14-world-session:refs/remotes/origin/ws14-world-session \
+            ws15-movement-sync:refs/remotes/origin/ws15-movement-sync \
+            ws16-npc-world:refs/remotes/origin/ws16-npc-world \
+            ws45-session-ownership:refs/remotes/origin/ws45-session-ownership
+          test "$(git rev-parse origin/ws14-world-session)" = "82cdcef40bed265ff4c4ce0fb7c8f6ad8cf2f52b"
+          test "$(git rev-parse origin/ws15-movement-sync)" = "ba44d65628a78f475b376a3996ff32b21ff1e1ab"
+          test "$(git rev-parse origin/ws16-npc-world)" = "e6ee973eead1dbd40f5e7a5e2eb7bc5bd29235a2"
+          test "$(git rev-parse origin/ws45-session-ownership)" = "4a66338743553c2781c68ca84b866ff4e999c14e"
+      - name: Materialize downstream services without modifying their branches
+        run: |
+          git archive origin/ws14-world-session services/ko1298-world | tar -x
+          git archive origin/ws15-movement-sync services/ko1298-movement | tar -x
+          git archive origin/ws16-npc-world services/ko1298-npc | tar -x
+          git archive origin/ws45-session-ownership services/session-ownership | tar -x
+      - name: Real downstream contract composition
+        run: node --test tests/ko1298-session/composed-contracts.contract.js
