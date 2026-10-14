@@ -24,11 +24,65 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+
+      - name: Checkout exact WS14 terrain height authority
+        uses: actions/checkout@v4
+        with:
+          repository: orhansevinc/oldera-preview
+          ref: 9b82adefb05a3cca32f430e25f8a1d9109db93b2
+          path: .authority/ws14
+          sparse-checkout: |
+            services/ko1298-world
+          fetch-depth: 1
+
+      - name: Checkout pinned 1298 Moradon SMD
+        uses: actions/checkout@v4
+        with:
+          repository: Open-KO/KnightOnline
+          ref: 7d6cf81093e142c928c2ac9510512b2b182178b5
+          path: .authority/openko
+          sparse-checkout: |
+            assets/Server/MAP/moradon_0826.smd
+          sparse-checkout-cone-mode: false
+          fetch-depth: 1
+
+      - name: Checkout exact WS31 Moradon catalog summary
+        uses: actions/checkout@v4
+        with:
+          repository: orhansevinc/oldera-preview
+          ref: 546d2ab62cd46a97f3385ebcddbe0c775a02c2eb
+          path: .authority/ws31
+          sparse-checkout: |
+            data-catalog/generated/catalog-summary.json
+          sparse-checkout-cone-mode: false
+          fetch-depth: 1
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Run WS25 mob lifecycle tests
-        run: node --test tests/ko1298-mobs/*.test.cjs
+
+      - name: Run WS25 deterministic unit and lifecycle tests
+        run: node --test tests/ko1298-mobs/mob-lifecycle.test.cjs tests/ko1298-mobs/mob-runtime.test.cjs
+
+      - name: Resolve all verified Moradon slots with real WS14 SMD
+        env:
+          WS25_WS14_WORLD_MODULE: ${{ github.workspace }}/.authority/ws14/services/ko1298-world
+          WS25_MORADON_SMD: ${{ github.workspace }}/.authority/openko/assets/Server/MAP/moradon_0826.smd
+          WS25_WS31_SUMMARY: ${{ github.workspace }}/.authority/ws31/data-catalog/generated/catalog-summary.json
+          WS25_WS14_PROVIDER_SHA: 9b82adefb05a3cca32f430e25f8a1d9109db93b2
+          WS25_WS31_PROVIDER_SHA: 546d2ab62cd46a97f3385ebcddbe0c775a02c2eb
+        run: |
+          set -o pipefail
+          node --test tests/ko1298-mobs/mob-height-authority-real.test.cjs 2>&1 | tee ws25-height-authority.log
+
+      - name: Upload WS25 height diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ws25-moradon-height-authority
+          path: ws25-height-authority.log
+          if-no-files-found: error
+          retention-days: 7
