@@ -5,6 +5,7 @@ import { createPool } from '../index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const migrationsDir = path.resolve(here, '../../../../database/migrations');
+const target = process.env.OLDKO_MIGRATION_TARGET?.trim() || null;
 const pool = createPool({ applicationName: 'oldko-migrator', max: 1 });
 const client = await pool.connect();
 
@@ -17,11 +18,13 @@ try {
   await client.query(`SELECT pg_advisory_lock(hashtext('oldko:migrations'))`);
 
   const { createHash } = await import('node:crypto');
-  const files = (await readdir(migrationsDir)).filter(name => /^\d+_.*\.sql$/.test(name)).sort();
+  const allFiles = (await readdir(migrationsDir)).filter(name => /^\d+_.*\.sql$/.test(name)).sort();
+  if (target && !allFiles.includes(target)) throw new Error(`unknown OLDKO_MIGRATION_TARGET: ${target}`);
+  const files = target ? allFiles.slice(0, allFiles.indexOf(target) + 1) : allFiles;
   for (const name of files) {
     const sql = await readFile(path.join(migrationsDir, name), 'utf8');
     const checksum = createHash('sha256').update(sql).digest('hex');
-    const existing = await client.query(`SELECT checksum FROM public._oldko_migrations WHERE name = $1`, [name]);
+    const existing = await client.query(`SELECT checksum FROM public._oldko_migrations WHERE name=$1`, [name]);
     if (existing.rows[0]) {
       if (existing.rows[0].checksum !== checksum) throw new Error(`migration checksum changed after apply: ${name}`);
       continue;
@@ -29,7 +32,7 @@ try {
     await client.query('BEGIN');
     try {
       await client.query(sql);
-      await client.query(`INSERT INTO public._oldko_migrations (name, checksum) VALUES ($1, $2)`, [name, checksum]);
+      await client.query(`INSERT INTO public._oldko_migrations(name,checksum) VALUES($1,$2)`, [name,checksum]);
       await client.query('COMMIT');
       console.log(`applied ${name}`);
     } catch (error) {
