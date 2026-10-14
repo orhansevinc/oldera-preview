@@ -48,9 +48,9 @@ on:
         required: true
         type: string
       keepalive_minutes:
-        description: Minutes to keep temporary HTTPS/WSS URL alive after all public smoke gates pass (5-45)
+        description: Minutes to keep temporary HTTPS/WSS URL alive after all public smoke gates pass (5-120)
         required: true
-        default: '30'
+        default: '90'
         type: string
   push:
     branches: [ws09-production-infra]
@@ -68,7 +68,7 @@ concurrency:
 jobs:
   publish-ephemeral:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 150
     env:
       WS10_RUN_ID: ${{ inputs.ws10_run_id }}
       WS10_HEAD_SHA: ${{ inputs.ws10_head_sha }}
@@ -139,7 +139,7 @@ jobs:
           done
           [[ "$WS10_RUN_ID" =~ ^[0-9]+$ ]] || { echo 'ws10_run_id must be numeric' >&2; exit 1; }
           [[ "$KEEPALIVE_MINUTES" =~ ^[0-9]+$ ]] || { echo 'keepalive_minutes must be numeric' >&2; exit 1; }
-          (( KEEPALIVE_MINUTES >= 5 && KEEPALIVE_MINUTES <= 45 )) || { echo 'keepalive_minutes must be 5..45' >&2; exit 1; }
+          (( KEEPALIVE_MINUTES >= 5 && KEEPALIVE_MINUTES <= 120 )) || { echo 'keepalive_minutes must be 5..120' >&2; exit 1; }
 
           gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${WS10_RUN_ID}" > "${RUNNER_TEMP}/ws10-run.json"
           jq -e --arg sha "$WS10_HEAD_SHA" '
@@ -147,9 +147,9 @@ jobs:
             .conclusion == "success" and
             .head_sha == $sha and
             .head_branch == "ws10-qa-integration" and
-            .name == "WS10 Moradon E2E Integration Gate"
+            (.name == "WS10 Moradon E2E Integration Gate" or .name == "WS10 WS50-C5 Real Browser Visibility Gate")
           ' "${RUNNER_TEMP}/ws10-run.json" >/dev/null || {
-            echo 'WS10 exact run is not a completed successful Moradon E2E run for the supplied SHA' >&2
+            echo 'WS10 exact run is not a completed successful Moradon visibility E2E run for the supplied SHA' >&2
             jq '{id,status,conclusion,head_branch,head_sha,name}' "${RUNNER_TEMP}/ws10-run.json" >&2
             exit 1
           }
@@ -310,7 +310,6 @@ jobs:
             --latest-output "$META/latest.json" \
             --cdn-manifest-path "client-content/v1/${CONTENT_VERSION}/manifest.json")
 
-          # Fail-closed order: immutable files -> manifest -> verify -> _complete -> verify -> latest last.
           cp "$PACKAGE/index.html" "$PACKAGE/KnightOnLine.js" "$PACKAGE/KnightOnLine.wasm" "$PACKAGE/KnightOnLine.data" "$PACKAGE/BUILD.txt" "$RELEASE/"
           cp "$META/manifest.json" "$RELEASE/manifest.json"
           (cd "$ROOT" && python3 -m tools.ws38_content.verify_manifest \
@@ -430,7 +429,20 @@ jobs:
         run: |
           set -euo pipefail
           TEST_LINK="${PUBLIC_ORIGIN}/play-shell/"
-          echo "TEST_LINK=$TEST_LINK"
+          STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          EXPECTED_UNTIL=$(date -u -d "+${KEEPALIVE_MINUTES} minutes" +%Y-%m-%dT%H:%M:%SZ)
+          LINK_FILE="${RUNNER_TEMP}/ws09-test-link.txt"
+          {
+            echo "TEST_LINK=$TEST_LINK"
+            echo "PUBLIC_SMOKE=PASS"
+            echo "KEEPALIVE_STARTED_AT=$STARTED_AT"
+            echo "KEEPALIVE_UNTIL_EXPECTED=$EXPECTED_UNTIL"
+            echo "KEEPALIVE_MINUTES=$KEEPALIVE_MINUTES"
+            echo "WS10_RUN=$WS10_RUN_ID"
+            echo "WS10_PASS_ARTIFACT=$WS10_PASS_ARTIFACT"
+            echo "WS10_CLIENT_ARTIFACT=$WS10_CLIENT_ARTIFACT"
+          } > "$LINK_FILE"
+          cat "$LINK_FILE"
           {
             echo '## WS09 ephemeral test link'
             echo
@@ -445,6 +457,14 @@ jobs:
             echo "- HTTPS/WS38/MIME/WSS/WS12 preflight: PASS"
             echo "- lifetime: this workflow process only (${KEEPALIVE_MINUTES} minutes requested)"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload live TEST_LINK handoff
+        uses: actions/upload-artifact@v4
+        with:
+          name: ws09-ephemeral-link-${{ github.run_number }}
+          path: ${{ runner.temp }}/ws09-test-link.txt
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Keep ephemeral link alive
         shell: bash
