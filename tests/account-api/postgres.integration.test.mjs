@@ -212,7 +212,7 @@ integration('PostgreSQL credential envelope rejects unsupported writes, preserve
 
     assert.equal((await jsonRequest(f.base, '/api/account/v1/password-reset/request', { method: 'POST', headers: { origin }, body: { email: f.account.email } })).status, 202);
     const expiredToken = f.delivery.resets[1].token;
-    await f.repository.db.query('UPDATE oldko.account_action_tokens SET expires_at=now() - interval \'1 second\' WHERE token_hash=$1', [Buffer.from(digestToken(expiredToken), 'hex')]);
+    await f.repository.db.query("UPDATE oldko.account_action_tokens SET created_at=now() - interval '2 hours', expires_at=now() - interval '1 hour' WHERE token_hash=$1", [Buffer.from(digestToken(expiredToken), 'hex')]);
     assert.equal((await jsonRequest(f.base, '/api/account/v1/password-reset/confirm', { method: 'POST', headers: { origin }, body: { token: expiredToken, newPassword: 'Prod!Pwd1239' } })).status, 400);
   } finally { await f.cleanup(); }
 });
