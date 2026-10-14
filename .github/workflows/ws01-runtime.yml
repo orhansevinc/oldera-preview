@@ -106,6 +106,7 @@ jobs:
           python3 tools/patch_openko_browser_serverlist_probe.py
           python3 tools/patch_openko_browser_auth_probe.py
           python3 tools/ws01_runtime/prepare_browser_source.py
+          python3 tools/ws01_runtime/normalize_generated_browser_source.py
           grep -F 'OldKOWebResolveWebSocketUrl' openko/src/Client/WarFare/APISocket.cpp
           grep -F 'browser_transport_pre.js' openko/src/Client/WarFare/CMakeLists.txt
           grep -F 'browser_display_pre.js' openko/src/Client/WarFare/CMakeLists.txt
