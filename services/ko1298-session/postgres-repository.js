@@ -5,7 +5,9 @@ const REQUIRED_WS07_SHA = '1ae85c96319cbab11648a91ed28300e17d4c607f';
 function canonicalUsername(value) {
   if (typeof value !== 'string') throw new TypeError('username must be a string');
   const trimmed = value.trim();
-  if (!trimmed || trimmed.length > 32) throw new TypeError('username is invalid');
+  if (!trimmed || trimmed.length > 20 || !/^[A-Za-z][A-Za-z0-9_]{3,19}$/.test(trimmed)) {
+    throw new TypeError('username is invalid for the shared website/KO1298 identity contract');
+  }
   return trimmed.toLowerCase();
 }
 
@@ -65,21 +67,62 @@ function initialWorldState(spec) {
   };
 }
 
+function gameAccessAllowed(account) {
+  return Boolean(
+    account
+    && account.status === 'active'
+    && account.verifiedAt
+    && !account.ban?.active
+  );
+}
+
 class ProductionPostgresRepository {
-  constructor({ pool, sessionRepository, worldRepository }) {
-    if (!pool || !sessionRepository || !worldRepository) throw new TypeError('pool, sessionRepository and worldRepository are required');
+  constructor({ pool, sessionRepository, worldRepository, accountRepository }) {
+    if (!pool || !sessionRepository || !worldRepository || !accountRepository) {
+      throw new TypeError('pool, sessionRepository, worldRepository and accountRepository are required');
+    }
     this.pool = pool;
     this.sessionRepository = sessionRepository;
     this.worldRepository = worldRepository;
+    this.accountRepository = accountRepository;
     this.providerSha = REQUIRED_WS07_SHA;
+    this.npcWorld = null;
   }
 
   normalizeAccountId(value) {
     return canonicalUsername(value);
   }
 
+  async getGameAccountAccess(username) {
+    const canonical = canonicalUsername(username);
+    const account = await this.accountRepository.findByUsernameCanonical(canonical);
+    if (!account) return { allowed: false, code: 'ACCOUNT_NOT_FOUND', account: null };
+    if (account.status !== 'active') return { allowed: false, code: 'ACCOUNT_INACTIVE', account };
+    if (!account.verifiedAt) return { allowed: false, code: 'ACCOUNT_UNVERIFIED', account };
+    if (account.ban?.active) return { allowed: false, code: account.ban.code || 'ACCOUNT_BANNED', account };
+    return {
+      allowed: true,
+      code: 'OK',
+      account,
+      accountId: canonical,
+      passwordVersion: Number(account.passwordVersion || 1),
+    };
+  }
+
   async authenticate(username, password) {
-    return this.sessionRepository.authenticate(canonicalUsername(username), password);
+    const canonical = canonicalUsername(username);
+    const access = await this.getGameAccountAccess(canonical);
+    if (!access.allowed) return false;
+    return this.sessionRepository.authenticate(canonical, password);
+  }
+
+  async assertGameAccountAccess(username, expectedPasswordVersion = null) {
+    const access = await this.getGameAccountAccess(username);
+    if (!access.allowed) return access;
+    if (expectedPasswordVersion != null && access.passwordVersion !== Number(expectedPasswordVersion)) {
+      return { ...access, allowed: false, code: 'PASSWORD_VERSION_CHANGED' };
+    }
+    return access;
   }
 
   async getNation(username) {
@@ -146,12 +189,25 @@ class ProductionPostgresRepository {
     return this.loadReconnectSnapshot(accountId, characterId);
   }
 
+  setNpcWorld(npcWorld) {
+    if (!npcWorld || typeof npcWorld.nearby !== 'function') {
+      throw new TypeError('npcWorld.nearby(zoneId, x, z) is required');
+    }
+    this.npcWorld = npcWorld;
+    return this;
+  }
+
   async getSurroundingUsers() {
     return [];
   }
 
-  async getSurroundingNpcs() {
-    return [];
+  async getSurroundingNpcs({ zoneId, x, z } = {}) {
+    if (!this.npcWorld) {
+      const error = new Error('production NPC visibility provider is not configured');
+      error.code = 'PRODUCTION_NPC_PROVIDER_REQUIRED';
+      throw error;
+    }
+    return this.npcWorld.nearby(Number(zoneId), Number(x), Number(z));
   }
 
   async close() {
@@ -162,10 +218,12 @@ class ProductionPostgresRepository {
 async function loadWs07Persistence() {
   let data;
   let adapters;
+  let ws13Adapter;
   try {
-    [data, adapters] = await Promise.all([
+    [data, adapters, ws13Adapter] = await Promise.all([
       import('../oldko-data/src/index.js'),
       import('../oldko-data/src/adapters/index.js'),
+      import('../oldko-data/src/adapters/ws13-account-api.js'),
     ]);
   } catch (error) {
     const wrapped = new Error(
@@ -178,10 +236,11 @@ async function loadWs07Persistence() {
 
   if (typeof data.createPool !== 'function'
       || typeof adapters.PgWs03SessionRepository !== 'function'
-      || typeof adapters.PgWs14WorldRepository !== 'function') {
-    throw new Error('WS07 persistent provider does not expose the required WS03/WS14 PostgreSQL adapters');
+      || typeof adapters.PgWs14WorldRepository !== 'function'
+      || typeof ws13Adapter.PgWs13AccountRepository !== 'function') {
+    throw new Error('WS07 persistent provider does not expose the required WS03/WS13/WS14 PostgreSQL adapters');
   }
-  return { ...data, ...adapters };
+  return { ...data, ...adapters, ...ws13Adapter };
 }
 
 async function createProductionPostgresRepository({ env = process.env, poolOptions = {} } = {}) {
@@ -194,6 +253,7 @@ async function createProductionPostgresRepository({ env = process.env, poolOptio
     createPool,
     PgWs03SessionRepository,
     PgWs14WorldRepository,
+    PgWs13AccountRepository,
   } = await loadWs07Persistence();
 
   const pool = createPool({
@@ -205,12 +265,14 @@ async function createProductionPostgresRepository({ env = process.env, poolOptio
     pool,
     sessionRepository: new PgWs03SessionRepository(pool),
     worldRepository: new PgWs14WorldRepository(pool),
+    accountRepository: new PgWs13AccountRepository(pool),
   });
 }
 
 module.exports = {
   REQUIRED_WS07_SHA,
   canonicalUsername,
+  gameAccessAllowed,
   ProductionPostgresRepository,
   createProductionPostgresRepository,
 };
