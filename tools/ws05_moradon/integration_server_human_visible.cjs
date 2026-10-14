@@ -50,7 +50,7 @@ if(mobPopulation.length!==135) throw new Error(`expected 135 Moradon mobs, got $
 const runtimeIdOf=(r)=>r?.runtimeId??r?.instanceId??r?.nid??r?.id;
 const posOf=(r)=>r?.position||r?.detailRecord?.position||r;
 const pidOf=(r)=>r?.pid??r?.templateResourceId??r?.detail?.pid??r?.detailRecord?.templateResourceId??0;
-const sidOf=(r)=>r?.templateId??r?.detail?.template_id??r?.detailRecord?.templateId??0;
+const sidOf=(r)=>r?.detail?.template_id??r?.detailRecord?.templateId??(typeof r?.templateId==='string'&&r.templateId.startsWith('ko1298:monster:')?Number(r.templateId.slice('ko1298:monster:'.length)):r?.templateId)??0;
 const nameOf=(r)=>r?.name??r?.detail?.name??r?.detailRecord?.name??'unknown';
 
 const npcIdSet=new Set(npcPopulation.records.map(runtimeIdOf));
