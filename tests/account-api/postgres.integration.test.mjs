@@ -57,30 +57,43 @@ async function fixture(label = 'Prod') {
   const account = uniqueAccount(label);
   let accountId = null;
 
-  async function registerAndVerify() {
+  async function registerOnly() {
     const register = await jsonRequest(base, '/api/account/v1/accounts/register', { method: 'POST', headers: { origin }, body: account });
     assert.equal(register.status, 201);
     assert.equal(delivery.verifications.length, 1);
     const stored = await repository.findByUsernameCanonical(account.username.toLowerCase());
     assert.ok(stored);
     accountId = stored.id;
+    return stored;
+  }
+
+  async function verifyLatest() {
+    assert.equal(delivery.verifications.length, 1);
     const verify = await jsonRequest(base, '/api/account/v1/accounts/verification/confirm', { method: 'POST', headers: { origin }, body: { token: delivery.verifications[0].token } });
     assert.equal(verify.status, 200);
     return repository.findById(accountId);
   }
 
+  async function registerAndVerify() {
+    await registerOnly();
+    return verifyLatest();
+  }
+
   async function cleanup() {
-    await new Promise((resolve) => server.close(resolve));
+    const closed = new Promise((resolve) => server.close(resolve));
+    server.closeAllConnections?.();
+    await closed;
     if (accountId) {
       await repository.db.query('DELETE FROM oldko.account_sessions WHERE account_id=$1', [accountId]);
       await repository.db.query('DELETE FROM oldko.account_action_tokens WHERE account_id=$1', [accountId]);
       await repository.db.query('DELETE FROM oldko.accounts WHERE id=$1', [accountId]);
     }
+    await repository.db.query('TRUNCATE oldko.account_rate_limits');
     await rateLimitStore.close();
     await repository.db.end();
   }
 
-  return { repository, delivery, base, account, ws07, registerAndVerify, cleanup };
+  return { repository, delivery, base, account, ws07, registerOnly, verifyLatest, registerAndVerify, cleanup };
 }
 
 integration('production runtime pins the exact WS07 PostgreSQL adapter and shared rate limiter', async () => {
@@ -97,15 +110,24 @@ integration('production runtime pins the exact WS07 PostgreSQL adapter and share
   }
 });
 
-integration('PostgreSQL register verify and WS07 game hash compatibility', async () => {
+integration('PostgreSQL register persists canonical WS07-compatible hash', async () => {
   const f = await fixture('Reg');
   try {
     assert.equal((await fetch(`${f.base}/api/account/readyz`)).status, 200);
-    const stored = await f.registerAndVerify();
+    const stored = await f.registerOnly();
     assert.match(stored.passwordHash, /^scrypt\$/);
     assert.equal(await f.ws07.verifyPassword(f.account.password, stored.passwordHash), true);
     assert.equal(await f.ws07.verifyPassword('Wrong!Password', stored.passwordHash), false);
-    assert.ok(stored.verifiedAt);
+    assert.equal(stored.verifiedAt, null);
+  } finally { await f.cleanup(); }
+});
+
+integration('PostgreSQL verification confirms real action token', async () => {
+  const f = await fixture('Ver');
+  try {
+    await f.registerOnly();
+    const verified = await f.verifyLatest();
+    assert.ok(verified.verifiedAt);
   } finally { await f.cleanup(); }
 });
 
