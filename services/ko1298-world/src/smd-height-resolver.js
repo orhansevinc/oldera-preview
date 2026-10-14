@@ -121,7 +121,6 @@ class SmdHeightMap {
       for (let x = 0; x < this.mainCellCountX; x += 1) {
         const exists = reader.i32(`shape main cell ${x},${z} exists`);
         if (exists === 0) continue;
-        if (exists !== 1) throw new Error(`invalid shape main-cell marker ${exists} at ${x},${z}`);
         this.mainCells[z * this.mainCellCountX + x] = readMainCell(reader, vertexCount, x, z);
       }
     }
