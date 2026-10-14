@@ -10,4 +10,5 @@ module.exports = {
   ...require('./src/visibility-world-session-service'),
   ...require('./src/mock-world-repository'),
   ...require('./src/smd-height-resolver'),
+  ...require('./src/shared-runtime-id-namespace'),
 };

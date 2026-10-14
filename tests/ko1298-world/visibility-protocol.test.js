@@ -103,6 +103,7 @@ function character() {
 }
 
 function phase(opcode, value) { return Buffer.from([opcode, value]); }
+
 function req(ids) {
   const b = Buffer.alloc(3 + ids.length * 2);
   b[0] = OPCODE.REQUEST_NPC_IN;
@@ -147,7 +148,10 @@ test('WS11 signed i16 runtime/detail fields and source coordinate quantization f
 
 test('runtime IDs are unique across NPC and monster namespaces', () => {
   assert.equal(assertUniqueRuntimeIds([npcFixture()], [monsterFixture()]), true);
-  assert.throws(() => assertUniqueRuntimeIds([npcFixture()], [monsterFixture({ runtimeId: 10001 })]), /runtime ID collision 10001/);
+  assert.throws(
+    () => assertUniqueRuntimeIds([npcFixture()], [monsterFixture({ runtimeId: 10001 })]),
+    /runtime ID collision 10001/,
+  );
 });
 
 test('WORLD LOADING emits one unified 0x1C NPC+monster list and 0x1D recovers both exact details', async () => {
@@ -183,7 +187,18 @@ test('WORLD LOADING emits one unified 0x1C NPC+monster list and 0x1D recovers bo
 });
 
 test('world bootstrap fails closed on cross-domain collision and missing Y', async () => {
-  const npc = { ...npcFixture(), nid: 10001, pid: 13001, size: 100, group: 0, x: 312, z: 402, y: 0, gateOpen: 1, zoneId: 21 };
+  const npc = {
+    ...npcFixture(),
+    nid: 10001,
+    pid: 13001,
+    size: 100,
+    group: 0,
+    x: 312,
+    z: 402,
+    y: 0,
+    gateOpen: 1,
+    zoneId: 21,
+  };
   const collision = new WorldSessionService({
     repository: new MockWorldRepository({ characters: [character()], npcs: [npc] }),
     mobPort: { async getNearby() { return [monsterFixture({ runtimeId: 10001 })]; } },
@@ -199,13 +214,20 @@ test('world bootstrap fails closed on cross-domain collision and missing Y', asy
   await assert.rejects(missingY.handleClientPacket(79, phase(OPCODE.GAMESTART, 1)), /finite authoritative Y/);
 });
 
-test('pinned WS25 provider is explicitly rejected until it supplies integer runtime visibility identity', () => {
+test('pinned current WS25 provider exposes integer runtime visibility authority for WS14 composition', () => {
   const root = process.env.WS14_WS25_PROVIDER_ROOT;
   if (!root) return;
-  const source = fs.readFileSync(path.join(root, 'services/ko1298-mobs/mob-model.cjs'), 'utf8');
-  assert.match(source, /id:\s*`\$\{group\.groupId\}\/\$\{spawn\.spawnId\}`/);
-  assert.doesNotMatch(source, /runtimeId\s*:/);
-  assert.throws(() => buildRegionNpcIds([{ id: 'group/spawn', position: { x: 1, y: 1, z: 1 } }]), /runtimeId/);
+  const ws25 = require(path.join(root, 'services/ko1298-mobs'));
+  assert.equal(typeof ws25.MobVisibilityService, 'function');
+  assert.equal(typeof ws25.loadVerifiedWorldDefinition, 'function');
+  assert.equal(ws25.RUNTIME_ID_CONTRACT.NPC_BAND, 10000);
+  assert.equal(ws25.RUNTIME_ID_CONTRACT.INVALID_BAND, 30000);
+
+  const source = fs.readFileSync(path.join(root, 'services/ko1298-mobs/mob-visibility-service.cjs'), 'utf8');
+  assert.match(source, /runtimeId\s*=\s*assertRuntimeId/);
+  assert.match(source, /instanceId:\s*runtimeId/);
+  assert.match(source, /nid:\s*runtimeId/);
+  assert.match(source, /runtimeIds\.claim|this\.runtimeIds/);
 });
 
 test('current WS16 semantic nearby/detail snapshots are directly encodable with WS14 authoritative Y', () => {

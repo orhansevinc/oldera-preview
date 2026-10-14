@@ -59,14 +59,14 @@ jobs:
           sparse-checkout-cone-mode: false
           fetch-depth: 1
 
-      - name: Checkout task-pinned WS25 Moradon mob provider
+      - name: Checkout task-pinned current WS25 Moradon visibility provider
         uses: actions/checkout@v4
         with:
           repository: orhansevinc/oldera-preview
-          ref: a334f54f9a6bd3ac416bd099cc48060f88a7e7fd
+          ref: 13c9bafe287b250d56b52f19e97a02e7ef18e6e5
           path: .authority/ws25
           sparse-checkout: |
-            services/ko1298-mobs/mob-model.cjs
+            services/ko1298-mobs
             world-data/mobs/verified/moradon-zone21.verified.json
           sparse-checkout-cone-mode: false
           fetch-depth: 1
@@ -83,6 +83,10 @@ jobs:
           WS14_WS16_NPC_DATA: ${{ github.workspace }}/.authority/ws16/world-data/npc/moradon.json
           WS14_WS25_PROVIDER_ROOT: ${{ github.workspace }}/.authority/ws25
           WS14_WS25_MOB_DATA: ${{ github.workspace }}/.authority/ws25/world-data/mobs/verified/moradon-zone21.verified.json
+          WS14_WS11_PROVIDER_SHA: 944b6ff9b6329af29f1048a74aa6e14fca141639
+          WS14_WS16_PROVIDER_SHA: 5ed48ff32187000312652838674388df52fc3fb7
+          WS14_WS25_PROVIDER_SHA: 13c9bafe287b250d56b52f19e97a02e7ef18e6e5
+          WS14_WS31_PROVIDER_SHA: 546d2ab62cd46a97f3385ebcddbe0c775a02c2eb
         run: |
           set -o pipefail
           node --test tests/ko1298-world/*.test.js 2>&1 | tee ws14-test.log
