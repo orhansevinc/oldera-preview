@@ -9,98 +9,122 @@ const {
 } = require('../../services/ko1298-progression');
 
 const progression = new ProgressionService({
-  levelTable,        // verified 1298 thresholds + max level
-  levelRewardPort,   // stat/skill reward owner
-  partyXpPort,       // exact party formula owner
-  respawnPointPort,  // world/zone spawn owner
-  nationPointPort,   // optional WS24/rules handoff
+  levelTable,            // exact verified LEVEL_UP.RequiredExp rows; getMaxLevel() must be 80
+  levelRewardPort,       // applies point/state mutation in the character/stat owner
+  vitalsPort,            // HP/MP/ability recalculation after level change
+  killRewardPort,        // verified mob death -> XP lookup
+  partyXpPort,           // verified party allocation owner
+  respawnPointPort,      // WS14/world spawn selection
+  respawnVitalsPort,     // normal respawn HP rule / representation adapter
+  movementBaselinePort,  // WS15/world baseline reset
+  nationPointPort,       // optional nation/loyalty owner handoff
   deathLossPolicy: new Verified1298PveDeathLossPolicy(),
 });
 ```
 
-## WS25 / WS26 mob reward -> XP
+## WS25/WS26 death event -> XP
+
+WS26 already establishes a stable mob-death `eventId` for loot idempotency. Reuse that death identity for progression, but do **not** read XP from the loot table.
 
 ```js
-const result = progression.awardMonsterKill(characterProgressionState, {
-  xp: reward.xp,
-  mobInstanceId: reward.mobInstanceId,
-  mobTemplateId: reward.mobTemplateId,
+const result = progression.awardMonsterKill(state, {
+  eventId,
+  mobInstanceId,
+  mobTemplateId,
+  killerCharacterId,
+  zoneId,
+  diedAt,
+}, {
+  expectedVersion: state.version,
+  pointSnapshot: {
+    unspentStatPoints,
+    baseStatTotal,
+    skillPointTotal,
+  },
 });
 ```
 
-Persist/broadcast returned state/events in the owning layers. WS27 does not import WS25/WS26.
+`KillRewardPort.resolveXp(killEvent)` resolves XP from a verified reward source. Negative/invalid rewards fail closed. Re-delivery of the same kill event returns `progression.replay_ignored` and no second XP grant.
 
-## Party XP
+## One level per reward event
 
-Supply `PartyXpPort.allocate()` only after exact 1298 party eligibility and split rules are verified.
+Do not wrap WS27 in a caller-side loop to consume all carried XP. Pinned 1298 `ExpChange()` performs one level transition and returns. Carried XP is evaluated again only on a later XP event.
 
-```js
-const results = progression.awardPartyMonsterKill(memberStates, {
-  xp: reward.xp,
-  mobInstanceId: reward.mobInstanceId,
-  mobTemplateId: reward.mobTemplateId,
-});
-```
+## Level rewards / HP-MP
 
-The allocator must return one unique allocation for every supplied member.
+`compute1298LevelPointRewards()` encodes the verified conditional +3 stat / +2 skill eligibility logic from caller-supplied totals. `LevelRewardPort` owns the actual stat/skill representation.
 
-## WS19 level rewards
+`VitalsPort.recalculateOnLevelChange()` must bind the character/equipment/class coefficient data required by the source HP/MP formulas. WS27 emits `progression.client_sync_required` after a level change; the packet/session owner should translate that to the 1298 client sync.
 
-`LevelRewardPort.onLevelUp()` is invoked for every crossed level, including multi-level XP awards. WS19/final composition applies stat/skill changes from verified patch data; WS27 does not modify combat/stat code.
-
-## Death + WS24 seam
+## Death
 
 ```js
 const deathResult = progression.markDead(state, {
-  kind: 'monster', // or 'player'
+  eventId,
+  kind: 'monster',
   killerId,
   zoneId,
   occurredAt,
+  xpLossDivisor, // 100 or 20 ONLY after combat/zone source mapping identifies the verified branch
 }, {
   allowXpLoss: zoneRules.allowXpLossOnDeath,
+  expectedVersion: state.version,
 });
 ```
 
-The default policy applies only the verified conservative PvE rule: monster death, level 6+, 1% of configured current-level XP cap. PvP XP loss remains zero unless a separately verified policy is supplied.
+The pinned source has both 1% and 5% NPC-death paths. If the integration layer cannot prove which applies, omit `xpLossDivisor`; default WS27 loss is zero rather than guessed.
 
-## Nation points
-
-```js
-const nationPointPort = {
-  onDeath({ characterId, death }) {
-    return rules.handleNationPointDeath({ characterId, death });
-  },
-};
-```
-
-WS27 does not calculate NP.
+Duplicate death delivery while dead is idempotently ignored. PvP nation/loyalty behavior remains `NationPointPort`; no item-loss behavior is implemented.
 
 ## Respawn
 
+Two-stage production flow:
+
 ```js
-const respawnResult = progression.respawn(deadState, {
+const requested = progression.requestRespawn(deadState, {
+  requestId,
   requestedPointId,
   zoneId,
+}, { expectedVersion: deadState.version });
+
+// Persist requested.persistence with CAS before world relocation if orchestration requires durability.
+
+const completed = progression.completeRespawn(requested.state, {
+  expectedVersion: requested.state.version,
+  nowMs: Date.now(),
 });
 ```
 
-`RespawnPointPort.resolve()` supplies the destination. WS14/WS15 or final composition owns the actual world relocation and packets.
+`RespawnPointPort` supplies the WS14/world-authoritative point. Normal respawn restores HP-to-max, preserves MP unless another verified resurrection mode says otherwise, resets movement baseline via `MovementBaselinePort`, and starts verified 10-second blinking/immunity.
 
-## Persistence boundary
+While dead, `assertGameplayAllowed(state, 'movement'|'combat')` rejects both actions. During blinking, combat is rejected while movement remains allowed.
 
-Recommended ordering:
+## Disconnect / reconnect
 
-1. validate/compute progression transition;
-2. persist progression + owned reward state atomically where possible;
-3. publish/broadcast emitted events only after commit.
+Persist `deathState`, `death`, pending `respawnRequest`, level/XP, `version`, and replay ledger using `toPersistenceSnapshot()`. Rehydrate with `restorePersistenceSnapshot()`. A character disconnecting dead therefore reconnects dead until an authoritative respawn completes.
 
-WS27 adds no DB schema or migration.
+## Persistence / WS07 contract
 
-## Required before production
+For every mutation, use the returned CAS envelope:
 
-- verified 1298 XP table;
-- exact target-patch max level;
-- verified level-up stat/skill awards;
+```js
+await progressionRepository.compareAndSwap({
+  characterId: result.state.characterId,
+  expectedVersion: result.persistence.expectedVersion,
+  nextVersion: result.persistence.nextVersion,
+  snapshot: result.persistence.snapshot,
+});
+```
+
+Only publish events/client sync after persistence commit. If CAS fails, reload and re-evaluate the event; stable event IDs make replay safe.
+
+WS27 does not add a database migration because the concrete WS07 schema/transaction owner remains external to this branch.
+
+## Still required before full production data enablement
+
+- verified exact 1298 `LEVEL_UP.RequiredExp` dataset;
+- verified mob-template/death -> XP reward dataset;
 - verified party XP formula;
-- verified PvP XP-loss behavior if any;
-- world-owned respawn point data.
+- exact combat/zone mapping for the source 1% vs 5% NPC-death branches;
+- WS14 authoritative respawn-point adapter;
+- WS07 CAS/idempotency persistence adapter.
