@@ -6,12 +6,16 @@ on:
     branches: [ws09-production-infra]
     paths:
       - 'deploy/RELEASE.ws50-c5-ws10-38604174659.env'
+      - 'deploy/production-account-api.Dockerfile'
+      - 'deploy/migrate-production-db.sh'
+      - 'docker-compose.ws09.yml'
+      - 'infra/nginx/**'
       - 'workstreams/ws09/DOMAIN_DEPLOYMENT.json'
       - 'workstreams/ws09/DOMAIN_RELEASE_REQUESTS.json'
       - '.github/workflows/ws09-permanent-release-bundle.yml'
 
 permissions:
-  contents: read
+  contents: write
   actions: read
 
 concurrency:
@@ -46,6 +50,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          test "$RELEASE_ID" = 'oldkoweb-domain-live-20261015'
           test "$FINAL_PROVIDER_SET" = 'WS50-C5@sha256:7ac3b8a4c06b67e52b8d18518ef8c82209a60c6101c33609a4c16e64d84f119e'
           test "$WS50_MANIFEST_COMMIT" = '0d5001095fa3b43693b4fa0cda615f84e2cb7df5'
           test "$WS50_HANDOFF_REF" = '7497087d4cf67e4e05a3a090f6edad3d206078cb'
@@ -71,6 +76,31 @@ jobs:
           for exact in "$FINAL_PROVIDER_SET" "$WS10_RUN_ID" "$WS10_HEAD_SHA" "$WS10_PASS_ARTIFACT" "$WS10_CLIENT_ARTIFACT" "$WS10_CLIENT_ARTIFACT_DIGEST"; do
             grep -Fq "$exact" "$RUNNER_TEMP/handoff.md"
           done
+
+      - name: Verify official site and account owner authorities
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ensure_commit() { git cat-file -e "$1^{commit}" 2>/dev/null || git fetch --no-tags origin "$1"; }
+          ensure_commit "$OFFICIAL_SITE_HANDOFF_COMMIT"
+          ensure_commit "$OFFICIAL_SITE_SOURCE_COMMIT"
+          ensure_commit "$WS13_ACCOUNT_HEAD"
+          ensure_commit "$WS07_ACCOUNT_COMMIT"
+          test "$(git show -s --format=%T "$OFFICIAL_SITE_SOURCE_COMMIT")" = "$OFFICIAL_SITE_SOURCE_TREE"
+          handoff=$(git show "$OFFICIAL_SITE_HANDOFF_COMMIT:coordination/handoffs/official-site-release.json")
+          test "$(jq -r .website_source_commit <<<"$handoff")" = "$OFFICIAL_SITE_SOURCE_COMMIT"
+          test "$(jq -r .artifact.id <<<"$handoff")" = "$OFFICIAL_SITE_ARTIFACT_ID"
+          test "$(jq -r .artifact.digest <<<"$handoff")" = "$OFFICIAL_SITE_ARTIFACT_DIGEST"
+          test "$(git rev-parse "$WS07_ACCOUNT_COMMIT:services/oldko-data/src/adapters/ws13-account-api.js")" = "$WS07_ACCOUNT_ADAPTER_BLOB_SHA1"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${WS13_ACCOUNT_RUN_ID}" > "$RUNNER_TEMP/ws13.json"
+          jq -e --arg sha "$WS13_ACCOUNT_HEAD" '.status == "completed" and .conclusion == "success" and .head_sha == $sha and .head_branch == "ws13-account-api"' "$RUNNER_TEMP/ws13.json" >/dev/null
+
+          # Record the newer WS03 evidence, but never silently replace the C5 WS03 pin.
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${OBSERVED_WS03_PERSISTENCE_RUN_ID}" > "$RUNNER_TEMP/ws03-new.json"
+          jq -e --arg sha "$OBSERVED_WS03_PERSISTENCE_HEAD" '.status == "completed" and .conclusion == "success" and .head_sha == $sha and .head_branch == "ws03-ko1298-session"' "$RUNNER_TEMP/ws03-new.json" >/dev/null
+          test "$WS03_SHA" != "$OBSERVED_WS03_PERSISTENCE_HEAD"
 
       - name: Download exact real-browser PASS and client
         env:
@@ -162,52 +192,125 @@ jobs:
             --publication-marker "$RELEASE/_complete.json" --require-publication-marker \
             --latest-pointer "$STATIC/latest.json")
 
-      - name: Build frozen gameplay images for host transfer
+      - name: Stage exact approved website and admin v10
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUNDLE="$RUNNER_TEMP/oldkoweb-host-bundle"
+          SITE="$BUNDLE/artifacts/site"
+          ADMIN="$BUNDLE/artifacts/admin"
+          mkdir -p "$SITE/assets" "$ADMIN"
+          for file in index.html account.html oldkoweb-live.html site-config.js oldkoweb-v14-a.css oldkoweb-v14-b.css oldkoweb-v14.js account-v15.css account-v15.js; do
+            git show "$OFFICIAL_SITE_SOURCE_COMMIT:$file" > "$SITE/$file"
+          done
+          git show "$OFFICIAL_SITE_SOURCE_COMMIT:assets/hero-1299-hd.jpg" > "$SITE/assets/hero-1299-hd.jpg"
+          git archive --format=tar "$OFFICIAL_SITE_SOURCE_COMMIT" admin | tar -xf - -C "$BUNDLE/artifacts"
+          grep -Fq 'admin.css?v=10' "$ADMIN/index.html"
+          grep -Fq '/api/account' "$SITE/site-config.js"
+          printf '%s\n' "$OFFICIAL_SITE_ARTIFACT_DIGEST" > "$SITE/OFFICIAL_SITE_ARTIFACT_DIGEST.txt"
+
+      - name: Build exact WS13 plus WS07 account image and frozen C5 gameplay images
         shell: bash
         run: |
           set -euo pipefail
           ROOT="$RUNNER_TEMP/composition"
           BUNDLE="$RUNNER_TEMP/oldkoweb-host-bundle"
-          mkdir -p "$BUNDLE/images"
+          ACCOUNT_CTX="$RUNNER_TEMP/account-image-context"
+          mkdir -p "$BUNDLE/images" "$ACCOUNT_CTX/ws13" "$ACCOUNT_CTX/ws07"
+          git archive --format=tar "$WS13_ACCOUNT_HEAD" services/account-api | tar -xf - -C "$ACCOUNT_CTX/ws13"
+          git archive --format=tar "$WS07_ACCOUNT_COMMIT" services/oldko-data database/migrations | tar -xf - -C "$ACCOUNT_CTX/ws07"
+
           GATEWAY_TAG="oldkoweb/ws02-gateway:${BUILD_ID}"
           SESSION_TAG="oldkoweb/session-world:${BUILD_ID}"
+          ACCOUNT_TAG="oldkoweb/account-api:${WS13_ACCOUNT_HEAD:0:12}-${WS07_ACCOUNT_COMMIT:0:12}"
           docker build -f "$ROOT/services/ko-gateway/Dockerfile" -t "$GATEWAY_TAG" "$ROOT"
           docker build -f deploy/ephemeral-session-world.Dockerfile -t "$SESSION_TAG" "$ROOT"
-          docker save "$GATEWAY_TAG" | gzip -1 > "$BUNDLE/images/ws02-gateway.tar.gz"
-          docker save "$SESSION_TAG" | gzip -1 > "$BUNDLE/images/session-world.tar.gz"
-          docker image inspect "$GATEWAY_TAG" --format '{{.Id}}' > "$BUNDLE/images/ws02-gateway.image-id"
-          docker image inspect "$SESSION_TAG" --format '{{.Id}}' > "$BUNDLE/images/session-world.image-id"
+          docker build -f deploy/production-account-api.Dockerfile -t "$ACCOUNT_TAG" "$ACCOUNT_CTX"
+
+          for pair in "ws02-gateway:$GATEWAY_TAG" "session-world:$SESSION_TAG" "account-api:$ACCOUNT_TAG"; do
+            name=${pair%%:*}; tag=${pair#*:}
+            docker save "$tag" | gzip -1 > "$BUNDLE/images/$name.tar.gz"
+            docker image inspect "$tag" --format '{{.Id}}' > "$BUNDLE/images/$name.image-id"
+            printf '%s\n' "$tag" > "$BUNDLE/images/$name.tag"
+          done
+
+      - name: Snapshot official runtime base image digests
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUNDLE="$RUNNER_TEMP/oldkoweb-host-bundle"
+          : > "$BUNDLE/images/base-images.env"
+          for image in nginx:stable-alpine postgres:16-alpine; do
+            docker pull "$image" >/dev/null
+            digest=$(docker image inspect "$image" --format '{{index .RepoDigests 0}}')
+            test -n "$digest"
+            case "$image" in
+              nginx:*) printf 'NGINX_IMAGE=%s\n' "$digest" >> "$BUNDLE/images/base-images.env" ;;
+              postgres:*) printf 'POSTGRES_IMAGE=%s\n' "$digest" >> "$BUNDLE/images/base-images.env" ;;
+            esac
+          done
 
       - name: Assemble host deployment bundle and checksums
         shell: bash
         run: |
           set -euo pipefail
           BUNDLE="$RUNNER_TEMP/oldkoweb-host-bundle"
-          mkdir -p "$BUNDLE/deploy" "$BUNDLE/infra" "$BUNDLE/workstreams/ws09"
+          mkdir -p "$BUNDLE/deploy" "$BUNDLE/infra" "$BUNDLE/workstreams/ws09" "$BUNDLE/coordination/handoffs/domain-live"
           cp docker-compose.ws09.yml "$BUNDLE/"
           cp deploy/RELEASE.ws50-c5-ws10-38604174659.env "$BUNDLE/deploy/"
           cp deploy/.env.production.example "$BUNDLE/deploy/"
+          cp deploy/production-account-api.Dockerfile deploy/migrate-production-db.sh "$BUNDLE/deploy/"
           cp deploy/backup-db.sh deploy/restore-db.sh deploy/production-smoke.sh deploy/release-switch.sh deploy/rollback-static.sh deploy/validate-production-env.sh "$BUNDLE/deploy/"
           cp -a infra/nginx "$BUNDLE/infra/"
           cp workstreams/ws09/DOMAIN_DEPLOYMENT.json workstreams/ws09/DOMAIN_RELEASE_REQUESTS.json "$BUNDLE/workstreams/ws09/"
+          if test -f coordination/handoffs/domain-live/WS09.json; then cp coordination/handoffs/domain-live/WS09.json "$BUNDLE/coordination/handoffs/domain-live/"; fi
           cat > "$BUNDLE/BUNDLE_STATUS.json" <<EOF
           {
             "release_id": "${RELEASE_ID}",
             "provider_set": "${FINAL_PROVIDER_SET}",
             "client_artifact_digest": "${WS10_CLIENT_ARTIFACT_DIGEST}",
-            "gameplay_host_bundle": "READY",
-            "final_domain_cutover": "BLOCKED",
-            "blocking_inputs": ["persistent_host_target", "official_site_handoff", "WS03/WS07 persistent repository composition", "WS13/WS07 shared account source", "WS08/WS07 admin adapter"]
+            "official_site_artifact_digest": "${OFFICIAL_SITE_ARTIFACT_DIGEST}",
+            "account_api_source": "${WS13_ACCOUNT_HEAD}+${WS07_ACCOUNT_COMMIT}",
+            "gameplay_host_bundle": "EXACT_C5_ONLY",
+            "final_domain_cutover": "BLOCKED_NOT_LIVE",
+            "deployment_allowed": false,
+            "blocking_inputs": [
+              "authorized_persistent_host_target",
+              "authorized_dns_zone_access_and_snapshot",
+              "production_account_delivery_webhook_secret_configuration",
+              "WS08_persistent_repository_and_real_command_bridge",
+              "WS50_selected_and_WS10_accepted_persistence_child_for_game_runtime"
+            ]
           }
           EOF
           (cd "$BUNDLE" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
           (cd "$BUNDLE" && sha256sum -c SHA256SUMS)
+          tar -C "$RUNNER_TEMP" -czf "$RUNNER_TEMP/oldkoweb-domain-live-20261015-candidate.tar.gz" oldkoweb-host-bundle
+          sha256sum "$RUNNER_TEMP/oldkoweb-domain-live-20261015-candidate.tar.gz" > "$RUNNER_TEMP/oldkoweb-domain-live-20261015-candidate.tar.gz.sha256"
 
-      - name: Upload permanent host bundle
+      - name: Publish durable blocked candidate to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag='oldkoweb-domain-live-20261015-candidate'
+          if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+              --title 'OldKOWeb domain-live 2026-10-15 candidate (BLOCKED, NOT LIVE)' \
+              --notes 'Durable WS09 deployment candidate. This is explicitly NOT a live-domain acceptance. DNS/host/admin persistence and a WS50+WS10 accepted persistent gameplay child remain required.'
+          fi
+          gh release upload "$tag" --repo "$GITHUB_REPOSITORY" --clobber \
+            "$RUNNER_TEMP/oldkoweb-domain-live-20261015-candidate.tar.gz" \
+            "$RUNNER_TEMP/oldkoweb-domain-live-20261015-candidate.tar.gz.sha256"
+
+      - name: Upload Actions convenience copy
         uses: actions/upload-artifact@v4
         with:
-          name: ws09-c5-permanent-host-bundle-${{ github.run_number }}
-          path: ${{ runner.temp }}/oldkoweb-host-bundle
+          name: ws09-domain-live-candidate-${{ github.run_number }}
+          path: |
+            ${{ runner.temp }}/oldkoweb-domain-live-20261015-candidate.tar.gz
+            ${{ runner.temp }}/oldkoweb-domain-live-20261015-candidate.tar.gz.sha256
           if-no-files-found: error
           retention-days: 30
           compression-level: 0
