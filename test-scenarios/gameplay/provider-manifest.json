@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "workstream": "WS49",
+  "repository": "orhansevinc/oldera-preview",
+  "capturedAt": "2026-10-14T06:00:00Z",
+  "ws49BaseSha": "5af52ca5e2ef32b44fb7975bc5f440f502f5d84f",
+  "providers": [
+    { "id": "WS03", "slug": "ws03", "branch": "ws03-ko1298-session", "sha": "237c4a613e94434baae656c1399cb449e7b78067", "role": "auth/game session" },
+    { "id": "WS10", "slug": "ws10", "branch": "ws10-qa-integration", "sha": "4a81c6cf7e11514ca01f0730ecc57010c9ea37fb", "role": "canonical real-browser Moradon gate" },
+    { "id": "WS14", "slug": "ws14", "branch": "ws14-world-session", "sha": "82cdcef40bed265ff4c4ce0fb7c8f6ad8cf2f52b", "role": "world/zone session" },
+    { "id": "WS15", "slug": "ws15", "branch": "ws15-movement-sync", "sha": "ba44d65628a78f475b376a3996ff32b21ff1e1ab", "role": "movement/position sync" },
+    { "id": "WS16", "slug": "ws16", "branch": "ws16-npc-world", "sha": "e6ee973eead1dbd40f5e7a5e2eb7bc5bd29235a2", "role": "NPC world" },
+    { "id": "WS17", "slug": "ws17", "branch": "ws17-item-inventory", "sha": "f557e91c79413960712aa621b0a034796d899c48", "role": "item/inventory" },
+    { "id": "WS19", "slug": "ws19", "branch": "ws19-combat-core", "sha": "8a74d9e5b0f78deea4ad45fc991d145bbb70fe03", "role": "combat core" },
+    { "id": "WS22", "slug": "ws22", "branch": "ws22-merchant-economy", "sha": "0503d10f55df15a50d33b5d856516aead260a3e2", "role": "merchant/trade economy" },
+    { "id": "WS25", "slug": "ws25", "branch": "ws25-mob-ai", "sha": "ff1804a7d7a1328727924c50be39792d2caa2483", "role": "mob AI" },
+    { "id": "WS26", "slug": "ws26", "branch": "ws26-drop-loot", "sha": "24290da1c9cc2a0f0d40bf2e017cef2dcc8e0866", "role": "drop/loot" },
+    { "id": "WS27", "slug": "ws27", "branch": "ws27-progression", "sha": "9cd78a5c9eacee0cfa737e6123ba84f55e39ab27", "role": "progression/death/respawn" },
+    { "id": "WS31", "slug": "ws31", "branch": "ws31-data-catalog", "sha": "a92ed73876be604273bc97e9d1faa68ac9cdc166", "role": "verified 1298 data catalog" }
+  ],
+  "canonicalGates": {
+    "scenarioA": {
+      "provider": "WS10",
+      "workflow": "WS10 Moradon E2E Integration Gate",
+      "runNumber": 26,
+      "runId": 38505039290,
+      "testedHarnessCommit": "f0cadfb50b5d1a36d2bfe4e5bf0a68f7c3061f41",
+      "requiredMarkers": ["MORADON E2E: PASS", "WS10_MORADON_E2E_PASS", "provider-owned `WS05_MORADON_GATE=PASS`"]
+    }
+  }
+}
