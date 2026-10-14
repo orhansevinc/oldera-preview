@@ -38,7 +38,7 @@ require("SDL_GetWindowSizeInPixels(m_pWindow, &m_iWinPixelW, &m_iWinPixelH);" in
 # never spends a frame using stale framebuffer geometry.
 if "OldKOWeb live browser framebuffer refresh" not in text:
     apply_anchor = "void RHIDeviceGL::ApplyFixedState()\n{\n"
-    apply_repl = r'''void RHIDeviceGL::ApplyFixedState()
+    apply_repl = '''void RHIDeviceGL::ApplyFixedState()
 {
 #ifdef __EMSCRIPTEN__
 \t// OldKOWeb live browser framebuffer refresh: SDL/Emscripten can resize the
