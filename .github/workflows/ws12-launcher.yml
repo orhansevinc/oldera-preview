@@ -25,17 +25,56 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout WS12
+        uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+
       - name: Syntax and config validation
         run: |
           node --check play-shell/launcher-core.js
           node --check play-shell/app.js
           node tools/ws12_launcher/check-config.cjs
-      - name: Launcher tests
+
+      - name: Launcher unit tests
         run: node --test tests/ws12-launcher/*.test.cjs
+
+      - name: Checkout WS38 publication contract read-only
+        uses: actions/checkout@v4
+        with:
+          ref: ws38-client-content-pipeline
+          path: .ws38
+
+      - name: Verify real1298 package with WS38 generator/verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="1298-ws12-${GITHUB_SHA:0:12}"
+          BUILD_ID="ws12-${GITHUB_RUN_ID}"
+          OUT="$RUNNER_TEMP/ws12-publication"
+          mkdir -p "$OUT/client-content/v1/$VERSION"
+          PYTHONPATH=.ws38 python -m tools.ws38_content.generate_manifest \
+            --root real1298 \
+            --profile .ws38/content-pipeline/oldko1298.profile.json \
+            --content-version "$VERSION" \
+            --build-id "$BUILD_ID" \
+            --source-commit "$GITHUB_SHA" \
+            --source-ref ws12-browser-launcher \
+            --output "$OUT/client-content/v1/$VERSION/manifest.json" \
+            --publication-marker-output "$OUT/client-content/v1/$VERSION/_complete.json" \
+            --cdn-publication-marker-path "client-content/v1/$VERSION/_complete.json" \
+            --latest-output "$OUT/latest.json" \
+            --cdn-manifest-path "client-content/v1/$VERSION/manifest.json"
+          PYTHONPATH=.ws38 python -m tools.ws38_content.verify_manifest \
+            --root real1298 \
+            --manifest "$OUT/client-content/v1/$VERSION/manifest.json" \
+            --expected-content-version "$VERSION" \
+            --publication-marker "$OUT/client-content/v1/$VERSION/_complete.json" \
+            --require-publication-marker \
+            --latest-pointer "$OUT/latest.json"
+
       - name: Real 1298 package HTTP smoke
         shell: bash
         run: |
@@ -45,6 +84,7 @@ jobs:
           trap 'kill "$server_pid"' EXIT
           sleep 1
           curl --fail --silent --show-error --head http://127.0.0.1:8129/play-shell/index.html >/dev/null
+          curl --fail --silent --show-error http://127.0.0.1:8129/play-shell/config.staging.example.json >/dev/null
           curl --fail --silent --show-error --head http://127.0.0.1:8129/real1298/index.html >/dev/null
           curl --fail --silent --show-error --head http://127.0.0.1:8129/real1298/KnightOnLine.js >/dev/null
           curl --fail --silent --show-error --head http://127.0.0.1:8129/real1298/KnightOnLine.wasm >/dev/null
