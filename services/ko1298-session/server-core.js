@@ -78,6 +78,7 @@ function listen(port, makeSession, name, {
   logger = createLogger({ name: `ko1298-${name}` }),
   socketIds = defaultSocketIds,
   dispatcherOptions = {},
+  sessionAuthority = null,
 } = {}) {
   const server = net.createServer((socket) => {
     const decoder = new FrameDecoder();
@@ -91,9 +92,22 @@ function listen(port, makeSession, name, {
     let terminating = false;
     let released = false;
 
+    if (name === 'game' && sessionAuthority) {
+      if (typeof sessionAuthority.register !== 'function' || typeof sessionAuthority.unregister !== 'function') {
+        throw new TypeError('sessionAuthority must expose register() and unregister()');
+      }
+      sessionAuthority.register({
+        socketId,
+        session,
+        dispatcher,
+        disconnectTransport: () => { if (!socket.destroyed) socket.destroy(); },
+      });
+    }
+
     const release = () => {
       if (!released && name === 'game') {
         released = true;
+        sessionAuthority?.unregister?.(socketId);
         socketIds.release(socketId);
       }
     };
@@ -159,6 +173,7 @@ function startServers({
   worldSession = undefined,
   socketIds = defaultSocketIds,
   gameOptions = {},
+  sessionAuthority = null,
   authPort = Number(process.env.AUTH_PORT || 15100),
   gamePort = Number(process.env.GAME_PORT || 15001),
   loggerFactory = (name) => createLogger({ name }),
@@ -186,9 +201,9 @@ function startServers({
       ...gameOptions,
     }),
     'game',
-    { logger: gameLogger, socketIds },
+    { logger: gameLogger, socketIds, sessionAuthority },
   );
-  return { auth, game, repository, worldSession: world };
+  return { auth, game, repository, worldSession: world, sessionAuthority };
 }
 
 function sanitizeLogMetadata(metadata) {
