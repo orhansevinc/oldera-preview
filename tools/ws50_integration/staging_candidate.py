@@ -143,7 +143,7 @@ console.log('WS03_WS14_RUNTIME_LOAD_OK');
 
 
 def container_checks(tree: Path, out: Path) -> None:
-    run(["docker", "build", "-t", "ws50-gateway:rehearsal", "services/ko-gateway"], cwd=tree)
+    run(["docker", "build", "-f", "services/ko-gateway/Dockerfile", "-t", "ws50-gateway:rehearsal", "."], cwd=tree)
 
     dockerfile = out / "Dockerfile.session-world"
     dockerfile.write_text(
