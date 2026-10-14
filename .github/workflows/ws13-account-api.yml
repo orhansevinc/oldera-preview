@@ -106,6 +106,14 @@ jobs:
         env:
           NODE_ENV: test
         run: node --test --test-name-pattern="password reset rotates" tests/account-api/postgres.integration.test.mjs
+      - name: Verify KO1298 credential envelope origin and token lifecycle
+        env:
+          NODE_ENV: test
+        run: node --test --test-name-pattern="credential envelope rejects unsupported writes" tests/account-api/postgres.integration.test.mjs
+      - name: Verify official frontend password aliases against production base
+        env:
+          NODE_ENV: test
+        run: node --test --test-name-pattern="official frontend password aliases" tests/account-api/postgres.integration.test.mjs
       - name: Verify shared PostgreSQL rate limiting
         env:
           NODE_ENV: test
