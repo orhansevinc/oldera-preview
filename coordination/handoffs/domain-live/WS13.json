@@ -1,0 +1,217 @@
+{
+  "schema_version": "domain-live-handoff/v1",
+  "workstream": "WS13",
+  "release_id": "oldkoweb-domain-live-20261015",
+  "branch": "ws13-account-api",
+  "source_commit": "e53966d9f882d98e2a5b4746262f38355dfda848",
+  "task_start_head": "1ef67bd7c0c98a588bce4db6c0f1305b820af008",
+  "public_endpoint": "https://oldkoweb.com/api/account",
+  "input_pins": {
+    "ws07": "1ae85c96319cbab11648a91ed28300e17d4c607f",
+    "official_site_handoff": "8370de2ebfdfd319cf8a719da79cbdef9853fd2f",
+    "ws03_observed": "7c5f5f3584e7d3621aa5a318ad65c011bd77276f",
+    "ws11_protocol": "013559b6e66ef9f6257403c96f3b012884739470",
+    "ko1298_client_source": "luisfelipe18/old-school-openko@97eb0ea20207afc0c360bfed6915113572711be3"
+  },
+  "contracts": {
+    "credential": "services/account-api/contracts/credential-policy.v1.json",
+    "mail_delivery": "services/account-api/contracts/mail-delivery-webhook.v1.json",
+    "production_service": "workstreams/ws13/PRODUCTION_ACCOUNT_SERVICE.json",
+    "openapi": "GET /api/account/openapi.json",
+    "official_frontend_asset": "account-v15.js@8370de2ebfdfd319cf8a719da79cbdef9853fd2f"
+  },
+  "credential_contract_summary": {
+    "account_source": "oldko.accounts via exact pinned WS07 PgWs13AccountRepository",
+    "username": {
+      "accepted": "4-20 ASCII bytes; first character letter; remaining letters/digits/underscore",
+      "canonical_lookup": "ASCII lowercase",
+      "trim_input": false,
+      "unicode_normalization": false,
+      "silent_truncation": false
+    },
+    "password_write": {
+      "applies_to": [
+        "register.password",
+        "password_change.newPassword",
+        "password_reset.newPassword"
+      ],
+      "accepted": "10-12 printable ASCII bytes U+0021-U+007E with at least three character classes",
+      "trim_input": false,
+      "unicode_normalization": false,
+      "silent_truncation": false,
+      "ko1298_packet_limit_changed": false
+    },
+    "legacy_transition": {
+      "web_login": "verify the exact stored legacy password value; successful incompatible credential returns credentialUpgradeRequired=true",
+      "game_access_check": "correct but non-KO1298-compatible legacy credential is rejected with CREDENTIAL_UPGRADE_REQUIRED",
+      "password_change": "exact legacy current password may authenticate; replacement must satisfy the shared KO1298-compatible write policy",
+      "password_reset": "replacement must satisfy the shared KO1298-compatible write policy",
+      "web_sessions_after_rotation": "invalidated by passwordVersion",
+      "old_password_after_rotation": "rejected by the shared WS07 scrypt verifier",
+      "already_authenticated_game_session_disconnect": "WS03 runtime ownership; no WS13 wire/protocol widening"
+    }
+  },
+  "api_contract_summary": {
+    "canonical_base": "/api/account",
+    "routes": [
+      "POST /v1/accounts/register",
+      "POST /v1/accounts/verification/request",
+      "POST /v1/accounts/verification/confirm",
+      "POST /v1/session/login",
+      "GET /v1/session/current",
+      "POST /v1/session/logout",
+      "POST /v1/password/change",
+      "POST /v1/password-reset/request",
+      "POST /v1/password-reset/confirm",
+      "POST /v1/accounts/access-check"
+    ],
+    "official_frontend_aliases": [
+      "POST /v1/accounts/password/change",
+      "POST /v1/accounts/password-reset/request",
+      "POST /v1/accounts/password-reset/confirm"
+    ],
+    "session_cookie": "oldko_session; Secure; HttpOnly; SameSite=Strict; Path=/",
+    "trusted_origin": "https://oldkoweb.com required for browser mutation routes",
+    "game_access_check_origin": "internal/game route; not browser-Origin gated",
+    "liveness": "GET /healthz",
+    "readiness": "GET /readyz; PostgreSQL account repository plus PostgreSQL shared rate-limit store"
+  },
+  "delivery_contract_summary": {
+    "transport": "signed HTTPS JSON webhook using HMAC-SHA256 timestamp.body",
+    "production_env": [
+      "OLDKO_ACCOUNT_DELIVERY_WEBHOOK_URL",
+      "OLDKO_ACCOUNT_DELIVERY_WEBHOOK_SECRET",
+      "OLDKO_ACCOUNT_MAIL_FROM"
+    ],
+    "sender_requirement": "sender must be on verified oldkoweb.com domain",
+    "recommended_sender": "accounts@oldkoweb.com",
+    "http_2xx_alone_is_success": false,
+    "required_receiver_ack": {
+      "accepted": true,
+      "provider": "non-empty provider identifier",
+      "provider_message_id": "non-empty provider acceptance/message id"
+    },
+    "provider_acceptance_is_mailbox_delivery_proof": false,
+    "token_transport": "signed HTTPS JSON body only; never logged and never embedded by WS13 in public URL artifacts",
+    "ci_sink_is_production_delivery_proof": false
+  },
+  "artifacts": [
+    "services/account-api/src/validation.js",
+    "services/account-api/src/service.js",
+    "services/account-api/src/http.js",
+    "services/account-api/src/delivery.js",
+    "services/account-api/src/production-runtime.js",
+    "services/account-api/src/postgres-rate-limit.js",
+    "services/account-api/src/openapi.js",
+    "services/account-api/contracts/credential-policy.v1.json",
+    "services/account-api/contracts/mail-delivery-webhook.v1.json",
+    "services/account-api/sql/0001_postgres_rate_limit.sql",
+    "tests/account-api/account-api.test.mjs",
+    "tests/account-api/session.test.mjs",
+    "tests/account-api/production.test.mjs",
+    "tests/account-api/frontend-contract.test.mjs",
+    "tests/account-api/postgres.integration.test.mjs",
+    ".github/workflows/ws13-account-api.yml",
+    "workstreams/ws13/PRODUCTION_ACCOUNT_SERVICE.json"
+  ],
+  "ci": {
+    "workflow": ".github/workflows/ws13-account-api.yml",
+    "run_id": 38655811413,
+    "run_url": "https://github.com/orhansevinc/oldera-preview/actions/runs/38655811413",
+    "head_sha": "e53966d9f882d98e2a5b4746262f38355dfda848",
+    "status": "completed",
+    "conclusion": "success",
+    "checks": [
+      {
+        "name": "unit",
+        "job_id": 116165180494,
+        "conclusion": "success"
+      },
+      {
+        "name": "postgres-integration",
+        "job_id": 116165180911,
+        "conclusion": "success",
+        "verified": [
+          "pinned production repository and readiness",
+          "official frontend contract",
+          "register plus WS07 game hash verification",
+          "verification token",
+          "login/current/logout/revocation",
+          "password change and previous session invalidation",
+          "password reset and previous credential rejection",
+          "12-byte KO1298-compatible password accepted by game access-check",
+          "13-byte unsupported password rejected at register/change/reset",
+          "unsupported reset password does not consume token",
+          "single-use token",
+          "expired token",
+          "untrusted Origin rejection",
+          "official /v1/accounts/password/... aliases",
+          "shared PostgreSQL rate-limit persistence"
+        ]
+      }
+    ],
+    "real_mail_provider_acceptance_proven": false,
+    "real_mailbox_delivery_proven": false,
+    "note": "CI capture/sink proves the signed receiver contract and provider-ACK semantics only; it is not production mail-delivery evidence."
+  },
+  "production_dependencies": {
+    "repository": "exact WS07 PgWs13AccountRepository; production memory fallback prohibited",
+    "database": "shared persistent PostgreSQL",
+    "account_table": "oldko.accounts",
+    "session_table": "oldko.account_sessions",
+    "action_token_table": "oldko.account_action_tokens",
+    "rate_limit_table": "oldko.account_rate_limits",
+    "process_local_rate_limiter_blocker": "closed"
+  },
+  "owner_blockers": [
+    {
+      "owner": "WS09",
+      "blocking_for_domain_live": true,
+      "items": [
+        "Provision persistent DATABASE_URL and deploy the exact pinned WS07 account repository module; do not substitute a memory repository.",
+        "Apply pinned WS07 account migrations, then services/account-api/sql/0001_postgres_rate_limit.sql in the coordinated migration order.",
+        "Reverse-proxy https://oldkoweb.com/api/account to this long-running service and set OLDKO_ACCOUNT_ALLOWED_ORIGINS=https://oldkoweb.com plus explicit OLDKO_TRUST_PROXY.",
+        "Provision OLDKO_ACCOUNT_DELIVERY_WEBHOOK_URL, OLDKO_ACCOUNT_DELIVERY_WEBHOOK_SECRET and OLDKO_ACCOUNT_MAIL_FROM without requesting them individually from the user.",
+        "Verify the oldkoweb.com sender/domain with the selected real mail provider, including provider-required SPF/DKIM records.",
+        "Run a controlled provider-acceptance smoke and record provider plus provider_message_id without recording verification/reset tokens."
+      ]
+    },
+    {
+      "owner": "official website frontend",
+      "blocking_for_credential_ux": true,
+      "items": [
+        "Consume services/account-api/contracts/credential-policy.v1.json and align register/change/reset client validation/messages to exact 10-12 printable ASCII bytes.",
+        "Handle credentialUpgradeRequired=true after legacy web login by directing the account to change/reset before game login.",
+        "Preserve the pinned /v1/accounts/password/... body-token route contract; do not move reset/verification tokens into insecure URL logging flows."
+      ]
+    },
+    {
+      "owner": "WS10",
+      "blocking_for_mail_delivery_acceptance": true,
+      "items": [
+        "Using a controlled real/sandbox recipient, verify actual verification-mail and password-reset-mail receipt separately from WS09 provider acceptance."
+      ]
+    },
+    {
+      "owner": "WS03",
+      "blocking_for_ws13_service": false,
+      "items": [
+        "Keep KO1298 20-byte username and 12-byte password packet limits unchanged.",
+        "Consume the shared oldko.accounts hash for subsequent game authentication.",
+        "If immediate disconnect of already-authenticated game sessions after password rotation is required, implement it in the game runtime; WS13 already invalidates web sessions and rotates the shared hash/passwordVersion."
+      ]
+    },
+    {
+      "owner": "WS07",
+      "blocking_for_ws13_service": false,
+      "items": [
+        "No competing account schema is introduced by WS13; retain the pinned shared account/session/action-token schema and adapter.",
+        "Keep the WS13 service-owned account_rate_limits migration coordinated with the shared migration plan."
+      ]
+    }
+  ],
+  "consumers": ["WS50", "WS09", "official website frontend", "WS03", "WS10"],
+  "secrets_requested_from_user_by_ws13": false,
+  "implementation_state": "CI_COMPLETE",
+  "domain_live_state": "AWAITING_EXTERNAL_OWNER_DEPLOYMENT_AND_REAL_MAIL_SMOKES"
+}
