@@ -17,13 +17,13 @@ function invisible() { return false; }
 
 function createPorts(ports = {}) {
   const world = ports.world ?? {};
+  const terrain = ports.terrain ?? {};
   const movement = ports.movement ?? {};
   const combat = ports.combat ?? {};
   return Object.freeze({
     world: Object.freeze({
       listAggroCandidates: world.listAggroCandidates ?? empty,
       getTargetSnapshot: world.getTargetSnapshot ?? none,
-      resolveSpawnPosition: world.resolveSpawnPosition ?? none,
       isMobVisibleToPlayer: world.isMobVisibleToPlayer ?? invisible,
       onMobSpawn: world.onMobSpawn ?? noop,
       onMobStateChange: world.onMobStateChange ?? noop,
@@ -31,6 +31,9 @@ function createPorts(ports = {}) {
       onNearbyMobSpawn: world.onNearbyMobSpawn ?? noop,
       onNearbyMobDespawn: world.onNearbyMobDespawn ?? noop,
       onAssistSignal: world.onAssistSignal ?? noop,
+    }),
+    terrain: Object.freeze({
+      resolveHeight: terrain.resolveHeight ?? none,
     }),
     movement: Object.freeze({
       chase: movement.chase ?? noop,
@@ -61,6 +64,11 @@ function requireTargetId(target) {
 function playerIdOf(player) {
   if (!player || (typeof player.id !== 'string' && typeof player.id !== 'number')) return null;
   return String(player.id);
+}
+
+function heightZoneId(zoneId) {
+  const numeric = Number(zoneId);
+  return Number.isSafeInteger(numeric) ? numeric : null;
 }
 
 class MobService {
@@ -383,7 +391,6 @@ class MobService {
   }
 
   _die(mob, now, meta) {
-    const template = this.definition.templates.get(mob.templateId);
     const previousTargetId = mob.targetId;
     mob.hp = 0;
     mob.targetId = null;
@@ -398,9 +405,22 @@ class MobService {
   }
 
   _respawn(mob, now) {
+    if (this.definition.dataClass === 'real') {
+      const resolved = this._resolveAuthoritativeSpawnOrigin(mob, now);
+      if (!resolved.ok) {
+        this._emitState(mob, 'respawn-deferred-height', now, {
+          heightStatus: resolved.status,
+          heightReason: resolved.reason,
+        });
+        return false;
+      }
+      this._applyAuthoritativeSpawnOrigin(mob, resolved);
+    } else {
+      mob.position = { ...mob.home };
+    }
+
     mob.state = MobState.IDLE;
     mob.hp = mob.maxHp;
-    mob.position = { ...mob.home };
     mob.targetId = null;
     mob.diedAt = null;
     mob.corpseDespawnAt = null;
@@ -410,25 +430,74 @@ class MobService {
     mob.stuckCount = 0;
     mob.revision += 1;
     this._emitSpawn(mob, 'respawn', now);
+    return true;
   }
 
   _resolveInitialPosition(mob, now) {
-    if (Number.isFinite(mob.position.y)) return;
-    const resolved = this.ports.world.resolveSpawnPosition(Object.freeze({
-      mobId: mob.id,
-      zoneId: mob.zoneId,
-      x: mob.position.x,
-      z: mob.position.z,
-      heading: mob.position.heading,
-      sourceArea: mob.sourceArea,
-      sourceRef: mob.sourceRef,
-      atMs: now,
-    }));
-    if (!resolved || ![resolved.x, resolved.y, resolved.z].every(Number.isFinite)) {
-      throw new Error(`ko1298-mobs: real spawn ${mob.id} requires authoritative height/position resolver`);
+    if (this.definition.dataClass !== 'real') {
+      if (!Number.isFinite(mob.position.y)) {
+        throw new Error(`ko1298-mobs: fixture spawn ${mob.id} requires explicit finite Y`);
+      }
+      mob.spawnOrigin = Object.freeze({ ...mob.position });
+      mob.home = { ...mob.position };
+      return;
     }
-    mob.position = { ...normalizePosition({ ...resolved, heading: resolved.heading ?? mob.position.heading }, `${mob.id}.resolvedPosition`) };
-    mob.home = { ...mob.position };
+
+    const resolved = this._resolveAuthoritativeSpawnOrigin(mob, now);
+    if (!resolved.ok) {
+      throw new Error(`ko1298-mobs: real spawn ${mob.id} requires authoritative terrain height (${resolved.status}:${resolved.reason})`);
+    }
+    this._applyAuthoritativeSpawnOrigin(mob, resolved);
+  }
+
+  _resolveAuthoritativeSpawnOrigin(mob, now) {
+    const zoneId = heightZoneId(mob.zoneId);
+    if (zoneId === null) return { ok: false, status: 'invalid', reason: 'non-numeric-zone' };
+
+    let result;
+    try {
+      result = this.ports.terrain.resolveHeight(zoneId, mob.spawnAnchor.x, mob.spawnAnchor.z);
+    } catch (error) {
+      return { ok: false, status: 'invalid', reason: `resolver-threw:${error.message}` };
+    }
+
+    if (!result || typeof result !== 'object') {
+      return { ok: false, status: 'unresolved', reason: 'missing-height-result' };
+    }
+    if (result.status !== 'authoritative') {
+      return { ok: false, status: String(result.status ?? 'unresolved'), reason: String(result.reason ?? 'height-not-authoritative') };
+    }
+    if (!Number.isFinite(result.height)) {
+      return { ok: false, status: 'invalid', reason: 'authoritative-height-not-finite' };
+    }
+
+    const position = normalizePosition({
+      x: mob.spawnAnchor.x,
+      y: result.height,
+      z: mob.spawnAnchor.z,
+      heading: mob.spawnAnchor.heading,
+    }, `${mob.id}.authoritativeSpawnOrigin`);
+
+    return {
+      ok: true,
+      position,
+      authority: Object.freeze({
+        status: 'authoritative',
+        zoneId,
+        surface: result.surface ?? null,
+        policy: result.policy ?? null,
+        terrainHeight: Number.isFinite(result.terrainHeight) ? result.terrainHeight : null,
+        shapeHeight: Number.isFinite(result.shapeHeight) ? result.shapeHeight : null,
+        resolvedAtMs: now,
+      }),
+    };
+  }
+
+  _applyAuthoritativeSpawnOrigin(mob, resolved) {
+    mob.position = { ...resolved.position };
+    mob.home = { ...resolved.position };
+    mob.spawnOrigin = Object.freeze({ ...resolved.position });
+    mob.heightAuthority = resolved.authority;
   }
 
   _emitAssistSignal(mob, targetId, template, atMs) {
