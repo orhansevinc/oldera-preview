@@ -1,0 +1,193 @@
+{
+  "schema_version": "official-site-release/v1",
+  "release_date": "2026-10-14",
+  "branch": "official-site-domain-release",
+  "website_source_commit": "5f9a4f0ccd3d7d06e8b407bfca35266f1b2d3516",
+  "artifact": {
+    "id": "official-site-static@5f9a4f0ccd3d7d06e8b407bfca35266f1b2d3516",
+    "digest": "git-tree-sha1:ee3ba5bfd85ff6951017befb748b71c3e5851f97",
+    "source_tree": "ee3ba5bfd85ff6951017befb748b71c3e5851f97"
+  },
+  "entrypoints": {
+    "official_site": "index.html",
+    "account_center": "account.html",
+    "legacy_home_alias": "oldkoweb-live.html"
+  },
+  "static_assets": [
+    "site-config.js",
+    "oldkoweb-v14-a.css",
+    "oldkoweb-v14-b.css",
+    "oldkoweb-v14.js",
+    "account-v15.css",
+    "account-v15.js",
+    "assets/hero-1299-hd.jpg"
+  ],
+  "public_urls": {
+    "official": "https://oldkoweb.com/",
+    "login": "https://oldkoweb.com/account.html#login",
+    "register": "https://oldkoweb.com/account.html#register",
+    "dashboard": "https://oldkoweb.com/account.html#dashboard",
+    "play": "https://play.oldkoweb.com/",
+    "admin": "https://admin.oldkoweb.com/"
+  },
+  "backend_refs": {
+    "ws13_public_account_api": {
+      "branch": "ws13-account-api",
+      "commit": "5777c865274cba26ca35a5e74bd13cb08530c5eb",
+      "secure_session_parent_commit": "361dccf0d064f221201e21d876a058543e4b4cdc"
+    },
+    "ws07_persistence": {
+      "branch": "ws07-database",
+      "commit": "1ae85c96319cbab11648a91ed28300e17d4c607f",
+      "migration": "database/migrations/0003_public_account_api.sql",
+      "account_repository_module": "services/oldko-data/src/adapters/ws13-account-api.js"
+    },
+    "shared_account_table": "oldko.accounts"
+  },
+  "same_origin_reverse_proxy": [
+    {
+      "public_prefix": "/api/account/",
+      "upstream_owner": "WS13",
+      "strip_prefix": "/api/account",
+      "required_routes": [
+        "POST /v1/accounts/register",
+        "POST /v1/accounts/verification/request",
+        "POST /v1/accounts/verification/confirm",
+        "POST /v1/accounts/password-reset/request",
+        "POST /v1/accounts/password-reset/confirm",
+        "POST /v1/accounts/password/change",
+        "POST /v1/session/login",
+        "GET /v1/session/current",
+        "POST /v1/session/logout"
+      ]
+    },
+    {
+      "public_prefix": "/api/rankings/",
+      "upstream_owner": "WS37",
+      "strip_prefix": "/api/rankings",
+      "required_routes": [
+        "GET /v1/rankings/levels",
+        "GET /v1/rankings/national-points",
+        "GET /v1/rankings/clans"
+      ]
+    },
+    {
+      "public_prefix": "/api/status/",
+      "upstream_owner": "WS44",
+      "strip_prefix": "/api/status",
+      "required_routes": [
+        "GET /v1/realms"
+      ]
+    }
+  ],
+  "account_security": {
+    "session_cookie": "oldko_session",
+    "cookie_requirements": ["Secure", "HttpOnly", "SameSite=Strict", "Path=/"],
+    "logout_csrf_protection": "trusted Origin allow-list plus SameSite=Strict cookie",
+    "dashboard_authorization": "GET /v1/session/current; fail closed on missing/invalid/revoked session",
+    "password_hash_authority": "canonical WS07-compatible scrypt$N$r$p$base64(salt)$base64(hash64); WS13 retains legacy read compatibility",
+    "password_or_token_in_url": false,
+    "frontend_token_storage": false
+  },
+  "production_env_names": [
+    "NODE_ENV",
+    "PORT",
+    "DATABASE_URL",
+    "OLDKO_DB_SSL",
+    "OLDKO_ACCOUNT_REPOSITORY_MODULE",
+    "OLDKO_ACCOUNT_DELIVERY_WEBHOOK_URL",
+    "OLDKO_ACCOUNT_DELIVERY_WEBHOOK_SECRET",
+    "OLDKO_ACCOUNT_ALLOWED_ORIGINS",
+    "OLDKO_TRUST_PROXY"
+  ],
+  "required_non_secret_config": {
+    "NODE_ENV": "production",
+    "OLDKO_ACCOUNT_ALLOWED_ORIGINS": "https://oldkoweb.com",
+    "OLDKO_TRUST_PROXY": "1 when and only when deployed behind the trusted WS09 reverse proxy",
+    "OLDKO_ACCOUNT_REPOSITORY_MODULE": "deployed path to services/oldko-data/src/adapters/ws13-account-api.js"
+  },
+  "migration_requirements": [
+    "Apply existing WS07 migrations in order before 0003_public_account_api.sql.",
+    "Apply database/migrations/0003_public_account_api.sql before starting the WS13 production repository adapter.",
+    "Do not run WS13 with InMemoryAccountRepository in production."
+  ],
+  "delivery_requirements": [
+    "Production verification/password-reset delivery requires the existing WS13 webhook delivery configuration.",
+    "OLDKO_ACCOUNT_DELIVERY_WEBHOOK_URL and OLDKO_ACCOUNT_DELIVERY_WEBHOOK_SECRET must be supplied through the deployment secret store; no secret values belong in this handoff."
+  ],
+  "website_runtime": {
+    "play_url": "https://play.oldkoweb.com/",
+    "account_api_base": "/api/account",
+    "rankings_api_base": "/api/rankings",
+    "status_api_base": "/api/status",
+    "opening_date": "runtime-configurable and hidden by default; 2026-11-01 is not a release promise",
+    "preview_paths_removed": true,
+    "fake_public_numbers_removed": true
+  },
+  "feature_support": {
+    "registration": "BACKEND_WIRED",
+    "verification": "BACKEND_WIRED_REQUIRES_PRODUCTION_DELIVERY",
+    "login": "BACKEND_WIRED_SECURE_SESSION",
+    "logout": "BACKEND_WIRED_SESSION_REVOCATION",
+    "current_user_dashboard": "BACKEND_WIRED_SERVER_AUTHORIZED",
+    "characters": "BACKEND_WIRED_SHARED_DATABASE",
+    "password_change": "BACKEND_WIRED",
+    "password_reset": "BACKEND_WIRED_REQUIRES_PRODUCTION_DELIVERY",
+    "cash_payment": "UNAVAILABLE_NO_VERIFIED_BACKEND",
+    "two_factor_auth": "UNAVAILABLE_NO_VERIFIED_BACKEND",
+    "support_ticket": "UNAVAILABLE_NO_VERIFIED_BACKEND",
+    "nation_change": "UNAVAILABLE_NO_VERIFIED_BACKEND",
+    "name_change": "UNAVAILABLE_NO_VERIFIED_BACKEND"
+  },
+  "verification": {
+    "ws13_session_integration": "PASS_2_OF_2: bad password 401; unauthenticated current-user 401; secure cookie login; authorized user+character read; logout revocation; post-logout 401; untrusted logout Origin 403",
+    "password_hash_game_verifier_compatibility": "PASS: canonical WS13 hash verifies with the WS07 game-auth algorithm; wrong password rejected",
+    "website_static_checks": "PASS_4_OF_4 on production behavior invariants before source commit; committed source preserves the asserted canonical-domain/session-route/public-service invariants",
+    "desktop_mobile_source_review": "PASS_RESPONSIVE_SOURCE; rendered live-domain browser verification still required after WS09 deployment",
+    "postgres_single_database_register_to_game_login": "NOT_RUN_NO_COMPOSED_PRODUCTION_POSTGRES_TARGET",
+    "live_domain_e2e": "NOT_RUN_WS09_NOT_DEPLOYED"
+  },
+  "ready_scope": [
+    "Canonical root website source and account center are ready for WS09 static-host transfer.",
+    "Account frontend is wired to the real WS13 session/account contract and no longer opens #dashboard without server authorization.",
+    "WS13 and WS07 now provide the persistent shared-account source, migration, session persistence and game-compatible password format needed for production composition.",
+    "WS37 ranking and WS44 realm-status exact public contracts are wired; unavailable nation split is left blank rather than fabricated."
+  ],
+  "open_blockers": [
+    {
+      "id": "PERSISTENT_HOST_TARGET",
+      "owner": "WS09/external infrastructure",
+      "detail": "WS09 currently has no authorized persistent host/stable public target, so static/backend transfer, DNS and TLS cutover cannot be completed."
+    },
+    {
+      "id": "WS03_WS07_PERSISTENT_GAME_REPOSITORY",
+      "owner": "WS03 with WS07 dependency",
+      "detail": "Game auth/character production runtime must compose the asynchronous WS07 PostgreSQL adapter and pass the required immutable-child integration/browser gates."
+    },
+    {
+      "id": "ONE_DATABASE_END_TO_END",
+      "owner": "WS13+WS07+WS03 integration",
+      "detail": "Registration -> verification -> website login -> game login must still be exercised against one real composed PostgreSQL target before production compatibility is declared verified."
+    },
+    {
+      "id": "PRODUCTION_RATE_LIMIT_STORE",
+      "owner": "WS13/deployment",
+      "detail": "Current WS13 SecurityGate store is process-local; production requires a shared/durable limiter or an explicitly approved deployment-safe single-instance policy."
+    },
+    {
+      "id": "ACCOUNT_DELIVERY_CONFIGURATION",
+      "owner": "WS13/deployment",
+      "detail": "Verification/reset delivery webhook URL and secret must be supplied by the production secret store and smoke-tested without logging tokens."
+    },
+    {
+      "id": "ADMIN_PERSISTENCE",
+      "owner": "WS08 with WS07 dependency",
+      "detail": "admin.oldkoweb.com remains a separate deployment concern; its production persistent repository is not part of this website source commit."
+    },
+    {
+      "id": "DNS_TLS_AND_LIVE_E2E",
+      "owner": "WS09",
+      "detail": "Do not mark deployed until apex/play/admin TLS, HTTPS/WSS and real-domain browser account/game smoke tests pass."
+    }
+  ]
+}
