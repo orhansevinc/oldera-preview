@@ -23,9 +23,10 @@ services:
       OFFICIAL_HOST: ${OFFICIAL_HOST:-oldkoweb.com}
       PLAY_HOST: ${PLAY_HOST:-play.oldkoweb.com}
       ADMIN_HOST: ${ADMIN_HOST:-admin.oldkoweb.com}
+      ACCOUNT_API_PORT: ${ACCOUNT_API_PORT:-8081}
       ADMIN_API_PORT: ${ADMIN_API_PORT:-8080}
       GATEWAY_INTERNAL_PORT: ${GATEWAY_INTERNAL_PORT:-8080}
-      NGINX_ENVSUBST_FILTER: '^(OFFICIAL_HOST|PLAY_HOST|ADMIN_HOST|ADMIN_API_PORT|GATEWAY_INTERNAL_PORT)$'
+      NGINX_ENVSUBST_FILTER: '^(OFFICIAL_HOST|PLAY_HOST|ADMIN_HOST|ACCOUNT_API_PORT|ADMIN_API_PORT|GATEWAY_INTERNAL_PORT)$'
     volumes:
       - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./infra/nginx/mime.types:/etc/nginx/oldkoweb-mime.types:ro
@@ -33,6 +34,8 @@ services:
       - ./deploy/artifacts:/srv/oldkoweb:ro
       - ${TLS_CERT_DIR:-./deploy/tls}:/etc/nginx/tls:ro
     depends_on:
+      account-api:
+        condition: service_healthy
       admin-api:
         condition: service_healthy
       gateway-auth:
@@ -50,6 +53,36 @@ services:
     pids_limit: 128
     networks:
       - edge
+      - backend
+
+  account-api:
+    <<: *service-defaults
+    image: ${ACCOUNT_API_IMAGE:?Set ACCOUNT_API_IMAGE to the immutable WS13+WS07 production image digest}
+    environment:
+      NODE_ENV: production
+      PORT: ${ACCOUNT_API_PORT:-8081}
+      DATABASE_URL: ${ACCOUNT_DATABASE_URL:?Set ACCOUNT_DATABASE_URL through the secure production configuration channel}
+      OLDKO_DB_SSL: ${OLDKO_DB_SSL:-disable}
+      OLDKO_ACCOUNT_REPOSITORY_MODULE: ${OLDKO_ACCOUNT_REPOSITORY_MODULE:-/opt/oldkoweb/ws07/services/oldko-data/src/adapters/ws13-account-api.js}
+      OLDKO_ACCOUNT_DELIVERY_WEBHOOK_URL: ${OLDKO_ACCOUNT_DELIVERY_WEBHOOK_URL:?Set the real HTTPS delivery webhook through the secure production configuration channel}
+      OLDKO_ACCOUNT_DELIVERY_WEBHOOK_SECRET: ${OLDKO_ACCOUNT_DELIVERY_WEBHOOK_SECRET:?Set the delivery webhook secret through the secure production configuration channel}
+      OLDKO_ACCOUNT_ALLOWED_ORIGINS: https://oldkoweb.com
+      OLDKO_TRUST_PROXY: "1"
+    expose:
+      - "${ACCOUNT_API_PORT:-8081}"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:${ACCOUNT_API_PORT:-8081}/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+    depends_on:
+      db:
+        condition: service_healthy
+    mem_limit: ${ACCOUNT_API_MEMORY_LIMIT:-512m}
+    cpus: ${ACCOUNT_API_CPU_LIMIT:-1.0}
+    pids_limit: 256
+    networks:
       - backend
 
   admin-api:
