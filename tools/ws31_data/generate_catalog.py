@@ -90,6 +90,28 @@ CLIENT_ITEM_HEADER_EXPECTED = {
 
 GOLDEN_SKILLS = {101003, 102003, 103001, 104001, 104004, 104008}
 MORADON_MONSTER_IDS = {750, 751, 752, 754, 755, 850, 851, 852, 853, 854}
+WS25_MORADON_SPAWN_SIGNATURES = {
+    (750, 221, 318, 236, 302, 5, 30),
+    (750, 265, 279, 286, 257, 5, 20),
+    (751, 232, 294, 256, 262, 10, 20),
+    (751, 255, 265, 290, 230, 10, 20),
+    (752, 254, 267, 303, 229, 10, 20),
+    (752, 179, 329, 224, 279, 10, 20),
+    (755, 357, 227, 409, 168, 10, 20),
+    (755, 426, 214, 481, 185, 10, 20),
+    (754, 302, 232, 374, 205, 10, 20),
+    (754, 427, 215, 483, 187, 5, 20),
+    (853, 451, 135, 475, 110, 5, 20),
+    (852, 213, 268, 241, 226, 5, 20),
+    (851, 145, 291, 185, 247, 5, 20),
+    (850, 193, 326, 238, 298, 5, 20),
+    (851, 361, 228, 385, 193, 5, 20),
+    (851, 416, 202, 447, 184, 5, 20),
+    (852, 293, 211, 348, 184, 5, 20),
+    (852, 413, 175, 483, 147, 5, 20),
+    (853, 346, 201, 379, 172, 5, 20),
+    (854, 467, 158, 493, 117, 5, 20),
+}
 EXPECTED_MORADON_NPC = {"templates": 31, "spawn_groups": 39, "declared_population": 43}
 EXPECTED_MORADON_MONSTERS = {"templates": 10, "spawn_groups": 20, "declared_population": 135}
 
@@ -883,19 +905,45 @@ def make():
                 f"expected {expected}, got {moradon_npc[key]}"
             )
 
-    moradon_monster_spawns = [
+    moradon_monster_source_rows = [
         x
         for x in monster_spawns
         if x["zone_id"] == 21 and x["template_id"] in MORADON_MONSTER_IDS
     ]
+    def ws25_signature(row):
+        rect = row["rectangle"]
+        return (
+            row["template_id"],
+            rect["left_x"],
+            rect["top_z"],
+            rect["right_x"],
+            rect["bottom_z"],
+            int(row["count"]),
+            int(row["respawn_seconds"]),
+        )
+
+    moradon_monster_spawns = [
+        row
+        for row in moradon_monster_source_rows
+        if ws25_signature(row) in WS25_MORADON_SPAWN_SIGNATURES
+    ]
+    selected_signatures = {ws25_signature(row) for row in moradon_monster_spawns}
+    missing_ws25_signatures = sorted(WS25_MORADON_SPAWN_SIGNATURES - selected_signatures)
+    if missing_ws25_signatures:
+        raise RuntimeError(
+            f"WS25 Moradon source signatures missing from pinned K_NPCPOS: {missing_ws25_signatures}"
+        )
     moradon_monsters_present = sorted(
         {x["template_id"] for x in monsters if x["template_id"] in MORADON_MONSTER_IDS}
     )
     moradon_monsters = {
         "templates": len(moradon_monsters_present),
+        "source_rows_all_matching_ids": len(moradon_monster_source_rows),
         "spawn_groups": len(moradon_monster_spawns),
         "declared_population": sum(int(x["count"]) for x in moradon_monster_spawns),
         "template_ids": moradon_monsters_present,
+        "slice_identity": "WS25 verified moradon-zone21.verified.json exact source geometry/count signatures",
+        "excluded_matching_source_rows": len(moradon_monster_source_rows) - len(moradon_monster_spawns),
         "source_position_semantics": "K_NPCPOS rectangle/count",
         "runtime_projection_semantics": (
             "deterministic projection may be used by WS25; it is not original 1298 RNG identity"
@@ -1157,7 +1205,7 @@ DURUM: DATA AUTHORITY GENERATED — pinned 1298 sources, deterministic output, e
 ## MORADON SOURCE SLICES
 - NPC: {moradon_npc['templates']} templates, {moradon_npc['spawn_groups']} K_NPCPOS groups, declared population {moradon_npc['declared_population']}.
 - NPC terrain Y: source K_NPCPOS has no Y column; {moradon_npc['terrain_y_unknown_groups']} groups remain runtime height-resolver dependent.
-- Monsters: {moradon_monsters['templates']} templates, {moradon_monsters['spawn_groups']} K_NPCPOS rows, declared population {moradon_monsters['declared_population']}.
+- Monsters: {moradon_monsters['templates']} templates; full pinned source has {moradon_monsters['source_rows_all_matching_ids']} Moradon rows for those IDs; WS25 verified slice is {moradon_monsters['spawn_groups']} rows / declared population {moradon_monsters['declared_population']}.
 - Monster runtime deterministic rectangle expansion is explicitly DERIVED and is not claimed to reproduce original 1298 RNG positions.
 
 ## ITEM SCHEMA EVIDENCE
@@ -1217,7 +1265,7 @@ Machine-readable authority: `data-catalog/generated/`.
 Counts: zones {counts['zones']}; NPC templates/spawns {counts['npc_templates']}/{counts['npc_spawns']}; monster templates/spawns {counts['monster_templates']}/{counts['monster_spawns']}; items {counts['items']}; skills {counts['skills']}; merchants {counts['merchants']}; item groups {counts['item_groups']}; drop tables {counts['drops']}; progression {counts['progression_rows']}.
 
 Moradon NPC source slice: {moradon_npc['templates']} templates / {moradon_npc['spawn_groups']} groups / population {moradon_npc['declared_population']}.
-Moradon monster source slice: {moradon_monsters['templates']} templates / {moradon_monsters['spawn_groups']} rows / population {moradon_monsters['declared_population']}.
+Moradon monster source: {moradon_monsters['templates']} templates / {moradon_monsters['source_rows_all_matching_ids']} matching pinned rows; WS25 verified slice {moradon_monsters['spawn_groups']} rows / population {moradon_monsters['declared_population']}.
 
 Unknown/unresolved: {summary['unknown_count']}. Conflicts: {summary['conflict_count']}.
 Category coverage percentages are in `catalog-summary.json`; WS26-specific drop coverage is in `drop-coverage.json`.

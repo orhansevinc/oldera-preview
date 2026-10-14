@@ -202,7 +202,12 @@ def main():
             errors.append(f"Moradon NPC {key}: expected {expected}")
 
     moradon_monsters = coverage.get("moradon_monsters", {})
-    expected_monsters = {"templates": 10, "spawn_groups": 20, "declared_population": 135}
+    expected_monsters = {
+        "templates": 10,
+        "source_rows_all_matching_ids": 26,
+        "spawn_groups": 20,
+        "declared_population": 135,
+    }
     for key, expected in expected_monsters.items():
         if moradon_monsters.get(key) != expected:
             errors.append(f"Moradon monsters {key}: expected {expected}")
