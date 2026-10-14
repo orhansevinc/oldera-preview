@@ -23,6 +23,8 @@
 
   let config = null;
   let runtimeTimer = 0;
+  let activeEntryUrl = '';
+  let activeVersion = '';
 
   function setStep(name, state, text) {
     const row = document.querySelector(`[data-step="${name}"]`);
@@ -52,6 +54,47 @@
     return core.normalizeConfig(await response.json());
   }
 
+  async function preflightClient() {
+    if (config.publication.enabled) {
+      setStep('build', 'pending', 'WS38 release doğrulanıyor…');
+      setStep('package', 'pending', 'SHA-256 doğrulanıyor…');
+      const release = await core.preflightPublication(config, window.fetch.bind(window), window.crypto, location.href);
+      activeEntryUrl = release.entryUrl;
+      activeVersion = release.contentVersion;
+      ui.build.textContent = `${config.brand.patch} / ${release.contentVersion}`;
+      setStep('build', 'ok', `${release.buildId} · ${release.sourceCommit.slice(0, 8)}`);
+      setStep('package', 'ok', `${release.requiredFileCount} dosya · WS38 integrity PASS`);
+      return;
+    }
+
+    const build = await core.fetchBuildMetadata(config, window.fetch.bind(window), location.href);
+    activeEntryUrl = core.versionedUrl(config.client.entryUrl, config.cacheVersion, location.href);
+    activeVersion = config.cacheVersion;
+    ui.build.textContent = build.sourceCommit ? `${config.brand.patch} / ${build.sourceCommit.slice(0, 12)}` : `${config.brand.patch} / ${config.cacheVersion}`;
+    setStep('build', 'ok', build.sourceBranch ? `${build.sourceBranch} · ${build.sourceCommit.slice(0, 8)}` : 'Build bilgisi hazır');
+
+    setStep('package', 'pending', 'Dosyalar doğrulanıyor…');
+    const packageResults = await core.checkClientPackage(config, window.fetch.bind(window), location.href);
+    setStep('package', 'ok', `${packageResults.length} gerçek paket dosyası hazır`);
+  }
+
+  async function preflightGateways() {
+    if (!config.gateway.endpoints.length) {
+      setStep('gateway', 'warn', 'Henüz config edilmedi');
+      return;
+    }
+    setStep('gateway', 'pending', 'Auth/game erişimi kontrol ediliyor…');
+    try {
+      const results = await core.probeGateways(config.gateway, window.WebSocket, location.href);
+      setStep('gateway', 'ok', `${results.map((item) => item.name).join(' + ')} ulaşılabilir`);
+    } catch (error) {
+      setStep('gateway', config.gateway.required ? 'error' : 'warn', 'Ulaşılamıyor');
+      if (config.gateway.required) throw error;
+      ui.error.hidden = false;
+      ui.error.textContent = core.userMessage(error);
+    }
+  }
+
   async function preflight() {
     config = await loadConfig();
     document.title = `${config.brand.product} — ${config.brand.game} Launcher`;
@@ -59,56 +102,28 @@
     ui.title.textContent = config.brand.game;
     ui.patch.textContent = `Gerçek Knight Online ${config.brand.patch} Web Client`;
 
-    const cacheState = core.rememberCacheVersion(localStorage, 'oldkoweb.play-shell.cacheVersion', config.cacheVersion);
-    await clearNamedCachesOnVersionChange(cacheState);
-
     if (core.detectMobile(window)) {
       ui.mobile.hidden = false;
       ui.mobile.textContent = config.mobile.message;
       if (config.mobile.policy === 'block') throw new core.LauncherError('MOBILE_BLOCKED', config.mobile.message);
     }
 
-    const wasm = core.isWasmSupported(window.WebAssembly);
-    if (!wasm) {
+    if (!core.isWasmSupported(window.WebAssembly)) {
       setStep('browser', 'error', 'WASM yok');
       throw new core.LauncherError('WASM_UNSUPPORTED', 'WebAssembly desteklenmiyor.');
     }
-    const webgl = core.isWebGL2Supported(document);
-    if (!webgl) {
+    if (!core.isWebGL2Supported(document)) {
       setStep('browser', 'error', 'WebGL2 yok');
       throw new core.LauncherError('WEBGL2_UNSUPPORTED', 'WebGL2 desteklenmiyor.');
     }
     setStep('browser', 'ok', 'WASM + WebGL2 hazır');
 
-    setStep('build', 'pending', 'Okunuyor…');
-    const build = await core.fetchBuildMetadata(config, window.fetch.bind(window), location.href);
-    const versionText = build.sourceCommit ? `${config.brand.patch} / ${build.sourceCommit.slice(0, 12)}` : `${config.brand.patch} / ${config.cacheVersion}`;
-    ui.build.textContent = versionText;
-    setStep('build', 'ok', build.sourceBranch ? `${build.sourceBranch} · ${build.sourceCommit.slice(0, 8)}` : 'Build bilgisi hazır');
+    await preflightClient();
+    const cacheState = core.rememberCacheVersion(localStorage, 'oldkoweb.play-shell.cacheVersion', activeVersion || config.cacheVersion);
+    await clearNamedCachesOnVersionChange(cacheState);
+    await preflightGateways();
 
-    setStep('package', 'pending', 'Dosyalar doğrulanıyor…');
-    const packageResults = await core.checkClientPackage(config, window.fetch.bind(window), location.href);
-    setStep('package', 'ok', `${packageResults.length} gerçek paket dosyası hazır`);
-
-    if (config.gateway.url) {
-      setStep('gateway', 'pending', 'Erişim kontrolü…');
-      try {
-        await core.probeGateway(config.gateway.url, window.WebSocket, config.gateway.timeoutMs);
-        setStep('gateway', 'ok', 'Ulaşılabilir');
-      } catch (error) {
-        setStep('gateway', config.gateway.required ? 'error' : 'warn', 'Ulaşılamıyor');
-        if (config.gateway.required) throw error;
-        ui.error.hidden = false;
-        ui.error.textContent = core.userMessage(error);
-      }
-    } else {
-      setStep('gateway', 'warn', 'Henüz config edilmedi');
-    }
-
-    if (cacheState.changed) {
-      setStep('build', 'ok', `Yeni cache sürümü · ${config.cacheVersion}`);
-    }
-
+    if (cacheState.changed) setStep('build', 'ok', `Yeni release · ${activeVersion || config.cacheVersion}`);
     ui.start.disabled = false;
   }
 
@@ -144,7 +159,7 @@
           ui.runtimeStrip.dataset.ready = 'true';
           return;
         }
-      } catch (error) {
+      } catch (_) {
         stopRuntimeMonitor();
         setStep('runtime', 'warn', 'Runtime telemetrisi cross-origin');
         ui.runtimeText.textContent = 'Client açıldı; cross-origin nedeniyle runtime telemetrisi okunamıyor.';
@@ -178,7 +193,7 @@
       setStep('runtime', 'error', 'Client açılamadı');
       ui.runtimeText.textContent = core.userMessage(error);
     };
-    ui.frame.src = core.versionedUrl(config.client.entryUrl, config.cacheVersion, location.href);
+    ui.frame.src = activeEntryUrl || core.versionedUrl(config.client.entryUrl, config.cacheVersion, location.href);
   }
 
   function backToLauncher() {
