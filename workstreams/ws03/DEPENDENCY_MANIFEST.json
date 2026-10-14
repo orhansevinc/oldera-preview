@@ -7,7 +7,7 @@
     "WS11": {"branch":"ws11-protocol-lab","pinnedSha":"013559b6e66ef9f6257403c96f3b012884739470","servicePath":"protocol-lab/runtime/playable-combat-codec.cjs"},
     "WS14": {"branch":"ws14-world-session","pinnedSha":"ed5f806ce7505f4dfae406e4164735def63b6c86","servicePath":"services/ko1298-world"},
     "WS15": {"branch":"ws15-movement-sync","pinnedSha":"ce9bed13b8d45c32ff0592595aa3a0d1e7b3964d","servicePath":"services/ko1298-movement"},
-    "WS16": {"branch":"ws16-npc-world","pinnedSha":"234657c1264ead6b8828425ae9e7fcdca0cca5c8","servicePath":"services/ko1298-npc"},
+    "WS16": {"branch":"ws16-npc-world","pinnedSha":"5ed48ff32187000312652838674388df52fc3fb7","servicePath":"services/ko1298-npc"},
     "WS17": {"branch":"ws17-item-inventory","pinnedSha":"eb3e9fce63b71fa68682d81d9227e6ed7ae905bf","servicePath":"services/ko1298-items"},
     "WS19": {"branch":"ws19-combat-core","pinnedSha":"cc1490672b676f0bf1675f83c8f4fc146b940df4","servicePath":"services/ko1298-combat"},
     "WS25": {"branch":"ws25-mob-ai","pinnedSha":"18c9e9b8439fef88fc93d74bfec7981b0cb41958","servicePath":"services/ko1298-mobs"},
