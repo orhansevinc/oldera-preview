@@ -1,36 +1,45 @@
 # OldKO Public Account API (WS13)
 
-Public player-account lifecycle service. It is intentionally separate from WS08 Admin API and from the KO 1298 protocol/session server.
+Public player-account lifecycle service for `oldkoweb.com`. It is intentionally separate from WS08 Admin API and from the KO 1298 protocol/session server.
 
-## Endpoints
+## Canonical public endpoints
 
-- `GET /healthz`
-- `GET /openapi.json`
-- `GET /v1/accounts/username/availability?username=...`
-- `POST /v1/accounts/register`
-- `POST /v1/accounts/access-check`
-- `POST /v1/accounts/password/change`
-- `POST /v1/accounts/password-reset/request`
-- `POST /v1/accounts/password-reset/confirm`
-- `POST /v1/accounts/verification/request`
-- `POST /v1/accounts/verification/confirm`
+WS09 exposes the service below `https://oldkoweb.com/api/account` and strips `/api/account` before proxying. WS13 also accepts the public prefix directly for deterministic smoke testing.
 
-Passwords use Node's native scrypt with a random per-password salt. Reset/verification tokens are random bearer tokens; only SHA-256 digests are stored. Public reset/verification request responses are deliberately generic to reduce account enumeration.
+- `POST /api/account/v1/accounts/register`
+- `POST /api/account/v1/accounts/verification/request`
+- `POST /api/account/v1/accounts/verification/confirm`
+- `POST /api/account/v1/session/login`
+- `GET /api/account/v1/session/current`
+- `POST /api/account/v1/session/logout`
+- `POST /api/account/v1/accounts/password/change`
+- `POST /api/account/v1/accounts/password-reset/request`
+- `POST /api/account/v1/accounts/password-reset/confirm`
+- `GET /healthz` and `GET /readyz` for direct upstream health/readiness probes.
 
-## Production configuration
+Passwords use canonical WS07-compatible scrypt with a random per-password salt. Reset/verification tokens are random bearer tokens; only SHA-256 digests are stored. Tokens are delivered in webhook JSON bodies and are never appended to URLs or emitted by the account service logger. Public reset/verification request responses remain generic to reduce account enumeration.
 
-No secrets belong in git. In production the process fails closed unless these integrations are provided:
+## Production fail-closed configuration
 
-- `OLDKO_ACCOUNT_REPOSITORY_MODULE`: module exporting `createAccountRepository({ env })` and implementing `AccountRepository`.
-- `OLDKO_ACCOUNT_DELIVERY_WEBHOOK_URL`
-- `OLDKO_ACCOUNT_DELIVERY_WEBHOOK_SECRET`
-- `OLDKO_ACCOUNT_ALLOWED_ORIGINS`: comma-separated official origins.
-- `OLDKO_TRUST_PROXY=1` only behind a trusted proxy that overwrites `X-Forwarded-For`.
+Production requires:
 
-The bundled in-memory repository is development/test-only. Rate-limit storage is also process-local; production multi-instance deployment should inject/shared-store the same `SecurityGate` semantics (for example Redis) at composition time.
+- `NODE_ENV=production`
+- `DATABASE_URL`
+- `OLDKO_ACCOUNT_REPOSITORY_MODULE` pointing to the exact WS07 `1ae85c96319cbab11648a91ed28300e17d4c607f` `services/oldko-data/src/adapters/ws13-account-api.js`; WS13 verifies the adapter Git blob SHA before boot.
+- `OLDKO_ACCOUNT_DELIVERY_WEBHOOK_URL` using HTTPS.
+- `OLDKO_ACCOUNT_DELIVERY_WEBHOOK_SECRET` from the deployment secret store.
+- `OLDKO_ACCOUNT_ALLOWED_ORIGINS=https://oldkoweb.com` exactly.
+- Explicit `OLDKO_TRUST_PROXY=0` or `1`; use `1` only behind the trusted WS09 reverse proxy that overwrites `X-Forwarded-For`.
 
-## Tests
+Production refuses `InMemoryAccountRepository` and does not use process-local rate limiting. Apply `sql/0001_postgres_rate_limit.sql` (or run `npm run migrate:rate-limit`) after the pinned WS07 migrations and before starting WS13. `/readyz` remains 503 until both the WS07 PostgreSQL repository and shared rate-limit table are reachable.
+
+The session cookie is `oldko_session; Secure; HttpOnly; SameSite=Strict; Path=/`. Logout requires an allowed `Origin`; the cookie is revoked in PostgreSQL and cleared client-side.
+
+## Validation
 
 ```bash
+npm install --prefix services/account-api
 npm test --prefix services/account-api
 ```
+
+The CI PostgreSQL job additionally checks out the pinned WS07 adapter and official-site handoff, applies real migrations, validates the frontend route contract, runs the public HTTP account lifecycle, verifies logout/password-version revocation, checks shared rate limiting, and verifies WS13 hashes with WS07's actual `verifyPassword()` implementation.

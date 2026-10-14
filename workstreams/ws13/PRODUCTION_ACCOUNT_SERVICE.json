@@ -1,0 +1,98 @@
+{
+  "schema_version": "ws13-production-account-service/v1",
+  "service": "oldko-account-api",
+  "branch": "ws13-account-api",
+  "parent_commit": "5777c865274cba26ca35a5e74bd13cb08530c5eb",
+  "pins": {
+    "official_site_handoff_commit": "8370de2ebfdfd319cf8a719da79cbdef9853fd2f",
+    "ws07_commit": "1ae85c96319cbab11648a91ed28300e17d4c607f",
+    "ws07_account_adapter": "services/oldko-data/src/adapters/ws13-account-api.js",
+    "ws07_account_adapter_git_blob_sha1": "022c32abde503a6dc3af1ff9429c206a1b20ca63"
+  },
+  "public_origin": "https://oldkoweb.com",
+  "public_api_base": "/api/account",
+  "reverse_proxy": {
+    "public_prefix": "/api/account/",
+    "strip_prefix": "/api/account",
+    "trust_proxy": "explicit OLDKO_TRUST_PROXY=1 only behind the trusted WS09 proxy"
+  },
+  "routes": [
+    "POST /api/account/v1/accounts/register",
+    "POST /api/account/v1/accounts/verification/request",
+    "POST /api/account/v1/accounts/verification/confirm",
+    "POST /api/account/v1/session/login",
+    "GET /api/account/v1/session/current",
+    "POST /api/account/v1/session/logout",
+    "POST /api/account/v1/accounts/password/change",
+    "POST /api/account/v1/accounts/password-reset/request",
+    "POST /api/account/v1/accounts/password-reset/confirm"
+  ],
+  "health": {
+    "liveness": "GET /healthz",
+    "readiness": "GET /readyz",
+    "readiness_dependencies": ["WS07 PostgreSQL account repository", "PostgreSQL shared rate-limit table"]
+  },
+  "session_cookie": {
+    "name": "oldko_session",
+    "secure": true,
+    "http_only": true,
+    "same_site": "Strict",
+    "path": "/"
+  },
+  "production_repository": {
+    "required": "exact pinned WS07 PgWs13AccountRepository",
+    "in_memory_allowed": false,
+    "account_table": "oldko.accounts",
+    "session_table": "oldko.account_sessions",
+    "action_token_table": "oldko.account_action_tokens"
+  },
+  "rate_limit": {
+    "backend": "PostgreSQL",
+    "table": "oldko.account_rate_limits",
+    "migration": "services/account-api/sql/0001_postgres_rate_limit.sql",
+    "process_local_allowed_in_production": false,
+    "stored_key_material": "SHA-256 bucket hashes only"
+  },
+  "delivery": {
+    "type": "signed HTTPS webhook",
+    "secret_source": "environment/deployment secret store only",
+    "token_transport": "JSON request body only",
+    "dev_token_public_output": false,
+    "fake_mail": false
+  },
+  "required_env": [
+    "NODE_ENV=production",
+    "DATABASE_URL",
+    "OLDKO_ACCOUNT_REPOSITORY_MODULE",
+    "OLDKO_ACCOUNT_DELIVERY_WEBHOOK_URL",
+    "OLDKO_ACCOUNT_DELIVERY_WEBHOOK_SECRET",
+    "OLDKO_ACCOUNT_ALLOWED_ORIGINS=https://oldkoweb.com",
+    "OLDKO_TRUST_PROXY=0|1"
+  ],
+  "optional_env": ["PORT", "OLDKO_DB_SSL=require"],
+  "required_prestart": [
+    "Apply pinned WS07 migrations through database/migrations/0003_public_account_api.sql",
+    "Apply services/account-api/sql/0001_postgres_rate_limit.sql",
+    "Provide the exact pinned WS07 account repository module file",
+    "Provide real delivery webhook URL and secret"
+  ],
+  "frontend_contract": {
+    "handoff_commit": "8370de2ebfdfd319cf8a719da79cbdef9853fd2f",
+    "asset": "account-v15.js",
+    "account_api_base": "/api/account",
+    "changed": false
+  },
+  "password": {
+    "format": "scrypt$N$r$p$base64(salt)$base64(hash64)",
+    "legacy_ws13_read_compatibility": true,
+    "game_verifier_authority": "WS07 verifyPassword()"
+  },
+  "security": {
+    "logout_origin_validation": true,
+    "current_session_database_authoritative": true,
+    "tokens_logged": false,
+    "tokens_in_urls": false,
+    "secrets_in_repository": false
+  },
+  "deployment_state": "READY_AFTER_EXTERNAL_SECRETS_AND_DATABASE_MIGRATIONS"
+}

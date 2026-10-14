@@ -19,7 +19,7 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  unit:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -27,5 +27,58 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Test WS13 Public Account API
+      - name: Install WS13 dependencies
+        run: npm install --prefix services/account-api --no-audit --no-fund
+      - name: Test WS13 unit and session behavior
+        run: npm test --prefix services/account-api
+
+  postgres-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: oldko
+          POSTGRES_PASSWORD: oldko
+          POSTGRES_DB: oldko_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U oldko -d oldko_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgresql://oldko:oldko@127.0.0.1:5432/oldko_test
+      OLDKO_POSTGRES_INTEGRATION: '1'
+    steps:
+      - name: Checkout WS13 candidate
+        uses: actions/checkout@v4
+      - name: Checkout pinned WS07 authority
+        uses: actions/checkout@v4
+        with:
+          ref: 1ae85c96319cbab11648a91ed28300e17d4c607f
+          path: ws07-source
+      - name: Checkout official-site handoff
+        uses: actions/checkout@v4
+        with:
+          ref: 8370de2ebfdfd319cf8a719da79cbdef9853fd2f
+          path: official-site-source
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install WS13 dependencies
+        run: npm install --prefix services/account-api --no-audit --no-fund
+      - name: Install pinned WS07 data dependencies
+        run: npm install --prefix ws07-source/services/oldko-data --no-audit --no-fund
+      - name: Apply pinned WS07 migrations
+        run: npm run migrate --prefix ws07-source/services/oldko-data
+      - name: Apply WS13 shared rate-limit migration
+        run: npm run migrate:rate-limit --prefix services/account-api
+      - name: Run real PostgreSQL + frontend contract gates
+        env:
+          NODE_ENV: test
+          OLDKO_ACCOUNT_REPOSITORY_MODULE: ${{ github.workspace }}/ws07-source/services/oldko-data/src/adapters/ws13-account-api.js
+          OFFICIAL_ACCOUNT_JS: ${{ github.workspace }}/official-site-source/account-v15.js
         run: npm test --prefix services/account-api
