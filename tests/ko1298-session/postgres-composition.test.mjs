@@ -80,6 +80,9 @@ test('one PostgreSQL row powers WS13 register/verify/login and WS03 KO1298 auth 
 
     const auth = new AuthSession(gameRepository);
     assert.deepEqual([...(await auth.handle(credentials(LOGIN.LOGIN_REQ, username, password)))[0]], [LOGIN.LOGIN_REQ, 1]);
+    const serverList = (await auth.handle(Buffer.from([LOGIN.SERVER_LIST])))[0];
+    assert.equal(serverList[0], LOGIN.SERVER_LIST);
+    assert.equal(serverList[1], 1);
 
     const world = new WorldSessionService({ repository: gameRepository });
     const game = new GameSession(gameRepository, { socketId: 777, worldSession: world });

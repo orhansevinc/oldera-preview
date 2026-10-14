@@ -50,7 +50,7 @@
   },
   "ci": {
     "oneDatabaseE2E": "postgres-one-db-e2e",
-    "flow": ["WS13 register","WS13 verify","WS13 login","same oldko.accounts row","WS03 auth","1298 version","game login","character list","character create","character select","WS14 world ready","save/load"],
+    "flow": ["WS13 register","WS13 verify","WS13 login","same oldko.accounts row","WS03 auth","login server list","1298 version","game login","character list","character create","character select","WS14 world ready","save/load"],
     "playableCombatRegression": "existing composed-contracts + combat-composition jobs unchanged in authority/pins"
   },
   "secrets": "No production credentials are committed. DATABASE_URL is environment-only; workflow credentials are ephemeral CI-only values.",
