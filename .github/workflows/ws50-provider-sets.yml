@@ -93,7 +93,7 @@ jobs:
 
       - name: Assert C4 fail-closed first blocker and closed historical authorities
         run: |
-          python3 - "$RUNNER_TEMP/ws50-provider-set-evidence/C4-receipt.json" <<'PY'
+          python3 - "$RUNNER_TEMP/ws50-provider-set-evidence/WS50-C4-receipt.json" <<'PY'
           import json
           import pathlib
           import sys
