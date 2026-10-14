@@ -46,7 +46,7 @@ test('real WS17 composition exposes canonical Short Sword normalized combat auth
   const { service } = createCanonicalService();
   const item = contract.canonicalStarterWeapon;
 
-  await service.createItem('ws31-karus-warrior', inv(0), { templateId: item.itemId, serial: '120010000-1' });
+  await service.createItem('ws31-karus-warrior', inv(0), { templateId: item.itemId, serial: '1200100001' });
   await service.equip('ws31-karus-warrior', 0, EQUIPMENT_SLOTS.RIGHT_HAND);
 
   const snapshot = await service.getCombatItemSnapshot('ws31-karus-warrior');
@@ -74,7 +74,7 @@ test('real WS17 composition exposes canonical Short Sword normalized combat auth
 test('WS19 compatibility surface needs no range or delay unit guessing', async () => {
   const { service } = createCanonicalService();
   const itemId = contract.canonicalStarterWeapon.itemId;
-  await service.createItem('ws19-consumer', inv(0), { templateId: itemId, serial: 'ws19-weapon' });
+  await service.createItem('ws19-consumer', inv(0), { templateId: itemId, serial: '1200100002' });
   await service.equip('ws19-consumer', 0, EQUIPMENT_SLOTS.RIGHT_HAND);
   const snapshot = await service.getCombatItemSnapshot('ws19-consumer');
 
@@ -100,7 +100,7 @@ test('missing right-hand weapon fails closed instead of looking playable', async
 test('broken canonical weapon preserves durability state but removes playable timing/range authority', async () => {
   const { service } = createCanonicalService();
   const itemId = contract.canonicalStarterWeapon.itemId;
-  await service.createItem('broken-player', inv(0), { templateId: itemId, serial: 'broken-weapon', durability: 0 });
+  await service.createItem('broken-player', inv(0), { templateId: itemId, serial: '1200100003', durability: 0 });
   await service.equip('broken-player', 0, EQUIPMENT_SLOTS.RIGHT_HAND);
   const snapshot = await service.getCombatItemSnapshot('broken-player');
   assert.equal(snapshot.playable, false);
