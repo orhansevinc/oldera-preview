@@ -35,7 +35,8 @@ jobs:
           touch deploy/artifacts/staging-play/play-shell/index.html
           printf '{}\n' > deploy/artifacts/staging-play/play-shell/config.json
           touch deploy/artifacts/staging-play/real1298/index.html
-          touch deploy/artifacts/staging-play/real1298/KnightOnLine.js
+          printf 'console.log("ws09-js-mime-smoke");\n' > deploy/artifacts/staging-play/real1298/KnightOnLine.js
+          printf 'export const ws09MimeSmoke = true;\n' > deploy/artifacts/staging-play/real1298/mime-contract.mjs
           touch deploy/artifacts/staging-play/real1298/KnightOnLine.wasm
           touch deploy/artifacts/staging-play/real1298/KnightOnLine.data
           openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
@@ -82,6 +83,30 @@ jobs:
             -v "$PWD/infra/nginx/mime.types:/etc/nginx/oldkoweb-mime.types:ro" \
             -v "$PWD/infra/nginx/templates/staging.conf.template:/etc/nginx/templates/default.conf.template:ro" \
             nginx:stable-alpine nginx -t
+
+      - name: Staging WS38 and WS12 strict MIME smoke
+        run: |
+          docker run -d --name ws09-mime-smoke \
+            -p 8080:80 \
+            --add-host gateway-auth:127.0.0.1 \
+            --add-host gateway-game:127.0.0.1 \
+            -e STAGING_HOST=localhost \
+            -e GATEWAY_INTERNAL_PORT=8080 \
+            -e 'NGINX_ENVSUBST_FILTER=^(STAGING_HOST|GATEWAY_INTERNAL_PORT)$' \
+            -v "$PWD/infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" \
+            -v "$PWD/infra/nginx/mime.types:/etc/nginx/oldkoweb-mime.types:ro" \
+            -v "$PWD/infra/nginx/templates/staging.conf.template:/etc/nginx/templates/default.conf.template:ro" \
+            -v "$PWD/deploy/artifacts/staging-play:/srv/oldkoweb/play:ro" \
+            nginx:stable-alpine >/dev/null
+          trap 'docker rm -f ws09-mime-smoke >/dev/null 2>&1 || true' EXIT
+          for attempt in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:8080/real1298/KnightOnLine.js >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          MIME_ONLY=1 MJS_SMOKE_PATH=real1298/mime-contract.mjs \
+            sh deploy/staging-smoke.sh deploy/.env.staging.example
 
       - name: Nginx production template syntax
         run: |
