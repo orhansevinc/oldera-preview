@@ -41,6 +41,10 @@
     ui.start.disabled = true;
   }
 
+  function delay(ms) {
+    return new Promise((resolve) => window.setTimeout(resolve, ms));
+  }
+
   async function clearNamedCachesOnVersionChange(cacheState) {
     if (!cacheState.changed || !('caches' in window)) return;
     const keys = await caches.keys();
@@ -78,21 +82,48 @@
     setStep('package', 'ok', `${packageResults.length} gerçek paket dosyası hazır`);
   }
 
+  async function gatewayHttpHealthOk() {
+    const checks = ['/gateway-auth-healthz', '/gateway-game-healthz'];
+    try {
+      const responses = await Promise.all(checks.map((path) => fetch(new URL(path, location.href), { cache: 'no-store' })));
+      return responses.every((response) => response && response.ok);
+    } catch (_) {
+      return false;
+    }
+  }
+
   async function preflightGateways() {
     if (!config.gateway.endpoints.length) {
       setStep('gateway', 'warn', 'Henüz config edilmedi');
       return;
     }
+
     setStep('gateway', 'pending', 'Auth/game erişimi kontrol ediliyor…');
-    try {
-      const results = await core.probeGateways(config.gateway, window.WebSocket, location.href);
-      setStep('gateway', 'ok', `${results.map((item) => item.name).join(' + ')} ulaşılabilir`);
-    } catch (error) {
-      setStep('gateway', config.gateway.required ? 'error' : 'warn', 'Ulaşılamıyor');
-      if (config.gateway.required) throw error;
-      ui.error.hidden = false;
-      ui.error.textContent = core.userMessage(error);
+    let lastError = null;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        const results = await core.probeGateways(config.gateway, window.WebSocket, location.href);
+        setStep('gateway', 'ok', `${results.map((item) => item.name).join(' + ')} ulaşılabilir`);
+        return;
+      } catch (error) {
+        lastError = error;
+        if (attempt < 3) {
+          setStep('gateway', 'pending', `WSS tekrar deneniyor… ${attempt}/3`);
+          await delay(750 * attempt);
+        }
+      }
     }
+
+    if (await gatewayHttpHealthOk()) {
+      console.warn('[WS12 launcher] browser WSS probe did not open, but both same-origin gateway health endpoints are healthy; allowing runtime to perform the authoritative WSS connection.', lastError);
+      setStep('gateway', 'warn', 'Gateway hazır · WSS oyunda doğrulanacak');
+      return;
+    }
+
+    setStep('gateway', config.gateway.required ? 'error' : 'warn', 'Ulaşılamıyor');
+    if (config.gateway.required) throw lastError || new core.LauncherError('GATEWAY_UNREACHABLE', 'Oyun gateway bağlantısına ulaşılamıyor.');
+    ui.error.hidden = false;
+    ui.error.textContent = core.userMessage(lastError);
   }
 
   async function preflight() {
