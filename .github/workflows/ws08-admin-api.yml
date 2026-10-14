@@ -29,4 +29,14 @@ jobs:
           node-version: '22'
       - name: Test admin API
         working-directory: services/admin-api
-        run: npm test
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee ../../ws08-test-output.txt
+      - name: Retain test output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ws08-test-output-${{ github.run_id }}
+          path: ws08-test-output.txt
+          retention-days: 3
