@@ -1,0 +1,327 @@
+name: WS10 WS50-C3 Visibility E2E Gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ws10-qa-integration
+    paths:
+      - .github/workflows/ws10-ws50-visibility.yml
+      - qa/moradon/**
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  PROVIDER_SET_ID: WS50-C3
+  PROVIDER_SET_KEY: WS50-C3@sha256:a9c808898bd1cb9f3cadfb44ddbabadaf34448f9aef0a4990ca91958053458aa
+  WS50_FREEZE_SHA: 15eb5b83bfadb7bb9ad131997730ef5adf0abcc8
+  WS10_HARNESS_SHA: 4a81c6cf7e11514ca01f0730ecc57010c9ea37fb
+  CANONICAL_RUN_ID: '38505039290'
+  CANONICAL_CLIENT_ARTIFACT: ws10-moradon-passing-client-26
+  CANONICAL_CLIENT_ARTIFACT_ID: '11867980473'
+  CANONICAL_CLIENT_ZIP_SHA256: ff9fb679ad1b3caa184ad098cff81cfb5469b0698d5e5f3b76ef4fab2ea775b3
+  WS10_TEST_ID: ws10e2e
+  WS10_TEST_PW: ws10pass
+  WS10_CHAR_NAME: Ws10Hero
+  WS10_RUNTIME_TIMEOUT_MS: '300000'
+  WS10_WORLD_TIMEOUT_MS: '600000'
+  WS10_WORLD_HEARTBEAT_MS: '15000'
+
+jobs:
+  canonical-browser-regression:
+    name: canonical-browser-regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact WS10 harness
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.WS10_HARNESS_SHA }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Download immutable canonical passing client
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.CANONICAL_CLIENT_ARTIFACT }}
+          path: canonical-client
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: orhansevinc/oldera-preview
+          run-id: ${{ env.CANONICAL_RUN_ID }}
+
+      - name: Verify client is unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          PASS_ROOT="$(dirname "$(find canonical-client -type f -name KnightOnLine.js -print -quit)")"
+          test -n "$PASS_ROOT"
+          test -s "$PASS_ROOT/KnightOnLine.js"
+          test -s "$PASS_ROOT/KnightOnLine.wasm"
+          test -s "$PASS_ROOT/KnightOnLine.data"
+          test -s "$PASS_ROOT/ws10-moradon.html"
+          test -s "$PASS_ROOT/SHA256SUMS.txt"
+          (cd "$PASS_ROOT" && sha256sum -c SHA256SUMS.txt)
+          test "$(stat -c %s "$PASS_ROOT/KnightOnLine.js")" = 1493510
+          test "$(stat -c %s "$PASS_ROOT/KnightOnLine.wasm")" = 5631727
+          test "$(stat -c %s "$PASS_ROOT/KnightOnLine.data")" = 615930538
+          echo "PASS_ROOT=$PASS_ROOT" >> "$GITHUB_ENV"
+          mkdir -p artifacts/ws50-c3-regression
+          {
+            echo "role=canonical-regression-only"
+            echo "provider_set_id=$PROVIDER_SET_ID"
+            echo "provider_set_key=$PROVIDER_SET_KEY"
+            echo "canonical_run_id=$CANONICAL_RUN_ID"
+            echo "canonical_client_artifact=$CANONICAL_CLIENT_ARTIFACT"
+            echo "canonical_client_artifact_id=$CANONICAL_CLIENT_ARTIFACT_ID"
+            echo "canonical_client_zip_sha256=$CANONICAL_CLIENT_ZIP_SHA256"
+            echo "client_rebuilt=false"
+            echo "harness_sha=$WS10_HARNESS_SHA"
+          } > artifacts/ws50-c3-regression/identity.txt
+          cp "$PASS_ROOT/SHA256SUMS.txt" artifacts/ws50-c3-regression/client-SHA256SUMS.txt
+
+      - name: Stage exact canonical regression providers
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .providers
+          stage() {
+            local name="$1" sha="$2"
+            git fetch --no-tags origin "$sha"
+            test "$(git rev-parse FETCH_HEAD)" = "$sha"
+            git worktree add --detach ".providers/$name" "$sha"
+          }
+          # Exact provider SHAs recorded by canonical browser PASS run 38505039290.
+          stage ws02 1738f60945b24e00bdd2266e6600b5c0cf3c64cf
+          stage ws03 d634870bbcd2c541695516643d34e0ac119354d7
+          stage ws14 82cdcef40bed265ff4c4ce0fb7c8f6ad8cf2f52b
+          {
+            echo 'WS02=1738f60945b24e00bdd2266e6600b5c0cf3c64cf'
+            echo 'WS03=d634870bbcd2c541695516643d34e0ac119354d7'
+            echo 'WS14=82cdcef40bed265ff4c4ce0fb7c8f6ad8cf2f52b'
+          } > artifacts/ws50-c3-regression/canonical-provider-refs.txt
+
+      - name: Install browser test runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix qa --no-audit --no-fund
+          npx --prefix qa playwright install --with-deps chromium
+
+      - name: Run unchanged real KO1298 browser regression
+        shell: bash
+        env:
+          QA_ARTIFACT_DIR: artifacts/ws50-c3-regression/browser
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/ws50-c3-regression/browser
+          WS03_ROOT="$GITHUB_WORKSPACE/.providers/ws03" \
+          WS14_ROOT="$GITHUB_WORKSPACE/.providers/ws14" \
+          AUTH_TCP_PORT=16100 GAME_TCP_PORT=16101 \
+          WS10_TEST_ID="$WS10_TEST_ID" WS10_TEST_PW="$WS10_TEST_PW" \
+            node qa/moradon/integration-server.cjs >artifacts/ws50-c3-regression/composition-server.log 2>&1 &
+          COMPOSE_PID=$!
+
+          GATEWAY_MODE=auth AUTH_TCP_HOST=127.0.0.1 AUTH_TCP_PORT=16100 \
+          LISTEN_HOST=127.0.0.1 PORT=15100 WS_PATH=/ REQUIRE_ORIGIN=false \
+            node .providers/ws02/services/ko-gateway/src/server.js >artifacts/ws50-c3-regression/gateway-auth.log 2>&1 &
+          AUTH_GW_PID=$!
+
+          GATEWAY_MODE=game GAME_TCP_HOST=127.0.0.1 GAME_TCP_PORT=16101 \
+          LISTEN_HOST=127.0.0.1 PORT=15001 WS_PATH=/ REQUIRE_ORIGIN=false \
+            node .providers/ws02/services/ko-gateway/src/server.js >artifacts/ws50-c3-regression/gateway-game.log 2>&1 &
+          GAME_GW_PID=$!
+
+          python3 -m http.server 8000 --bind 127.0.0.1 --directory "$PASS_ROOT" >artifacts/ws50-c3-regression/http.log 2>&1 &
+          HTTP_PID=$!
+          trap 'kill $HTTP_PID $AUTH_GW_PID $GAME_GW_PID $COMPOSE_PID 2>/dev/null || true' EXIT
+          sleep 3
+
+          WS10_CLIENT_URL=http://127.0.0.1:8000/ws10-moradon.html \
+            node qa/moradon/browser-e2e.cjs 2>&1 | tee artifacts/ws50-c3-regression/driver.log
+
+          grep -q 'WS10_MORADON_E2E_PASS' artifacts/ws50-c3-regression/driver.log
+          grep -q 'WS05_GATE event=moradon-terrain-rendered zone=21' artifacts/ws50-c3-regression/driver.log
+          grep -q 'WS05_GATE event=moradon-shapes-rendered zone=21' artifacts/ws50-c3-regression/driver.log
+          grep -q 'WS05_GATE event=moradon-local-player-rendered zone=21' artifacts/ws50-c3-regression/driver.log
+          grep -q 'WS10_NATIVE_GL nonBlack=' artifacts/ws50-c3-regression/driver.log
+          grep -q 'game-tx opcode=0x1c' artifacts/ws50-c3-regression/composition-server.log
+          grep -q 'game-rx opcode=0x1d' artifacts/ws50-c3-regression/composition-server.log
+          grep -q 'game-tx opcode=0x1d' artifacts/ws50-c3-regression/composition-server.log
+          grep -q 'state=WORLD_READY' artifacts/ws50-c3-regression/composition-server.log
+
+          python3 - <<'PY'
+          import json, hashlib, os
+          from pathlib import Path
+          root = Path(os.environ['PASS_ROOT'])
+          out = Path('artifacts/ws50-c3-regression')
+          digests = {}
+          for name in ('KnightOnLine.js','KnightOnLine.wasm','KnightOnLine.data'):
+              h = hashlib.sha256()
+              with (root/name).open('rb') as f:
+                  for chunk in iter(lambda: f.read(8*1024*1024), b''):
+                      h.update(chunk)
+              digests[name] = {'sha256': h.hexdigest(), 'bytes': (root/name).stat().st_size}
+          evidence = {
+              'role': 'canonical-regression-only',
+              'providerSetId': os.environ['PROVIDER_SET_ID'],
+              'providerSetKey': os.environ['PROVIDER_SET_KEY'],
+              'canonicalRunId': os.environ['CANONICAL_RUN_ID'],
+              'canonicalClientArtifact': os.environ['CANONICAL_CLIENT_ARTIFACT'],
+              'clientRebuilt': False,
+              'realBrowser': True,
+              'terrain': 'PASS', 'shapes': 'PASS', 'localPlayer': 'PASS',
+              'nonBlackFramebuffer': 'PASS',
+              'npcHandshakeRegression': {'0x1cReceived': True, '0x1dRequested': True, '0x1dReturned': True},
+              'visibilityProductionProof': False,
+              'note': 'Historical canonical harness uses its original synthetic NPC fixture; this is regression evidence only and is never accepted as WS50-C3 visibility PASS.',
+              'clientDigests': digests,
+          }
+          (out/'regression-evidence.json').write_text(json.dumps(evidence, indent=2) + '\n')
+          PY
+
+      - name: Upload canonical regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ws10-ws50-c3-canonical-regression-${{ github.run_number }}
+          path: artifacts/ws50-c3-regression/**
+          retention-days: 30
+
+  frozen-c3-visibility-boundary:
+    name: frozen-c3-visibility-boundary
+    needs: canonical-browser-regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact WS10 harness
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.WS10_HARNESS_SHA }}
+          fetch-depth: 0
+
+      - name: Stage frozen WS50-C3 and exact visibility providers
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .providers artifacts/ws50-c3-visibility
+          stage() {
+            local name="$1" sha="$2"
+            git fetch --no-tags origin "$sha"
+            test "$(git rev-parse FETCH_HEAD)" = "$sha"
+            git worktree add --detach ".providers/$name" "$sha"
+          }
+          stage ws50 "$WS50_FREEZE_SHA"
+          stage ws14 c1a1d454285db02c6de0c087a2d65434bfb4593b
+          stage ws16 234657c1264ead6b8828425ae9e7fcdca0cca5c8
+          stage ws25 a42b489e1a17d7c2889cfd92909ddd45c65e825e
+          stage ws31 546d2ab62cd46a97f3385ebcddbe0c775a02c2eb
+          cp .providers/ws50/release/sets/ws50/C3.json artifacts/ws50-c3-visibility/provider-set.json
+          cp .providers/ws50/release/sets/ws50/current-candidate.json artifacts/ws50-c3-visibility/current-candidate.json
+
+      - name: Verify immutable candidate identity and source-backed blockers
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const candidate = JSON.parse(fs.readFileSync('.providers/ws50/release/sets/ws50/current-candidate.json','utf8'));
+          const c3 = JSON.parse(fs.readFileSync('.providers/ws50/release/sets/ws50/C3.json','utf8'));
+          const expectedId = process.env.PROVIDER_SET_ID;
+          const expectedKey = process.env.PROVIDER_SET_KEY;
+          if (candidate.set_id !== expectedId || candidate.immutable_key !== expectedKey) throw new Error('current-candidate identity mismatch');
+          if (c3.set_id !== expectedId || c3.immutable_key !== expectedKey) throw new Error('C3 identity mismatch');
+          const pins = c3.providers || c3.provider_pins || {};
+          const text = JSON.stringify(c3);
+          for (const [name, sha] of Object.entries({
+            WS14:'c1a1d454285db02c6de0c087a2d65434bfb4593b',
+            WS16:'234657c1264ead6b8828425ae9e7fcdca0cca5c8',
+            WS25:'a42b489e1a17d7c2889cfd92909ddd45c65e825e',
+            WS31:'546d2ab62cd46a97f3385ebcddbe0c775a02c2eb',
+            WS10:'4a81c6cf7e11514ca01f0730ecc57010c9ea37fb'
+          })) {
+            if (!text.includes(sha)) throw new Error(`C3 manifest missing exact ${name} pin ${sha}`);
+          }
+          const blockers = candidate.blockers || [];
+          for (const b of ['WORLD_TERRAIN_HEIGHT_AUTHORITY','NPC_REGION_BODY_AUTHORITY','MOB_BROWSER_BOOTSTRAP_ENCODER_AUTHORITY']) {
+            if (!blockers.includes(b)) throw new Error(`frozen current-candidate no longer records blocker ${b}`);
+          }
+          NODE
+
+          grep -q 'terrain+shape Y resolver port with fail-closed unresolved height' .providers/ws16/workstreams/ws16/STATUS.md
+          grep -q 'real Y values must come from the verified zone runtime/assets' .providers/ws16/workstreams/ws16/STATUS.md
+          grep -q 'buildMobBootstrap' .providers/ws14/services/ko1298-world/src/world-session-service.js
+          grep -q 'mobPort.getNearby' .providers/ws14/services/ko1298-world/src/world-session-service.js
+
+          if grep -R -E 'buildMobBootstrap|WIZ_NPC_REGION|WIZ_REQ_NPCIN' .providers/ws25/services/ko1298-mobs >/tmp/ws25-wire-hits.txt; then
+            echo 'Frozen WS25 unexpectedly owns KO visibility packet encoding:' >&2
+            cat /tmp/ws25-wire-hits.txt >&2
+            exit 2
+          fi
+
+      - name: Record first real failing boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          out = Path('artifacts/ws50-c3-visibility')
+          evidence = {
+            'status': 'FAIL',
+            'providerSetId': os.environ['PROVIDER_SET_ID'],
+            'providerSetKey': os.environ['PROVIDER_SET_KEY'],
+            'providerSetFreezeSha': os.environ['WS50_FREEZE_SHA'],
+            'latestHeadResolvedAfterFreeze': False,
+            'client': {
+              'artifact': os.environ['CANONICAL_CLIENT_ARTIFACT'],
+              'artifactId': os.environ['CANONICAL_CLIENT_ARTIFACT_ID'],
+              'zipSha256': os.environ['CANONICAL_CLIENT_ZIP_SHA256'],
+              'rebuilt': False,
+              'rebuildRequiredForNpcHandshake': False,
+              'basis': 'canonical run 38505039290 already proves 0x1C -> client 0x1D -> server 0x1D with this exact client artifact'
+            },
+            'firstFailingBoundary': 'SERVER',
+            'firstBlocker': 'WORLD_TERRAIN_HEIGHT_AUTHORITY',
+            'serverEvidence': {
+              'npc': 'Frozen WS16 requires authoritative terrain+shape Y and fails closed when unresolved; C3 has no resolved authority in its immutable composition.',
+              'mob': 'Frozen WS14 requires an injected buildMobBootstrap port while frozen WS25 exports domain/AI services and no KO1298 visibility packet encoder.',
+              'candidateManifestStatus': 'BLOCKED'
+            },
+            'network': {
+              'npcCanonicalRegression': {'0x1c': 'PASS', '0x1dRequest': 'PASS', '0x1dReturn': 'PASS'},
+              'npcC3VerifiedProvider': 'NOT_REACHED_SERVER_BLOCKER',
+              'mobC3VerifiedProvider': 'NOT_REACHED_SERVER_BLOCKER'
+            },
+            'entityCreate': {'npc': 'NOT_REACHED', 'mob': 'NOT_REACHED'},
+            'render': {'npc': 'NOT_REACHED', 'mob': 'NOT_REACHED'},
+            'movement': 'NOT_REACHED_ON_C3_VISIBILITY_CANDIDATE',
+            'disconnect': 'NOT_APPLICABLE_CANDIDATE_NOT_STARTED',
+            'publicationReady': False,
+            'passArtifactProduced': False,
+            'antiFake': {
+              'syntheticFixtureAcceptedAsVisibilityPass': False,
+              'domEntity': False,
+              'htmlOverlay': False,
+              'threeJs': False
+            }
+          }
+          (out/'boundary-evidence.json').write_text(json.dumps(evidence, indent=2) + '\n')
+          PY
+          cat artifacts/ws50-c3-visibility/boundary-evidence.json
+          echo 'WS10_VISIBILITY_BOUNDARY=SERVER'
+          echo 'Frozen WS50-C3 is not browser-visibility-ready; refusing to manufacture a PASS.' >&2
+          exit 1
+
+      - name: Upload frozen C3 boundary evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ws10-ws50-c3-visibility-boundary-${{ github.run_number }}
+          path: artifacts/ws50-c3-visibility/**
+          retention-days: 30
