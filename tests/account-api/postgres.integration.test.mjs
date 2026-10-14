@@ -161,7 +161,7 @@ integration('PostgreSQL password change invalidates prior session and credential
     const login = await jsonRequest(f.base, '/api/account/v1/session/login', { method: 'POST', headers: { origin }, body: { identifier: f.account.username, password: f.account.password } });
     assert.equal(login.status, 200);
     const cookie = login.headers.get('set-cookie').split(';', 1)[0];
-    const change = await jsonRequest(f.base, '/api/account/v1/accounts/password/change', { method: 'POST', headers: { origin, cookie }, body: { username: f.account.username, currentPassword: f.account.password, newPassword: nextPassword } });
+    const change = await jsonRequest(f.base, '/api/account/v1/password/change', { method: 'POST', headers: { origin, cookie }, body: { username: f.account.username, currentPassword: f.account.password, newPassword: nextPassword } });
     assert.equal(change.status, 200);
     assert.equal((await jsonRequest(f.base, '/api/account/v1/session/current', { headers: { cookie, origin } })).status, 401);
     assert.equal((await jsonRequest(f.base, '/api/account/v1/session/login', { method: 'POST', headers: { origin }, body: { identifier: f.account.username, password: f.account.password } })).status, 401);
@@ -174,10 +174,10 @@ integration('PostgreSQL password reset rotates credential', async () => {
   const nextPassword = 'Str0ng!ProdPass3';
   try {
     await f.registerAndVerify();
-    const resetRequest = await jsonRequest(f.base, '/api/account/v1/accounts/password-reset/request', { method: 'POST', headers: { origin }, body: { email: f.account.email } });
+    const resetRequest = await jsonRequest(f.base, '/api/account/v1/password-reset/request', { method: 'POST', headers: { origin }, body: { email: f.account.email } });
     assert.equal(resetRequest.status, 202);
     assert.equal(f.delivery.resets.length, 1);
-    const resetConfirm = await jsonRequest(f.base, '/api/account/v1/accounts/password-reset/confirm', { method: 'POST', headers: { origin }, body: { token: f.delivery.resets[0].token, newPassword: nextPassword } });
+    const resetConfirm = await jsonRequest(f.base, '/api/account/v1/password-reset/confirm', { method: 'POST', headers: { origin }, body: { token: f.delivery.resets[0].token, newPassword: nextPassword } });
     assert.equal(resetConfirm.status, 200);
     assert.equal((await jsonRequest(f.base, '/api/account/v1/session/login', { method: 'POST', headers: { origin }, body: { identifier: f.account.username, password: f.account.password } })).status, 401);
     assert.equal((await jsonRequest(f.base, '/api/account/v1/session/login', { method: 'POST', headers: { origin }, body: { identifier: f.account.username, password: nextPassword } })).status, 200);

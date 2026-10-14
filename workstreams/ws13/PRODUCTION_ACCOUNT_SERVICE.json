@@ -23,6 +23,11 @@
     "POST /api/account/v1/session/login",
     "GET /api/account/v1/session/current",
     "POST /api/account/v1/session/logout",
+    "POST /api/account/v1/password/change",
+    "POST /api/account/v1/password-reset/request",
+    "POST /api/account/v1/password-reset/confirm"
+  ],
+  "frontend_compatibility_routes": [
     "POST /api/account/v1/accounts/password/change",
     "POST /api/account/v1/accounts/password-reset/request",
     "POST /api/account/v1/accounts/password-reset/confirm"
@@ -80,7 +85,8 @@
     "handoff_commit": "8370de2ebfdfd319cf8a719da79cbdef9853fd2f",
     "asset": "account-v15.js",
     "account_api_base": "/api/account",
-    "changed": false
+    "changed": false,
+    "compatibility_aliases_retained": true
   },
   "password": {
     "format": "scrypt$N$r$p$base64(salt)$base64(hash64)",

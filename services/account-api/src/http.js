@@ -125,12 +125,19 @@ export function createHttpServer({ service, openApiDocument, trustProxy = false,
         return send(res, 200, result, { ...cors, 'x-request-id': requestId, 'set-cookie': clearSessionCookie() });
       }
 
+      const changePassword = (body) => service.changePassword(body, context);
+      const requestPasswordReset = (body) => service.requestPasswordReset(body, context);
+      const confirmPasswordReset = (body) => service.confirmPasswordReset(body, context);
       const routes = new Map([
         ['/v1/accounts/register', (body) => service.register(body, context)],
         ['/v1/accounts/access-check', (body) => service.accessCheck(body, context)],
-        ['/v1/accounts/password/change', (body) => service.changePassword(body, context)],
-        ['/v1/accounts/password-reset/request', (body) => service.requestPasswordReset(body, context)],
-        ['/v1/accounts/password-reset/confirm', (body) => service.confirmPasswordReset(body, context)],
+        ['/v1/password/change', changePassword],
+        ['/v1/password-reset/request', requestPasswordReset],
+        ['/v1/password-reset/confirm', confirmPasswordReset],
+        // Pinned official account-v15.js compatibility. Do not remove without a coordinated frontend release.
+        ['/v1/accounts/password/change', changePassword],
+        ['/v1/accounts/password-reset/request', requestPasswordReset],
+        ['/v1/accounts/password-reset/confirm', confirmPasswordReset],
         ['/v1/accounts/verification/request', (body) => service.requestVerification(body, context)],
         ['/v1/accounts/verification/confirm', (body) => service.confirmVerification(body, context)]
       ]);

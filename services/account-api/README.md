@@ -12,10 +12,12 @@ WS09 exposes the service below `https://oldkoweb.com/api/account` and strips `/a
 - `POST /api/account/v1/session/login`
 - `GET /api/account/v1/session/current`
 - `POST /api/account/v1/session/logout`
-- `POST /api/account/v1/accounts/password/change`
-- `POST /api/account/v1/accounts/password-reset/request`
-- `POST /api/account/v1/accounts/password-reset/confirm`
+- `POST /api/account/v1/password/change`
+- `POST /api/account/v1/password-reset/request`
+- `POST /api/account/v1/password-reset/confirm`
 - `GET /healthz` and `GET /readyz` for direct upstream health/readiness probes.
+
+The pinned official `account-v15.js` still calls `/v1/accounts/password/change` and `/v1/accounts/password-reset/...`. Those exact paths remain supported as compatibility aliases; the frontend asset and its configured `/api/account` base are unchanged.
 
 Passwords use canonical WS07-compatible scrypt with a random per-password salt. Reset/verification tokens are random bearer tokens; only SHA-256 digests are stored. Tokens are delivered in webhook JSON bodies and are never appended to URLs or emitted by the account service logger. Public reset/verification request responses remain generic to reduce account enumeration.
 
