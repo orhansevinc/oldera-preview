@@ -69,6 +69,35 @@
       catch(_){return path;}
     };
 
+    // Temporary public-staging compatibility bridge for the canonical WS10
+    // artifact, whose C++ browser transport still emits ws://host:port URLs.
+    // Rewrite only the two known KO 1298 transport ports to the same-origin
+    // HTTPS/WSS edge before Emscripten's websocket.js is loaded.
+    if(location.protocol==='https:' && typeof window.WebSocket==='function'){
+      const NativeWebSocket=window.WebSocket;
+      const mapWebSocketUrl=(input)=>{
+        try{
+          const u=new URL(String(input),location.href);
+          if(u.port==='15100') return `wss://${location.host}/auth`;
+          if(u.port==='15001') return `wss://${location.host}/game`;
+        }catch(_){ }
+        return input;
+      };
+      function OldKOWebWebSocket(url,protocols){
+        const mapped=mapWebSocketUrl(url);
+        if(String(mapped)!==String(url)) log('NET',`WebSocket bridge ${url} -> ${mapped}`);
+        return protocols===undefined ? new NativeWebSocket(mapped) : new NativeWebSocket(mapped,protocols);
+      }
+      OldKOWebWebSocket.prototype=NativeWebSocket.prototype;
+      Object.setPrototypeOf(OldKOWebWebSocket,NativeWebSocket);
+      for(const key of ['CONNECTING','OPEN','CLOSING','CLOSED']){
+        Object.defineProperty(OldKOWebWebSocket,key,{value:NativeWebSocket[key],enumerable:true});
+      }
+      window.WebSocket=OldKOWebWebSocket;
+      state.transportConfigSource='same-origin-wss-compat';
+      log('NET','public staging WebSocket bridge active: 15100=/auth 15001=/game');
+    }
+
     const externalTransport=window.__OLDKO_TRANSPORT_CONFIG__;
     const oldkoTransport=externalTransport||{
       routes:{
@@ -76,7 +105,7 @@
         game:{serverPorts:[15001],endpoint:'/game'}
       }
     };
-    state.transportConfigSource=externalTransport?'external':'same-origin-default';
+    if(!state.transportConfigSource) state.transportConfigSource=externalTransport?'external':'same-origin-default';
     log('NET',`transport config: ${state.transportConfigSource}; auth=/auth game=/game`);
 
     window.Module={
