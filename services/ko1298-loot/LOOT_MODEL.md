@@ -1,98 +1,70 @@
 # WS26 Loot Model
 
-## Scope
+## Two explicit models
 
-This module owns the server-side **Drop / Loot / Reward domain** for OldKO 1298. It does not implement combat, mobs, inventory, parties, persistence, the client, or verified historical drop data.
+WS26 now keeps the old generic weighted `LootService` for fixture/back-compat tests and adds a separate production path: `ProductionLootService` + `Verified1298DropTableAdapter`.
 
-No authoritative KO 1298 drop dataset was available in the WS26 starting branch. Therefore **no production mob -> item/coin values are asserted here**. `world-data/drops/fixture.synthetic.json` is synthetic test-only data and is explicitly marked as a fixture.
+Synthetic weighted data must not be represented as historical 1298 data. Production accepts only tables carrying `model: 'ko1298-verified'` and pinned `verified-1298` provenance.
 
-## Event boundary
+## Verified 1298 generation
 
-WS25 (mob domain) should emit a mob-death event to `LootService.createFromMobDeath()` with:
+A monster maps through `K_MONSTER.sItem` to `K_MONSTER_ITEM.sIndex`; monster money comes from `K_MONSTER.iMoney`.
 
-- `eventId`: stable/idempotency key for the death
-- `mobInstanceId`
-- `mobTemplateId`
-- `killerCharacterId`
-- `zoneId`
-- `position: { x, z }`
-- optional `diedAt` and opaque `context`
+The verified runtime model reproduces the source-backed behavior used by `CNpc::GiveNpcHaveItem` / `GetItemGroupNumber`:
+- five item slots roll independently on a 10,000-point scale;
+- slot 0 uses `ItemProdution` when the code is `< 100`, otherwise `MAKE_ITEM_GROUP`;
+- slot 1 uses `MAKE_ITEM_GROUP`;
+- slots 2..4 are direct item IDs;
+- item-group selection uses the source 30-slot modulo rule;
+- direct arrow-range drops use quantity 20; other direct items use quantity 1;
+- coin uses 70..100 percent of base monster money with the legacy cap behavior.
 
-Repeated calls with the same `eventId` return the first result and do not roll a second reward.
+The exact `ItemProdution` algorithm is deliberately **not guessed**. A verified resolver is required for those rows.
 
-## Drop table
+## Ground loot record
 
-A table has:
+Every generated reward becomes a distinct immutable ground record containing:
+- unique `lootId`;
+- source death/mob/template/killer IDs;
+- table ID and provenance;
+- authoritative death zone and position;
+- reward payload;
+- owner character IDs;
+- `createdAt`, optional verified `publicAt`, `expiresAt`;
+- `state` and `claimed` marker.
 
-- `id`: stable table id
-- `rolls`: positive integer number of weighted draws
-- `entries`: one or more weighted entries
+No-drop is a durable death outcome too; it is persisted so a repeated death event cannot reroll after restart.
 
-Entry kinds:
+## Pickup authority
 
-- `item`: `itemId`, `weight`, `minQuantity`, `maxQuantity`
-- `coin`: `weight`, `minQuantity`, `maxQuantity`
-- `none`: `weight` only; represents a draw that produces no ground loot
+Production pickup takes only `lootId`, `characterId`, and `requestId` as packet-level identity inputs. Client-provided zone/coordinates are not authoritative.
 
-Weights are relative positive integers. For each roll, one ticket in `[1, sum(weights)]` is selected. Quantity is then selected uniformly and inclusively in `[minQuantity, maxQuantity]`.
+The service obtains alive/world-ready/connected/zone/position from `playerState`, uses the WS15 distance adapter, checks ownership, and rechecks player state inside the durable claim transaction.
 
-This is a deterministic domain model for integration and testing. It must not be interpreted as a claim that these exact table semantics or any fixture weights match the historical 1298 server until verified source data is supplied.
+WS17 remains authoritative for inventory capacity, stack merging, serial generation and item mutation. WS22 remains authoritative for coin balance semantics. WS07 owns durable transaction rollback.
 
-Invalid/impossible definitions are rejected before rolling: empty tables, unknown kinds, zero/negative/non-integer weights, zero/negative/non-integer quantities, `minQuantity > maxQuantity`, invalid item ids, unsafe totals, and non-positive roll counts.
+## Claim / anti-dupe invariants
 
-## RNG
+In-process state machine: `available -> claiming -> claimed/deleted`.
 
-`SeededRng` is a deterministic xorshift32 generator. Tests can pass an explicit numeric seed to `createFromMobDeath(event, { seed })`. Production can inject a different `rngFactory`; WS26 does not require a specific cryptographic/random provider.
+Durable invariants:
+- one persisted death outcome per `eventId`;
+- stable death transaction `loot-death:<eventId>`;
+- stable claim transaction `loot-claim:<lootId>`;
+- one persisted claim per `lootId`;
+- one replay-key transition per pickup request;
+- serial uniqueness delegated to WS17/DB and guarded before grant;
+- ground loot is removed only after successful transaction;
+- failed grants/persistence restore transient claimability after rollback;
+- despawn is persisted under `loot-despawn:<lootId>` before removal;
+- spawn/claim/despawn audit events are emitted.
 
-## Ground loot lifecycle
+## Ownership / party
 
-Each non-`none` reward becomes one ground-loot record with:
+Ownership and party distribution are ports. WS26 does not embed round-robin/random logic without verified 1298 evidence.
 
-- source death/mob/table ids
-- zone and position
-- reward (`item` or `coin`)
-- owner character ids
-- optional `publicAt`
-- `expiresAt`
+A `publicAfterMs` policy is rejected unless the ownership adapter explicitly marks it `publicAfterVerified: true`.
 
-The default lifetime is 60 seconds but is configuration, **not a historical 1298 claim**. Expired loot cannot be picked up and `sweepExpired()` despawns available expired records.
+## Regression provenance
 
-## Ownership / party boundary
-
-Ownership is a port, not embedded party logic. `KillerOwnershipPolicy` is a safe default that grants the killer ownership and never opens the loot publicly. WS18 can provide a party-aware policy implementing:
-
-- `resolveOwners(event) -> { characterIds, publicAfterMs }`
-- `canPickup({ loot, characterId, now }) -> boolean`
-
-This allows round-robin, leader, random member, contributor, or other verified rules to be added later without changing WS26.
-
-## Pickup validation
-
-Pickup is denied unless all applicable checks pass:
-
-1. loot exists and is not busy/expired;
-2. character zone matches the loot zone;
-3. ownership policy permits the character;
-4. injected distance validator permits the pickup;
-5. for items, injected inventory-capacity check permits the grant.
-
-The actual 1298 pickup radius is intentionally not hardcoded because it was not verified in WS26.
-
-## WS17 item boundary
-
-WS26 never mutates inventory directly. Item pickup uses four injected ports:
-
-- `inventory.canAccept(...)`
-- `serials.createForDrop(...) -> serial | null`
-- `serialGuard.reserve/commit/release(serial)`
-- `items.grant(...)`
-
-The serial factory may return `null` for item types that do not require a unique serial. Non-null serials are reserved before grant; duplicate reservation fails; a failed item grant releases the reservation. `InMemorySerialGuard` exists for tests/reference, while WS17 should back this with its authoritative transaction/duplicate-serial mechanism.
-
-## Coin boundary
-
-Coin rewards require an injected `coins.grant(...)` port. If no coin port is configured, coin pickup fails explicitly with `COIN_PORT_REQUIRED` rather than silently losing or inventing currency state.
-
-## Concurrency
-
-A pickup marks the record `claiming` before the first grant-side effect. A concurrent second pickup receives `LOOT_BUSY`. On a failed grant, the original `available` record is restored so a later retry is possible.
+`world-data/drops/verified1298.sample.json` is a small source-backed regression sample, not a complete production catalog. See `workstreams/ws26/DROP_PROVENANCE.md` for pinned source commits and unresolved rules.

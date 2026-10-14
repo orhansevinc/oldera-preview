@@ -1,143 +1,97 @@
 # WS26 Integration Patch
 
-WS26 is intentionally isolated from WS17, WS18, WS19 and WS25 implementation code. Integration should be done by adapters in the eventual integration branch; do not copy domain logic between workstreams.
+WS26 stays isolated from WS17, WS19, WS22, WS25 and WS07 implementation code. Production integration is adapter-based; do not copy business logic between workstreams.
 
-## WS25 -> WS26 mob death adapter
+## WS25 / WS19 -> WS26 death boundary
 
-On the authoritative WS25 mob-death transition, call:
+On an authoritative mob-death transition call:
 
 ```js
-await lootService.createFromMobDeath({
-  eventId,             // stable, unique death-event id
+await productionLootService.createFromMobDeath({
+  eventId,
   mobInstanceId,
   mobTemplateId,
   killerCharacterId,
   zoneId,
   position: { x, z },
-  diedAt
+  diedAt,
+  context
 });
 ```
 
-If WS25 has contributors/damage metadata, pass it under `context`; WS26 will not interpret it until the ownership/reward rule is verified.
+`eventId` is the death idempotency key. WS26 persists even an empty no-drop outcome so redelivery/restart cannot reroll rewards.
 
-`eventId` is the idempotency boundary. Re-delivery of the same death event does not generate a second set of loot.
+## WS31 verified drop adapter
 
-## Drop-table repository adapter
+Production uses `Verified1298DropTableAdapter` with:
+- `monsterMappings`: `K_MONSTER.sSid -> K_MONSTER.sItem`, plus `K_MONSTER.iMoney`;
+- `dropTables`: the five item/chance slots from `K_MONSTER_ITEM`;
+- `itemGroups`: the 30 entries from `MAKE_ITEM_GROUP`;
+- pinned `verified-1298` provenance.
 
-Provide:
+`ProductionLootService` rejects non-verified tables. The old weighted `LootService` remains fixture/back-compat only.
 
-```js
-const dropTables = {
-  async findForMob(mobTemplateId) {
-    // Return null for no configured table.
-    // Return { id, rolls, entries } only from verified production data.
-  }
-};
-```
+## Required production ports
 
-Do not promote `world-data/drops/fixture.synthetic.json` to production data.
+- `dropTables.findForMob(monsterTemplateId)` — WS31 adapter.
+- `itemTemplates.exists({ itemId })` — verified WS31/WS17 item existence.
+- `ownership.resolveOwners(event)` / `ownership.canPickup(...)` — killer/party ownership adapter.
+- `playerState.getLootState({ characterId })` — authoritative alive/worldReady/connected/zone/position state from WS19/WS14/WS15 integration.
+- `distance.canPickup(...)` — WS15 authoritative pickup-range adapter.
+- `inventory.canAccept(...)` — WS17 capacity/stack contract.
+- `serials.createForDrop(...)`, `serialGuard.reserve/commit/release(...)` — WS17 serial invariant.
+- `items.grant(...)` — WS17 inventory mutation using the supplied transaction handle.
+- `coins.grant(...)` — WS22 coin mutation using the supplied transaction handle.
+- `transactions.run({ transactionId }, fn)` — WS07 durable transaction boundary.
+- `lootStore.loadDeathRewards/persistDeathRewards/markClaimed/despawn` — WS07 persistence adapter.
+- `replay.begin/commit/release` — persistent pickup replay/idempotency adapter.
+- `audit.append(event)` — audit sink, transaction-aware where supported.
 
-## WS17 inventory/item adapter
+### Durable rehydration invariant
 
-Provide four ports:
+`lootStore.loadDeathRewards(eventId)` has three-state semantics:
+- return `null` only when the death outcome has never been persisted;
+- return `[]` when the death outcome exists but produced no loot **or** every produced loot record has already been claimed/despawned;
+- otherwise return only still-live ground-loot records.
 
-```js
-const inventory = {
-  async canAccept({ characterId, itemId, quantity }) {
-    // Delegate to WS17 authoritative capacity/slot rules.
-    return { ok: true }; // example shape only
-  }
-};
+`markClaimed()` and `despawn()` must atomically make those loot IDs ineligible for later rehydration. A service restart followed by redelivery of the same death event must never resurrect consumed loot.
 
-const serials = {
-  async createForDrop({ itemId, quantity, loot }) {
-    // Delegate item metadata/serial rules to WS17.
-    // Return null only when WS17 says this grant needs no unique serial.
-    return generatedSerial;
-  }
-};
+## Pickup request
 
-const serialGuard = {
-  async reserve(serial) { /* authoritative duplicate prevention */ },
-  async commit(serial) { /* finalize with successful item transaction */ },
-  async release(serial) { /* rollback reservation after failed grant */ }
-};
-
-const items = {
-  async grant({ characterId, itemId, quantity, serial, source }) {
-    // Perform WS17 atomic inventory mutation.
-  }
-};
-```
-
-The ideal final adapter should execute serial reservation + inventory mutation in the same authoritative transaction boundary. `InMemorySerialGuard` is only a reference/test implementation.
-
-## WS18 party adapter
-
-Replace `KillerOwnershipPolicy` with an adapter implementing:
+Production request shape:
 
 ```js
-const ownership = {
-  async resolveOwners(event) {
-    return {
-      characterIds: eligibleCharacterIds,
-      publicAfterMs: null // or a verified value/rule
-    };
-  },
-  async canPickup({ loot, characterId, now }) {
-    // Apply WS18 party loot mode and ownership state.
-    return trueOrFalse;
-  }
-};
-```
-
-WS26 intentionally does not invent party loot modes or historical ownership timers.
-
-## Distance adapter
-
-Provide:
-
-```js
-const distance = {
-  async canPickup({ characterId, zoneId, characterPosition, lootPosition }) {
-    // Use authoritative world/movement position and verified 1298 pickup radius.
-    return trueOrFalse;
-  }
-};
-```
-
-No numeric pickup radius is hardcoded in WS26.
-
-## Coin economy adapter
-
-If verified drop tables contain coin entries, provide:
-
-```js
-const coins = {
-  async grant({ characterId, amount, source }) {
-    // Delegate to the authoritative coin/economy transaction service.
-  }
-};
-```
-
-Without this adapter, coin pickup fails with `COIN_PORT_REQUIRED`.
-
-## Composition
-
-```js
-const lootService = new LootService({
-  ports: {
-    dropTables,
-    ownership,
-    distance,
-    inventory,
-    serials,
-    serialGuard,
-    items,
-    coins
-  },
-  lootLifetimeMs: verifiedOrConfiguredLifetime
+await productionLootService.pickup({
+  lootId,
+  characterId,
+  requestId
 });
 ```
 
-The default 60-second lifetime is configuration convenience, not a verified historical value. Set an authoritative value during integration if/when confirmed.
+Do not trust packet zone/position. WS26 obtains authoritative player state from `playerState` and passes that to the WS15 distance adapter. The state is checked again inside the claim transaction so a disconnect or zone transition between validation and commit fails closed.
+
+## Atomic claim contract
+
+Claim transaction ID is stable: `loot-claim:<lootId>`.
+
+Within one WS07 transaction WS26 orchestrates:
+1. authoritative player-state recheck;
+2. WS17 capacity/stack acceptance;
+3. serial reservation when required;
+4. WS17 item grant **or** WS22 coin grant;
+5. serial commit for item rewards;
+6. persisted loot claim/uniqueness check;
+7. replay-key commit;
+8. audit event.
+
+The WS07 adapter must rollback every transaction-aware participant if persistence/commit fails. WS26 restores only its transient in-memory claim state; it intentionally does not reimplement WS17 or WS22 rollback logic.
+
+## Ownership / party
+
+No party distribution algorithm is embedded in WS26. Round-robin/random/public-after-time behavior must remain adapter-controlled and disabled unless exact 1298 behavior is verified.
+
+If an ownership adapter supplies `publicAfterMs`, it must also set `publicAfterVerified: true`; otherwise production loot rejects the policy.
+
+## Ground-loot expiry
+
+Expiry/despawn is persisted under `loot-despawn:<lootId>` before the in-memory ground record is removed. The configured lifetime is runtime policy unless/until an exact historical 1298 value is verified.

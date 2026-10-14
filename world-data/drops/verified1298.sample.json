@@ -1,0 +1,38 @@
+{
+  "classification": "verified-1298-sample",
+  "purpose": "Regression sample only; not a complete production drop catalog.",
+  "provenance": {
+    "classification": "verified-1298",
+    "sourceRefs": [
+      "Open-KO/OpenKO-db@bec619466938d278339c30e5b1a4bff3c9413bab:ManualSetup/6_InsertData_K_MONSTER.sql",
+      "Open-KO/OpenKO-db@bec619466938d278339c30e5b1a4bff3c9413bab:ManualSetup/6_InsertData_K_MONSTER_ITEM.sql",
+      "Open-KO/OpenKO-db@bec619466938d278339c30e5b1a4bff3c9413bab:ManualSetup/6_InsertData_MAKE_ITEM_GROUP.sql",
+      "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:src/Server/AIServer/Npc.cpp"
+    ]
+  },
+  "monsterMappings": [
+    { "monsterTemplateId": 100, "dropTableKey": 100, "moneyBase": 73 }
+  ],
+  "dropTables": [
+    {
+      "dropTableKey": 100,
+      "slots": [
+        { "itemCode": 140, "chance": 900 },
+        { "itemCode": 130, "chance": 1500 },
+        { "itemCode": 379016000, "chance": 300 },
+        { "itemCode": 330310014, "chance": 3 },
+        { "itemCode": 391010000, "chance": 3000 }
+      ]
+    }
+  ],
+  "itemGroups": [
+    {
+      "groupId": 130,
+      "itemIds": [201001503,201002503,201003503,201004503,201005503,241001503,241002503,241003503,241004503,241005503,261001503,261002503,261003503,261004503,261005503,281001503,281002503,281003503,281004503,281005503,201001503,201002503,241001503,241002503,261002503,281001503,201004505,241003505,261003505,281003505]
+    },
+    {
+      "groupId": 140,
+      "itemIds": [110110044,110410044,120110044,130210045,140210007,150210005,160100004,160100005,160100006,180110044,180110164,180110174,170110044,120510045,160210045,180110167,389065000,389074000,389010000,389076000,389010000,379006000,389026000,389065000,389065000,389065000,389065000,389033000,389023000,389023000]
+    }
+  ]
+}
