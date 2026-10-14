@@ -13,6 +13,7 @@ export const WS07_ACCOUNT_ADAPTER_AUTHORITY = Object.freeze({
   gitBlobSha1: '022c32abde503a6dc3af1ff9429c206a1b20ca63'
 });
 export const PRODUCTION_ORIGIN = 'https://oldkoweb.com';
+export const PRODUCTION_MAIL_DOMAIN = 'oldkoweb.com';
 
 function resolveModuleFile(modulePath) {
   if (modulePath.startsWith('file:')) return fileURLToPath(modulePath);
@@ -71,14 +72,19 @@ export async function buildRepository(env = process.env) {
 export function buildDelivery(env = process.env) {
   const url = env.OLDKO_ACCOUNT_DELIVERY_WEBHOOK_URL;
   const secret = env.OLDKO_ACCOUNT_DELIVERY_WEBHOOK_SECRET;
-  if (Boolean(url) !== Boolean(secret)) throw new Error('Delivery webhook URL and secret must be configured together');
+  const sender = env.OLDKO_ACCOUNT_MAIL_FROM;
+  const configured = [url, secret, sender].filter(Boolean).length;
+  if (configured !== 0 && configured !== 3) throw new Error('Delivery webhook URL, secret and mail sender must be configured together');
   if (!url) {
-    if (env.NODE_ENV === 'production') throw new Error('Production requires delivery webhook URL and secret');
+    if (env.NODE_ENV === 'production') throw new Error('Production requires delivery webhook URL, secret and mail sender');
     return new NullDelivery();
   }
   const parsed = new URL(url);
   if (env.NODE_ENV === 'production' && parsed.protocol !== 'https:') throw new Error('Production delivery webhook must use HTTPS');
-  return new WebhookDelivery({ url: parsed.toString(), secret });
+  if (env.NODE_ENV === 'production' && !new RegExp(`^[^@\\s]+@${PRODUCTION_MAIL_DOMAIN.replace('.', '\\.')}$`, 'i').test(sender)) {
+    throw new Error(`Production mail sender must use the verified ${PRODUCTION_MAIL_DOMAIN} domain`);
+  }
+  return new WebhookDelivery({ url: parsed.toString(), secret, sender });
 }
 
 export function buildRateLimitStore(env = process.env) {
