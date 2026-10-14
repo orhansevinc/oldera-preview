@@ -10,6 +10,6 @@
   "ws12_sha": "121bb7bdb82c364bf9459111096f5ff007873a61",
   "ws14_sha": "ed5f806ce7505f4dfae406e4164735def63b6c86",
   "ws38_sha": "5f323f3cf055ba7f96d928605a2f2faf84e609cb",
-  "keepalive_minutes": "90",
-  "request_nonce": "2026-10-14-c5-real-visibility-90m"
+  "keepalive_minutes": "120",
+  "request_nonce": "2026-10-14-c5-real-visibility-120m-fast-public-test"
 }
