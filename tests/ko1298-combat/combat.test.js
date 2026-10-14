@@ -1,79 +1,16 @@
 'use strict';
-
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const {
-  CombatService,
-  LIFE_STATE,
-  OpenKo1298NormalAttackDamagePolicy,
-  applyHpDelta,
-  createCombatant,
-} = require('../../services/ko1298-combat');
-
-function actor(id, hp, combat = {}) {
-  return createCombatant({ id, hp, maxHp: hp || 100, mp: 50, maxMp: 50, classId: 101, level: 10, stats: {}, combat: { ap: 1000, ac: 0, hitRate: 10, evasionRate: 1, ...combat } });
-}
-
-test('HP update clamps and transitions alive -> dead at zero', () => {
-  const target = actor('t', 50);
-  const result = applyHpDelta(target, -999);
-  assert.equal(target.hp, 0);
-  assert.equal(target.lifeState, LIFE_STATE.DEAD);
-  assert.equal(result.died, true);
-  const blocked = applyHpDelta(target, 999);
-  assert.equal(blocked.blockedByDeathState, true);
-  assert.equal(target.hp, 0);
-  assert.equal(target.lifeState, LIFE_STATE.DEAD);
-
-  applyHpDelta(target, 50, { allowRevive: true });
-  assert.equal(target.hp, 50);
-  assert.equal(target.lifeState, LIFE_STATE.ALIVE);
-});
-
-test('normal attack fails closed when range hook is missing', () => {
-  const service = new CombatService({ damagePolicy: new OpenKo1298NormalAttackDamagePolicy({ rng: () => 0 }) });
-  assert.deepEqual(service.normalAttack(actor('a', 100), actor('t', 100)), { ok: false, reason: 'RANGE_VALIDATION_UNAVAILABLE' });
-});
-
-test('normal attack uses range hook, hit roll, source damage chain and death state', () => {
-  const attacker = actor('a', 100, { ap: 1000, hitRate: 10, evasionRate: 1 });
-  const target = actor('t', 70, { ac: 500, hitRate: 1, evasionRate: 1 });
-  const service = new CombatService({
-    damagePolicy: new OpenKo1298NormalAttackDamagePolicy({ rng: () => 0 }),
-    rangeValidator: () => ({ ok: true }),
-    rng: () => 0,
-  });
-  const result = service.normalAttack(attacker, target);
-  assert.equal(result.ok, true);
-  assert.equal(result.damage, 76);
-  assert.equal(result.hp.died, true);
-  assert.equal(target.hp, 0);
-  assert.equal(target.lifeState, LIFE_STATE.DEAD);
-});
-
-test('range rejection does not damage target', () => {
-  const target = actor('t', 100);
-  const service = new CombatService({
-    damagePolicy: new OpenKo1298NormalAttackDamagePolicy({ rng: () => 0 }),
-    rangeValidator: () => ({ ok: false, reason: 'OUT_OF_RANGE' }),
-  });
-  assert.deepEqual(service.normalAttack(actor('a', 100), target), { ok: false, reason: 'OUT_OF_RANGE' });
-  assert.equal(target.hp, 100);
-});
-
-test('weapon armor hook can project sequential right/left-hand reductions without owning inventory', () => {
-  const attacker = actor('a', 100, { ap: 1000, hitRate: 10, evasionRate: 1 });
-  const target = actor('t', 1000, { ac: 0, hitRate: 1, evasionRate: 1 });
-  const service = new CombatService({
-    damagePolicy: new OpenKo1298NormalAttackDamagePolicy({
-      rng: () => 0,
-      weaponArmorAdapter: () => [100, 100],
-    }),
-    rangeValidator: () => true,
-    rng: () => 0,
-  });
-  const result = service.normalAttack(attacker, target);
-  assert.equal(result.ok, true);
-  assert.equal(result.stages.weaponArmorApplied, true);
-  assert.equal(result.damage, 59);
-});
+const test=require('node:test'); const assert=require('node:assert/strict');
+const {ATTACK_RESULT,CombatService,LIFE_STATE,OpenKo1298NormalAttackDamagePolicy,applyHpDelta,createCombatant}=require('../../services/ko1298-combat');
+function actor(id,{hp=100,maxHp=100,zoneId=21,ap=200,ac=100,hitRate=5,evasionRate=1}={}){return createCombatant({id,hp,maxHp,zoneId,combat:{ap,ac,hitRate,evasionRate}});}
+function service({clock=()=>1000,range=true,equipment={weaponRange:2,attackDelayMs:1000},rng=()=>0,damageRng=()=>0}={}){return new CombatService({damagePolicy:new OpenKo1298NormalAttackDamagePolicy({rng:damageRng}),clock,rng,worldPort:{validateAttackRange:()=>range,getZoneId:e=>e.zoneId},equipmentPort:{getCombatSnapshot:()=>equipment}});}
+test('HP clamps, death is sticky and death event is emitted once',()=>{const x=actor('x',{hp:10});const first=applyHpDelta(x,-20,{sourceId:'a',cause:'TEST'});assert.equal(x.hp,0);assert.equal(x.lifeState,LIFE_STATE.DEAD);assert.equal(first.deathEvent.type,'DEATH');const second=applyHpDelta(x,-5,{sourceId:'b'});assert.equal(second.died,false);assert.equal(second.deathEvent,null);assert.equal(x.combatState.deathSequence,1);});
+test('attack rejects source dead and target dead',()=>{const s=service(),a=actor('a'),b=actor('b');a.lifeState=LIFE_STATE.DEAD;a.hp=0;assert.equal(s.normalAttack(a,b,{requestKey:'1'}).reason,ATTACK_RESULT.SOURCE_DEAD);a.lifeState=LIFE_STATE.ALIVE;a.hp=1;b.lifeState=LIFE_STATE.DEAD;b.hp=0;assert.equal(s.normalAttack(a,b,{requestKey:'2'}).reason,ATTACK_RESULT.TARGET_DEAD);});
+test('same-zone is authoritative and mismatch is rejected',()=>{const s=service(),a=actor('a'),b=actor('b',{zoneId:1});assert.equal(s.normalAttack(a,b,{requestKey:'z'}).reason,ATTACK_RESULT.ZONE_MISMATCH);});
+test('missing zone validation fails closed',()=>{const s=new CombatService({damagePolicy:new OpenKo1298NormalAttackDamagePolicy(),worldPort:{validateAttackRange:()=>true},equipmentPort:{getCombatSnapshot:()=>({weaponRange:2,attackDelayMs:0})}});const a=actor('a'),b=actor('b');a.zoneId=null;b.zoneId=null;assert.equal(s.normalAttack(a,b,{requestKey:'z'}).reason,ATTACK_RESULT.ZONE_VALIDATION_UNAVAILABLE);});
+test('authoritative range rejection occurs before damage',()=>{const s=service({range:{ok:false,reason:'OUT_OF_RANGE'}}),a=actor('a'),b=actor('b');const r=s.normalAttack(a,b,{requestKey:'r'});assert.equal(r.reason,'OUT_OF_RANGE');assert.equal(b.hp,100);});
+test('equipment snapshot is required for weapon range/timer contract',()=>{const s=service({equipment:null}),a=actor('a'),b=actor('b');assert.equal(s.normalAttack(a,b,{requestKey:'e'}).reason,ATTACK_RESULT.EQUIPMENT_SNAPSHOT_UNAVAILABLE);});
+test('normal attack timer rejects cooldown spam',()=>{let now=1000;const s=service({clock:()=>now}),a=actor('a'),b=actor('b',{hp:1000,maxHp:1000});assert.equal(s.normalAttack(a,b,{requestKey:'1'}).ok,true);now=1500;assert.equal(s.normalAttack(a,b,{requestKey:'2'}).reason,ATTACK_RESULT.ATTACK_COOLDOWN);now=2000;assert.equal(s.normalAttack(a,b,{requestKey:'3'}).ok,true);});
+test('duplicate ingress request key cannot hit twice',()=>{const s=service({equipment:{weaponRange:2,attackDelayMs:0}}),a=actor('a'),b=actor('b',{hp:1000,maxHp:1000});const one=s.normalAttack(a,b,{requestKey:'packet-77'});const hp=b.hp;const two=s.normalAttack(a,b,{requestKey:'packet-77'});assert.equal(one.ok,true);assert.equal(two.reason,ATTACK_RESULT.DUPLICATE_ATTACK);assert.equal(b.hp,hp);});
+test('two attackers can damage one live target deterministically',()=>{const s=service({equipment:{weaponRange:2,attackDelayMs:0}}),a=actor('a'),c=actor('c'),b=actor('b',{hp:1000,maxHp:1000});assert.equal(s.normalAttack(a,b,{requestKey:'a1'}).ok,true);const afterA=b.hp;assert.equal(s.normalAttack(c,b,{requestKey:'c1'}).ok,true);assert.ok(b.hp<afterA);});
+test('simultaneous lethal attempts produce one death transition',()=>{const fixed={resolve:()=>({damage:100,hitOutcome:'SUCCESS',stages:{}})};const s=new CombatService({damagePolicy:fixed,clock:()=>1,rng:()=>0,worldPort:{getZoneId:e=>e.zoneId,validateAttackRange:()=>true},equipmentPort:{getCombatSnapshot:()=>({weaponRange:2,attackDelayMs:0})}});const a=actor('a'),c=actor('c'),b=actor('b',{hp:50});const r1=s.normalAttack(a,b,{requestKey:'1'}),r2=s.normalAttack(c,b,{requestKey:'2'});assert.equal(r1.deathEvent.type,'DEATH');assert.equal(r2.reason,ATTACK_RESULT.TARGET_DEAD);assert.equal(b.combatState.deathSequence,1);});
+test('normal attack thousands simulation stays inside verified damage bounds',()=>{let seed=123456789;const lcg=()=>((seed=(1103515245*seed+12345)>>>0)/0x100000000);let now=0;const s=service({clock:()=>now,equipment:{weaponRange:3,attackDelayMs:0},rng:lcg,damageRng:lcg}),a=actor('a',{ap:300}),b=actor('b',{hp:100000,maxHp:100000,ac:120,hitRate:2,evasionRate:1});for(let i=0;i<5000;i++){now++;b.hp=100000;b.lifeState=LIFE_STATE.ALIVE;const r=s.normalAttack(a,b,{requestKey:`sim-${i}`});assert.equal(r.ok,true);assert.ok(r.damage>=0);assert.ok(r.damage<=64);} });

@@ -1,76 +1,19 @@
 'use strict';
-
-const { rollHitOutcome } = require('./hit-rate');
-
-const LIFE_STATE = Object.freeze({ ALIVE: 'ALIVE', DEAD: 'DEAD' });
-
-function createCombatant({ id, hp, maxHp, mp = 0, maxMp = 0, stats, combat, classId, level, skillPoints = {} }) {
-  if (!id) throw new TypeError('id is required');
-  if (!Number.isFinite(maxHp) || maxHp < 1) throw new RangeError('maxHp must be >= 1');
-  const boundedHp = Math.max(0, Math.min(maxHp, hp));
-  return {
-    id,
-    classId,
-    level,
-    stats,
-    combat: { ...combat },
-    hp: boundedHp,
-    maxHp,
-    mp: Math.max(0, Math.min(maxMp, mp)),
-    maxMp,
-    skillPoints: { ...skillPoints },
-    lifeState: boundedHp === 0 ? LIFE_STATE.DEAD : LIFE_STATE.ALIVE,
-  };
+const {rollHitOutcome}=require('./hit-rate');
+const {clearEffectsOnDeath,createCombatState,ensureCombatState}=require('./combat-state');
+const LIFE_STATE=Object.freeze({ALIVE:'ALIVE',DEAD:'DEAD'});
+const ATTACK_RESULT=Object.freeze({OK:'OK',INVALID_SOURCE:'INVALID_SOURCE',INVALID_TARGET:'INVALID_TARGET',SELF_TARGET:'SELF_TARGET',SOURCE_DEAD:'SOURCE_DEAD',TARGET_DEAD:'TARGET_DEAD',ZONE_VALIDATION_UNAVAILABLE:'ZONE_VALIDATION_UNAVAILABLE',ZONE_MISMATCH:'ZONE_MISMATCH',RANGE_VALIDATION_UNAVAILABLE:'RANGE_VALIDATION_UNAVAILABLE',OUT_OF_RANGE:'OUT_OF_RANGE',EQUIPMENT_SNAPSHOT_UNAVAILABLE:'EQUIPMENT_SNAPSHOT_UNAVAILABLE',ATTACK_TIMER_UNAVAILABLE:'ATTACK_TIMER_UNAVAILABLE',ATTACK_COOLDOWN:'ATTACK_COOLDOWN',DUPLICATE_ATTACK:'DUPLICATE_ATTACK'});
+function createCombatant({id,hp,maxHp,mp=0,maxMp=0,sp=0,maxSp=0,resourceKind='MP',stats={},combat={},classId=null,level=1,skillPoints={},zoneId=null,position=null,nationId=null,partyId=null,clanId=null}){if(id==null)throw new TypeError('id is required');const m=Math.max(0,Math.trunc(maxHp));const h=Math.max(0,Math.min(m,Math.trunc(hp)));return {id,hp:h,maxHp:m,mp:Math.max(0,Math.trunc(mp)),maxMp:Math.max(0,Math.trunc(maxMp)),sp:Math.max(0,Math.trunc(sp)),maxSp:Math.max(0,Math.trunc(maxSp)),resourceKind,stats:{...stats},combat:{...combat},classId,level,skillPoints:{...skillPoints},zoneId,position:position?{...position}:null,nationId,partyId,clanId,lifeState:h>0?LIFE_STATE.ALIVE:LIFE_STATE.DEAD,combatState:createCombatState()};}
+function applyHpDelta(entity,amount,{allowRevive=false,sourceId=null,cause=null}={}){const before=entity.hp;if(entity.lifeState===LIFE_STATE.DEAD&&!allowRevive)return Object.freeze({before,after:before,deltaApplied:0,died:false,blockedByDeathState:true,deathEvent:null});const next=Math.max(0,Math.min(entity.maxHp,before+Math.trunc(amount)));entity.hp=next;const died=before>0&&next===0;let deathEvent=null;if(died){entity.lifeState=LIFE_STATE.DEAD;const state=ensureCombatState(entity);state.deathSequence+=1;const removedEffects=clearEffectsOnDeath(entity);deathEvent=Object.freeze({type:'DEATH',targetId:entity.id,killerId:sourceId,cause,sequence:state.deathSequence,removedEffectKeys:removedEffects.map(e=>e.key)});}else if(allowRevive&&next>0)entity.lifeState=LIFE_STATE.ALIVE;return Object.freeze({before,after:next,deltaApplied:next-before,died,blockedByDeathState:false,deathEvent});}
+class CombatService{
+ constructor({damagePolicy,worldPort=null,equipmentPort=null,attackTimerPolicy=null,rangeValidator=null,clock=()=>Date.now(),rng=Math.random,requireZoneValidation=true,requireRangeValidation=true,requireEquipmentSnapshot=true,requireAttackTimer=true,requireRequestKey=true}={}){if(!damagePolicy||typeof damagePolicy.resolve!=='function')throw new TypeError('damagePolicy.resolve is required');this.damagePolicy=damagePolicy;this.worldPort=worldPort;this.equipmentPort=equipmentPort;this.attackTimerPolicy=attackTimerPolicy;this.rangeValidator=rangeValidator;this.clock=clock;this.rng=rng;this.requireZoneValidation=requireZoneValidation;this.requireRangeValidation=requireRangeValidation;this.requireEquipmentSnapshot=requireEquipmentSnapshot;this.requireAttackTimer=requireAttackTimer;this.requireRequestKey=requireRequestKey;this.seenRequests=new Map();}
+ _reject(reason,extra={}){return Object.freeze({ok:false,reason,...extra});}
+ _markRequest(attacker,requestKey){if(requestKey==null)return !this.requireRequestKey;const k=`${attacker.id}:${requestKey}`;if(this.seenRequests.has(k))return false;this.seenRequests.set(k,this.clock());if(this.seenRequests.size>4096)this.seenRequests.delete(this.seenRequests.keys().next().value);return true;}
+ normalAttack(attacker,target,context={}){if(!attacker||attacker.id==null)return this._reject(ATTACK_RESULT.INVALID_SOURCE);if(!target||target.id==null)return this._reject(ATTACK_RESULT.INVALID_TARGET);if(attacker.id===target.id)return this._reject(ATTACK_RESULT.SELF_TARGET);if(attacker.lifeState!==LIFE_STATE.ALIVE||attacker.hp<=0)return this._reject(ATTACK_RESULT.SOURCE_DEAD);if(target.lifeState!==LIFE_STATE.ALIVE||target.hp<=0)return this._reject(ATTACK_RESULT.TARGET_DEAD);if(!this._markRequest(attacker,context.requestKey))return this._reject(ATTACK_RESULT.DUPLICATE_ATTACK);
+ const sourceZone=this.worldPort?.getZoneId?.(attacker)??attacker.zoneId;const targetZone=this.worldPort?.getZoneId?.(target)??target.zoneId;if(sourceZone==null||targetZone==null){if(this.requireZoneValidation)return this._reject(ATTACK_RESULT.ZONE_VALIDATION_UNAVAILABLE);}else if(sourceZone!==targetZone)return this._reject(ATTACK_RESULT.ZONE_MISMATCH);
+ const equipment=this.equipmentPort?.getCombatSnapshot?.(attacker)??null;if(!equipment&&this.requireEquipmentSnapshot)return this._reject(ATTACK_RESULT.EQUIPMENT_SNAPSHOT_UNAVAILABLE);
+ const now=this.clock();const state=ensureCombatState(attacker);let delayMs=this.attackTimerPolicy?.resolveNormalAttackDelayMs?.({attacker,equipment,context});if(delayMs==null)delayMs=equipment?.attackDelayMs??null;if(delayMs==null&&this.requireAttackTimer)return this._reject(ATTACK_RESULT.ATTACK_TIMER_UNAVAILABLE);if(now<state.attackReadyAt)return this._reject(ATTACK_RESULT.ATTACK_COOLDOWN,{retryAt:state.attackReadyAt});
+ const rangeCheck=this.worldPort?.validateAttackRange?.({attacker,target,equipment,weaponRange:equipment?.weaponRange,context})??(this.rangeValidator?this.rangeValidator({attacker,target,equipment,weaponRange:equipment?.weaponRange,kind:'NORMAL_ATTACK',context}):null);if(rangeCheck==null&&this.requireRangeValidation)return this._reject(ATTACK_RESULT.RANGE_VALIDATION_UNAVAILABLE);if(rangeCheck!==null){const ok=rangeCheck===true||rangeCheck?.ok===true;if(!ok)return this._reject(rangeCheck?.reason??ATTACK_RESULT.OUT_OF_RANGE);}
+ if(delayMs!=null)state.attackReadyAt=now+Math.max(0,Math.trunc(delayMs));const hitRate=Number(attacker.combat.hitRate);const evasionRate=Number(target.combat.evasionRate);if(!(hitRate>=0)||!(evasionRate>0))throw new RangeError('invalid hit/evasion rate');const hitOutcome=rollHitOutcome(hitRate/evasionRate,this.rng);const resolved=this.damagePolicy.resolve({attacker,target,hitOutcome,equipment});const hp=applyHpDelta(target,-Math.max(0,Math.trunc(resolved.damage)),{sourceId:attacker.id,cause:'NORMAL_ATTACK'});return Object.freeze({ok:true,reason:ATTACK_RESULT.OK,type:'NORMAL_ATTACK',attackerId:attacker.id,targetId:target.id,requestKey:context.requestKey??null,attackReadyAt:state.attackReadyAt,...resolved,hp,deathEvent:hp.deathEvent,targetLifeState:target.lifeState});}
 }
-
-function applyHpDelta(entity, amount, { allowRevive = false } = {}) {
-  if (!Number.isFinite(amount)) throw new TypeError('HP delta must be finite');
-  const before = entity.hp;
-  const wasAlive = entity.lifeState === LIFE_STATE.ALIVE;
-
-  // Death is sticky. Source code has explicit regeneration/resurrection paths; a generic HP heal must not revive.
-  if (!wasAlive && amount > 0 && !allowRevive) {
-    return Object.freeze({ before, after: before, deltaApplied: 0, died: false, blockedByDeathState: true });
-  }
-
-  entity.hp = Math.max(0, Math.min(entity.maxHp, entity.hp + Math.trunc(amount)));
-  if (wasAlive && entity.hp === 0) entity.lifeState = LIFE_STATE.DEAD;
-  else if (!wasAlive && allowRevive && entity.hp > 0) entity.lifeState = LIFE_STATE.ALIVE;
-
-  return Object.freeze({ before, after: entity.hp, deltaApplied: entity.hp - before, died: wasAlive && entity.lifeState === LIFE_STATE.DEAD });
-}
-
-class CombatService {
-  constructor({ damagePolicy, rangeValidator, rng = Math.random, requireRangeValidation = true } = {}) {
-    if (!damagePolicy || typeof damagePolicy.resolve !== 'function') throw new TypeError('damagePolicy.resolve is required');
-    this.damagePolicy = damagePolicy;
-    this.rangeValidator = rangeValidator;
-    this.rng = rng;
-    this.requireRangeValidation = requireRangeValidation;
-  }
-
-  normalAttack(attacker, target, context = {}) {
-    if (attacker.lifeState !== LIFE_STATE.ALIVE || attacker.hp <= 0) return Object.freeze({ ok: false, reason: 'ATTACKER_DEAD' });
-    if (target.lifeState !== LIFE_STATE.ALIVE || target.hp <= 0) return Object.freeze({ ok: false, reason: 'TARGET_DEAD' });
-
-    if (!this.rangeValidator) {
-      if (this.requireRangeValidation) return Object.freeze({ ok: false, reason: 'RANGE_VALIDATION_UNAVAILABLE' });
-    } else {
-      const range = this.rangeValidator({ attacker, target, kind: 'NORMAL_ATTACK', context });
-      const ok = range === true || (range && range.ok === true);
-      if (!ok) return Object.freeze({ ok: false, reason: range?.reason ?? 'OUT_OF_RANGE' });
-    }
-
-    if (!Number.isFinite(attacker.combat.hitRate) || !Number.isFinite(target.combat.evasionRate) || target.combat.evasionRate <= 0) {
-      return Object.freeze({ ok: false, reason: 'INVALID_HIT_EVASION' });
-    }
-
-    const hitOutcome = rollHitOutcome(attacker.combat.hitRate / target.combat.evasionRate, this.rng);
-    const resolved = this.damagePolicy.resolve({ attacker, target, hitOutcome, context });
-    const hp = resolved.damage > 0 ? applyHpDelta(target, -resolved.damage) : Object.freeze({ before: target.hp, after: target.hp, deltaApplied: 0, died: false });
-
-    return Object.freeze({ ok: true, type: 'NORMAL_ATTACK', attackerId: attacker.id, targetId: target.id, ...resolved, hp, targetLifeState: target.lifeState });
-  }
-}
-
-module.exports = { CombatService, LIFE_STATE, applyHpDelta, createCombatant };
+module.exports={ATTACK_RESULT,CombatService,LIFE_STATE,applyHpDelta,createCombatant};

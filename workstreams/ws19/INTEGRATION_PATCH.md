@@ -1,142 +1,138 @@
 # WS19 Integration Patch
 
-## Files to integrate
+## Public module
 
-Merge/copy only the WS19-owned paths:
+Use `services/ko1298-combat/index.js`.
 
-- `services/ko1298-combat/**`
-- `tests/ko1298-combat/**`
-- `workstreams/ws19/**`
-- `.github/workflows/ws19-combat.yml`
+Important exports:
 
-No existing product file outside those paths is modified by WS19.
+- `CombatService`
+- `OpenKo1298NormalAttackDamagePolicy`
+- `OpenKo1298PvpPhysicalSkillDamagePolicy`
+- `SkillService`
+- `Verified1298SkillTableAdapter`
+- `createGoldenSkillTable`
+- `createAuthoritativeWorldPort`
+- `createWs17EquipmentCombatPort`
+- `createWs25MobCombatPort`
+- `createPlayerCombatPort`
+- `decodeMagicProcessPayload`
+- `encodeMagicProcessPayload`
+- `toClientSkillResult`
 
-## Runtime entry point
+## WS15 world integration
 
-```js
-const {
-  CombatService,
-  OpenKo1298NormalAttackDamagePolicy,
-  SkillService,
-} = require('./services/ko1298-combat');
-```
-
-## Required integration adapters
-
-### 1. Character snapshot / coefficient adapter
-
-World/session character state should provide:
-
-- stable character id
-- real KO class id
-- level
-- current/max HP
-- current/max MP/SP resource
-- base primary stats
-- current combat snapshot (`ap`, `ac`, `hitRate`, `evasionRate`, percentage/flat modifiers)
-- skill-point slots
-
-The class coefficient table must be adapted to the fields documented in `COMBAT_MODEL.md`; do not hardcode guessed class coefficients in WS19.
-
-### 2. WS15 range adapter
-
-Provide a function shaped like:
+Provide a stable authoritative position snapshot:
 
 ```js
-({ attacker, target, kind, context }) => ({ ok: true })
+const worldPort = createAuthoritativeWorldPort({
+  getSnapshot(id) {
+    // { zoneId, position: { x, y, z } }
+  },
+  distance(a, b) {
+    // canonical WS15/world distance contract
+  }
+});
 ```
 
-or:
+Do not pass client packet distance as authority.
+
+## WS17 equipment integration
 
 ```js
-({ caster, target, skill, kind, context }) => ({ ok: false, reason: 'OUT_OF_RANGE' })
+const equipmentPort = createWs17EquipmentCombatPort({
+  getEquipmentSnapshot(entityId) {
+    return {
+      weaponRange,
+      attackDelayMs,
+      leftItemClass,
+      rightItemClass,
+      // optional verified item-domain combat values
+    };
+  }
+});
 ```
 
-It must own coordinate/zone/distance rules. WS19 intentionally does not read or update position.
+`attackDelayMs` must already be authoritative. WS19 intentionally does not guess the conversion from a raw item delay field.
 
-### 3. WS17 equipment adapter
+For normal attack / physical skill item semantics, inject verified adapters into the damage policies. Do not copy synthetic item constants into WS19.
 
-Provide read-only combat projections from equipped items:
+## WS25 mob integration
 
-- item hit / bow damage
-- item AC
-- item HP/MP
-- item STR/STA/DEX/INT/MP-stat bonuses
-- item hit/evasion multipliers
-- elemental/status resistance totals
-- weapon armor totals
-- attacker weapon kind
-- item magical damage properties if/when integrated
+```js
+const mobCombat = createWs25MobCombatPort({ combatService, getEntity });
+const out = mobCombat.normalAttack({ mobId, targetId, requestKey });
 
-WS19 must not move/equip/consume items.
+// out.absoluteTargetHp is authoritative WS19 HP.
+// out.deathEvent is the one WS19 live->dead transition.
+```
 
-For exact normal-attack post-processing, wire:
+WS25 remains owner of target selection/AI. WS19 remains owner of hit/damage/HP/death.
 
-- `magicItemDamageAdapter`
-- `weaponArmorAdapter` (one value or ordered right/left values)
+## Player/session integration
 
-### 4. Real skill-table adapter
+```js
+const playerCombat = createPlayerCombatPort({
+  combatService,
+  skillService,
+  getEntity
+});
+```
 
-Replace `InMemorySkillTableAdapter` with a read-only adapter over the real 1298 magic tables. Normalize confirmed fields to WS19's Stage-2 contract.
+Ingress must provide a stable packet/request key so duplicate network delivery cannot hit twice.
 
-Do not map unknown Type1..8 semantics to the fixture `FLAT_DAMAGE`/`FLAT_HEAL` effects. Those effects are test-only framework fixtures.
+## Skill data integration
 
-## Normal attack integration
+Production data must use `Verified1298SkillTableAdapter` rows parsed from source-backed 1298 tables. `InMemorySkillTableAdapter` is tagged `SYNTHETIC_TEST_ONLY` and must not be presented as production skill data.
 
-Recommended orchestration:
+Current verified golden source set is documented in `VERIFIED_1298_SKILLS.md`.
 
-1. session/world resolves attacker + selected target
-2. build WS19 combat views (live domain objects or mutable copies) from authoritative read-only world/item projections
-3. `CombatService.normalAttack(attacker, target, context)` mutates only combat HP/life-state on the supplied target view
-4. if a copy was used, sync the returned HP/life-state atomically to the owning world/session entity
-5. world/session broadcasts protocol packets/events
-6. if `hp.died`, owning world/session triggers its death/broadcast/reward hooks
+## Skill cooldown
 
-WS19 itself must not send packets or update movement/world/NPC state.
+Do **not** automatically enforce `clientRecastMs` as server cooldown.
 
-## Skill request integration
+If a verified server policy is available, inject:
 
-Recommended orchestration:
+```js
+const skillService = new SkillService({
+  table,
+  cooldownPolicy: {
+    resolveCooldownMs({ skill, caster, target, context }) {
+      return authoritativeMs;
+    }
+  }
+});
+```
 
-1. protocol/session parses the 1298 skill request
-2. resolve caster/target
-3. call `SkillService.request(...)`
-4. convert WS19 reason codes to the packet/protocol response in the owning session/protocol layer
-5. only supported Stage-2 framework effects are applied here
-6. later Type1..8 implementation should be added behind effect executors/adapters, not as packet code inside WS19
+Without that port, recast remains client metadata and WS19 reports `UNVERIFIED_NOT_ENFORCED`.
 
-## Event/reason codes currently exposed
+## Type1 / Type2 PvP integration
 
-Normal attack may return:
+```js
+const physicalSkillDamagePort = new OpenKo1298PvpPhysicalSkillDamagePolicy({
+  magicDamageAdapter,   // verified GetMagicDamage / item-elemental projection
+  weaponArmorAdapter   // verified WS17 target armor projection
+});
+```
 
-- `ATTACKER_DEAD`
-- `TARGET_DEAD`
-- `RANGE_VALIDATION_UNAVAILABLE`
-- range-adapter reason (normally `OUT_OF_RANGE`)
-- `INVALID_HIT_EVASION`
+This policy is source-backed for the PvP `Ebenezer/User.cpp::GetDamage()` path only. Do not reuse it for NPC/mob skills unless that equivalence is separately proven.
 
-Skill request may return:
+## Type3 magic damage integration
 
-- `UNKNOWN_SKILL`
-- `CASTER_DEAD`
-- `TARGET_DEAD`
-- `CLASS_MISMATCH`
-- `LEVEL_TOO_LOW`
-- `SKILL_POINTS_TOO_LOW`
-- `COOLDOWN`
-- `INSUFFICIENT_MP`
-- `RANGE_VALIDATION_UNAVAILABLE`
-- `OUT_OF_RANGE`
-- `UNSUPPORTED_EFFECT`
+Negative Type3 HP damage requires a `magicDamagePort.resolveType3()` implementation so elemental/resistance behavior is not guessed. Positive HP healing and the source two-second duration scheduler are implemented directly.
 
-## Integration order / dependency note
+## Type4 stat integration
 
-WS19 is independently testable, but production integration is **conditional** on read-only adapters from:
+WS19 stores exact Type4 modifier state and calls `effectPort.onType4Applied/onType4Expired`. The stat/equipment owner may project those modifiers. This avoids duplicating derived-stat ownership inside the skill service.
 
-- WS15 for authoritative range/position validation
-- WS17 for item/equipment projections
-- real 1298 coefficient + magic-table data source
+## Death / progression handoff
 
-NPC combat can be added after WS16 provides stable NPC entity snapshots.
+Consume WS19 `DEATH` events in WS27. WS19 intentionally does not award XP, perform respawn, or persist progression.
 
-No DB migration is required by WS19.
+## Test command
+
+```bash
+node --test tests/ko1298-combat/*.test.js
+```
+
+Current local evidence: 56/56 pass.
