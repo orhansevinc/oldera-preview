@@ -8,12 +8,31 @@
   <link rel="stylesheet" href="./admin.css?v=10" />
   <link rel="stylesheet" href="./character-control.css?v=10" />
   <link rel="stylesheet" href="./responsive-overrides.css?v=10" />
+  <style>
+    body.admin-booting .app-shell{visibility:hidden}
+    .admin-gate{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;background:#060707;padding:24px}
+    .admin-gate[hidden]{display:none}.admin-gate .modal{display:block;max-width:460px;width:min(100%,460px)}
+    .admin-gate-state{margin:10px 0 0;color:var(--muted,#a99f90);font-size:12px;line-height:1.6}.admin-gate-state.error{color:var(--red,#e56f62)}
+    .metric-card strong[data-live],.server-ring strong[data-live]{min-width:2ch}.disabled-action{opacity:.48;cursor:not-allowed!important}
+  </style>
 </head>
-<body>
+<body class="admin-booting">
+  <div class="admin-gate" id="adminGate">
+    <form class="modal" id="adminLoginForm" hidden>
+      <small>OLDKO CONTROL CENTER</small><h2>Yönetici girişi</h2>
+      <p>Yetkili içerik yalnız sunucu oturumu doğrulandıktan sonra açılır.</p>
+      <label class="field"><span>Kullanıcı</span><input id="adminLoginUser" autocomplete="username" required></label>
+      <label class="field" style="margin-top:10px"><span>Şifre</span><input id="adminLoginPassword" type="password" autocomplete="current-password" required></label>
+      <div class="modal-actions"><button type="submit">GİRİŞ YAP</button></div>
+      <p class="admin-gate-state" id="adminLoginError"></p>
+    </form>
+    <div class="modal" id="adminBootState"><small>OLDKO CONTROL CENTER</small><h2>Oturum doğrulanıyor</h2><p class="admin-gate-state" id="adminBootText">Production Admin API bağlantısı kontrol ediliyor…</p></div>
+  </div>
+
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
       <div class="brand"><div class="brand-mark">OK</div><div><strong>OldKOWeb</strong><span>OLDKO CONTROL CENTER</span></div></div>
-      <div class="owner-card"><span class="owner-dot"></span><div><small>AKTİF YETKİ</small><strong>ROOT OWNER</strong></div></div>
+      <div class="owner-card"><span class="owner-dot"></span><div><small id="authorityLabel">YETKİ · SUNUCUDAN</small><strong id="authorityRole">—</strong></div></div>
       <nav id="sideNav" class="side-nav" aria-label="Admin navigation">
         <button class="nav-item active" data-view="dashboard"><span>◈</span><b>Dashboard</b><small>Genel durum</small></button>
         <button class="nav-item" data-view="online"><span>●</span><b>Online Players</b><small>Çevrimiçi oyuncular</small></button>
@@ -25,7 +44,7 @@
         <button class="nav-item" data-view="server"><span>▣</span><b>Server Control</b><small>Sunucu yönetimi</small></button>
         <button class="nav-item" data-view="logs"><span>≡</span><b>Audit & Logs</b><small>İşlem kayıtları</small></button>
       </nav>
-      <div class="sidebar-foot"><div class="env"><i></i><span>OldKO I</span><b>ONLINE</b></div><small>1298 CONTROL PROFILE</small></div>
+      <div class="sidebar-foot"><div class="env"><i></i><span>OldKO I</span><b id="apiState">—</b></div><small>1298 CONTROL PROFILE</small></div>
     </aside>
 
     <main class="main">
@@ -33,73 +52,53 @@
         <button id="menuToggle" class="icon-btn mobile-menu" aria-label="Menü">☰</button>
         <div class="page-heading"><div class="crumb">OLDKOWEB / <span id="crumbTitle">DASHBOARD</span></div><h1 id="pageTitle">OldKO Control Center</h1></div>
         <div class="top-actions">
-          <label class="global-search"><span>⌕</span><input id="globalSearch" placeholder="Hesap, karakter, clan, item serial..." /></label>
+          <label class="global-search"><span>⌕</span><input id="globalSearch" placeholder="Hesap, karakter, item serial..." /></label>
           <button class="icon-btn" id="themeBtn" title="Tema değiştir">☀</button>
           <button class="icon-btn" id="refreshBtn" title="Yenile">↻</button>
-          <div class="owner-pill"><span>ORHAN</span><small>ROOT OWNER</small></div>
+          <button class="owner-pill" id="sessionMenu" type="button"><span id="sessionUser">—</span><small id="sessionRole">SUNUCU OTURUMU</small></button>
         </div>
       </header>
 
       <section id="dashboard" class="view active">
-        <div class="alert-bar"><strong>OLDKO OWNER MODE</strong><span>OldKOWeb paneli ve oyun içi admin karakteri aynı yetkili komut katmanını kullanacak.</span><b>GÜVENLİ OTURUM</b></div>
+        <div class="alert-bar"><strong>OLDKO OWNER MODE</strong><span>Panel yalnız sunucunun doğruladığı rol ve izinlerle çalışır.</span><b id="dashboardState">SESSION VERIFIED</b></div>
         <div class="metrics">
-          <button class="metric-card" data-view-target="online"><small>ONLINE OYUNCU</small><strong>247</strong><span class="up">+18 son 1 saat</span></button>
-          <button class="metric-card" data-view-target="players"><small>HESAPLAR</small><strong>1,842</strong><span>Bugün +32</span></button>
-          <button class="metric-card" data-view-target="players"><small>KARAKTERLER</small><strong>3,991</strong><span>Hesap başına 2.17</span></button>
-          <button class="metric-card" data-view-target="server"><small>SERVER UPTIME</small><strong>19s 42d</strong><span class="ok">Sağlıklı</span></button>
+          <button class="metric-card" data-view-target="online"><small>ONLINE OYUNCU</small><strong data-live id="metricOnline">—</strong><span>Canlı WS08 verisi</span></button>
+          <button class="metric-card" data-view-target="players"><small>KARAKTERLER</small><strong data-live id="metricCharacters">—</strong><span>Canlı repository</span></button>
+          <button class="metric-card" data-view-target="players"><small>AKTİF YAPTIRIM</small><strong data-live id="metricSanctions">—</strong><span>Canlı repository</span></button>
+          <button class="metric-card" data-view-target="items"><small>DUPLICATE SERIAL</small><strong data-live id="metricDuplicates">—</strong><span>Canlı repository</span></button>
         </div>
         <div class="grid-2">
           <article class="panel">
-            <div class="panel-head"><div><small>CANLI OPERASYON</small><h2>OldKO Sunucu Özeti</h2></div><span class="live">● LIVE</span></div>
-            <div class="server-overview"><button class="server-ring" data-view-target="online"><strong>247</strong><span>ONLINE</span></button><div class="server-bars"><div><label>El Morad <b>131</b></label><span><i style="width:53%"></i></span></div><div><label>Karus <b>116</b></label><span><i style="width:47%"></i></span></div><div><label>Moradon <b>92</b></label><span><i style="width:37%"></i></span></div><div><label>Colony Zone <b>68</b></label><span><i style="width:28%"></i></span></div></div></div>
-            <div class="service-row"><button data-view-target="server"><i class="dot okdot"></i><span>Login Server</span><b>ONLINE</b></button><button data-view-target="server"><i class="dot okdot"></i><span>Game Server</span><b>ONLINE</b></button><button data-view-target="server"><i class="dot okdot"></i><span>Database</span><b>ONLINE</b></button></div>
+            <div class="panel-head"><div><small>CANLI OPERASYON</small><h2>OldKO Sunucu Özeti</h2></div><span class="live" id="overviewLive">● API</span></div>
+            <div class="server-overview"><button class="server-ring" data-view-target="online"><strong data-live id="ringOnline">—</strong><span>ONLINE</span></button><div class="server-bars"><div><label>Veri kaynağı <b>WS08</b></label><span><i style="width:100%"></i></span></div><div><label>Kimlik <b id="overviewActor">—</b></label><span><i style="width:100%"></i></span></div></div></div>
+            <div class="service-row"><button disabled><i class="dot okdot"></i><span>Admin API</span><b id="adminApiHealth">DOĞRULANIYOR</b></button><button disabled><i class="dot"></i><span>Game command bridge</span><b id="commandBridgeState">DURUM YOK</b></button><button disabled><i class="dot"></i><span>Database</span><b id="databaseState">API ÜZERİNDEN</b></button></div>
           </article>
           <article class="panel">
             <div class="panel-head"><div><small>HIZLI ERİŞİM</small><h2>Owner İşlemleri</h2></div><span class="muted">1298 GM Core</span></div>
-            <div class="action-grid"><button data-command="NOTICEALL"><b>NOTICE ALL</b><span>Tüm oyunculara duyuru gönder</span></button><button data-command="SUMMONUSER"><b>SUMMON USER</b><span>Oyuncuyu yanına çağır</span></button><button data-command="INVISIBLE"><b>INVISIBLE</b><span>GM görünmezliğini aç / kapat</span></button><button data-command="ARREST"><b>ARREST</b><span>Oyuncunun bulunduğu yere git / takip et</span></button><button data-command="FORBIDCHAT"><b>FORBID CHAT</b><span>Oyuncunun sohbetini yasakla</span></button><button data-command="CUTOFF"><b>CUTOFF</b><span>Oyuncunun bağlantısını kes</span></button></div>
+            <div class="action-grid"><button data-command="NOTICEALL"><b>NOTICE ALL</b><span>Tüm oyunculara duyuru isteği oluştur</span></button><button data-command="SUMMONUSER"><b>SUMMON USER</b><span>Hedef oyuncu için komut isteği oluştur</span></button><button data-command="INVISIBLE"><b>INVISIBLE</b><span>GM görünmezlik komut isteği</span></button><button data-command="ARREST"><b>ARREST</b><span>Hedef oyuncu komut isteği</span></button><button data-command="FORBIDCHAT"><b>FORBID CHAT</b><span>Sohbet yetkisi komut isteği</span></button><button data-command="CUTOFF"><b>CUTOFF</b><span>Bağlantı kesme komut isteği</span></button></div>
           </article>
         </div>
       </section>
 
-      <section id="online" class="view">
-        <article class="panel full">
-          <div class="panel-head"><div><small>CANLI OYUNCULAR</small><h2>Online Players</h2></div><span class="live">● 247 ONLINE</span></div>
-          <div class="player-tools"><label class="field grow"><span>İsme göre ara</span><input id="onlineSearch" placeholder="Karakter adı yaz..." /></label><label class="field"><span>Sırala</span><select id="onlineSort"><option value="np-desc">NP ↓</option><option value="level-desc">Level ↓</option><option value="name-asc">İsim A-Z</option><option value="zone-asc">Zone A-Z</option></select></label><label class="field"><span>Nation</span><select id="onlineNation"><option value="all">Tümü</option><option value="El Morad">El Morad</option><option value="Karus">Karus</option></select></label></div>
-          <div class="player-grid" id="onlinePlayerGrid"></div>
-        </article>
-      </section>
+      <section id="online" class="view"><article class="panel full"><div class="panel-head"><div><small>CANLI OYUNCULAR</small><h2>Online Players</h2></div><span class="live" id="onlineCountLabel">● — ONLINE</span></div><div class="player-tools"><label class="field grow"><span>İsme göre ara</span><input id="onlineSearch" placeholder="Karakter adı yaz..."></label><label class="field"><span>Sırala</span><select id="onlineSort"><option value="np-desc">NP ↓</option><option value="level-desc">Level ↓</option><option value="name-asc">İsim A-Z</option><option value="zone-asc">Zone A-Z</option></select></label><label class="field"><span>Nation</span><select id="onlineNation"><option value="all">Tümü</option><option value="El Morad">El Morad</option><option value="Karus">Karus</option></select></label></div><div class="player-grid" id="onlinePlayerGrid"><div class="loading-card">Canlı oyuncular yükleniyor…</div></div></article></section>
 
-      <section id="players" class="view">
-        <article class="panel full">
-          <div class="panel-head"><div><small>OYUNCU VERİTABANI</small><h2>Players & Rankings</h2></div><span class="muted">Karaktere tıklayarak tam kontrol ekranını aç</span></div>
-          <div class="player-tools"><label class="field grow"><span>Oyuncu ara</span><input id="playerSearch" placeholder="Karakter / hesap / clan..." /></label><label class="field"><span>Sırala</span><select id="playerSort"><option value="np-desc">NP yüksekten düşüğe</option><option value="level-desc">Level yüksekten düşüğe</option><option value="coin-desc">Coin yüksekten düşüğe</option><option value="name-asc">İsim A-Z</option></select></label><label class="field"><span>Durum</span><select id="playerStatus"><option value="all">Tümü</option><option value="online">Online</option><option value="offline">Offline</option><option value="banned">Banned</option></select></label></div>
-          <div class="table-wrap"><table class="players-table"><thead><tr><th>Görünüm</th><th>Durum</th><th>Karakter</th><th>Nation</th><th>Class</th><th>Level</th><th>NP</th><th>Coin</th><th>Zone</th><th>Son Aktivite</th></tr></thead><tbody id="playersBody"></tbody></table></div>
-        </article>
-      </section>
+      <section id="players" class="view"><article class="panel full"><div class="panel-head"><div><small>OYUNCU VERİTABANI</small><h2>Players & Rankings</h2></div><span class="muted">Karaktere tıklayarak tam kontrol ekranını aç</span></div><div class="player-tools"><label class="field grow"><span>Oyuncu ara</span><input id="playerSearch" placeholder="Karakter / hesap / clan..."></label><label class="field"><span>Sırala</span><select id="playerSort"><option value="np-desc">NP yüksekten düşüğe</option><option value="level-desc">Level yüksekten düşüğe</option><option value="coin-desc">Coin yüksekten düşüğe</option><option value="name-asc">İsim A-Z</option></select></label><label class="field"><span>Durum</span><select id="playerStatus"><option value="all">Tümü</option><option value="online">Online</option><option value="offline">Offline</option><option value="banned">Banned</option></select></label></div><div class="table-wrap"><table class="players-table"><thead><tr><th>Görünüm</th><th>Durum</th><th>Karakter</th><th>Nation</th><th>Class</th><th>Level</th><th>NP</th><th>Coin</th><th>Zone</th><th>Son Aktivite</th></tr></thead><tbody id="playersBody"><tr><td colspan="10">Canlı oyuncular yükleniyor…</td></tr></tbody></table></div></article></section>
 
-      <section id="characters" class="view"><div class="loading-card">OldKO karakter kontrol modülü yükleniyor...</div></section>
-      <section id="items" class="view"><article class="panel full"><div class="panel-head"><div><small>ITEM DATABASE & ECONOMY</small><h2>Item Control</h2></div></div><div class="empty-state"><b>Item veritabanı kontrolü</b><span>Serial arama, sahiplik geçmişi, upgrade geçmişi ve ekonomi görünümü bu servise bağlanacak.</span><button data-demo-action="Item arama konsolu">ITEM SEARCH</button></div></article></section>
-      <section id="world" class="view"><article class="panel full"><div class="panel-head"><div><small>1298 WORLD CONTROL</small><h2>World · Zones · Weather</h2></div></div><div class="action-grid large"><button data-command="RAINING"><b>RAINING</b><span>Yağmuru aç / kapat</span></button><button data-command="SNOWING"><b>SNOWING</b><span>Karı aç / kapat</span></button><button data-command="TIME"><b>TIME</b><span>Dünya saatini kontrol et</span></button><button data-command="CLEAN"><b>CLEAN</b><span>Dünya temizleme komutu</span></button></div></article></section>
+      <section id="characters" class="view"><div class="loading-card">Bir karakter seçildiğinde canlı kontrol verisi burada açılır.</div></section>
+      <section id="items" class="view"><article class="panel full"><div class="panel-head"><div><small>ITEM DATABASE & ECONOMY</small><h2>Item Control</h2></div><span class="muted">WS08 item endpoints</span></div><div class="player-tools"><label class="field grow"><span>Item ID / serial / owner</span><input id="itemSearchInput" placeholder="Arama değeri..."></label><button id="itemSearchBtn">ITEM SEARCH</button><button id="duplicateSearchBtn">DUPLICATE SERIALS</button></div><div class="table-wrap"><table><thead><tr><th>Serial</th><th>Item ID</th><th>Karakter</th><th>Account</th><th>Konum</th><th>Slot</th></tr></thead><tbody id="itemRows"><tr><td colspan="6">Arama yapılmadı.</td></tr></tbody></table></div></article></section>
+      <section id="world" class="view"><article class="panel full"><div class="panel-head"><div><small>1298 WORLD CONTROL</small><h2>World · Zones · Weather</h2></div></div><div class="action-grid large"><button data-command="RAINING"><b>RAINING</b><span>Yağmur komut isteği</span></button><button data-command="SNOWING"><b>SNOWING</b><span>Kar komut isteği</span></button><button data-command="TIME"><b>TIME</b><span>Dünya saati komut isteği</span></button><button data-command="CLEAN"><b>CLEAN</b><span>Dünya temizleme komut isteği</span></button></div></article></section>
 
-      <section id="gm" class="view">
-        <article class="panel full"><div class="panel-head"><div><small>ORIGINAL 1298 ADMIN COMMAND SURFACE</small><h2>GM Command Center</h2></div><span class="badge gold">ROOT OWNER</span></div><div class="command-toolbar"><label class="field grow"><span>Hedef karakter</span><input id="gmTarget" value="osevinc" /></label><label class="field grow"><span>Komut argümanı / mesaj</span><input id="gmArg" placeholder="Mesaj veya ek değer" /></label><button id="dryRunBtn">SEÇİLİ KOMUTU ÇALIŞTIR</button></div><div class="command-list" id="commandList"></div></article>
-      </section>
+      <section id="gm" class="view"><article class="panel full"><div class="panel-head"><div><small>ORIGINAL 1298 ADMIN COMMAND SURFACE</small><h2>GM Command Center</h2></div><span class="badge gold" id="gmRoleBadge">SERVER ROLE</span></div><div class="command-toolbar"><label class="field grow"><span>Hedef karakter</span><input id="gmTarget" placeholder="Gerekiyorsa karakter adı"></label><label class="field grow"><span>Komut argümanı / mesaj</span><input id="gmArg" placeholder="Mesaj veya ek değer"></label><button id="dryRunBtn">SEÇİLİ KOMUTU KUYRUĞA AL</button></div><div class="command-list" id="commandList"></div><div class="empty-state" id="commandResult"><b>KOMUT DURUMU</b><span>Henüz komut isteği oluşturulmadı.</span></div></article></section>
 
-      <section id="server" class="view">
-        <div class="server-stack">
-          <article class="panel"><div class="panel-head"><div><small>OLDKO RUNTIME</small><h2>Server Services</h2></div><span class="live">● SYSTEM LIVE</span></div><div class="service-list large-services"><button data-demo-action="Login Server detayları"><span><i class="dot okdot"></i><strong>Login Server</strong><small>Hesap giriş servisi</small></span><b>ONLINE</b></button><button data-demo-action="Game Server detayları"><span><i class="dot okdot"></i><strong>Game Server</strong><small>Dünya ve oyuncu oturumları</small></span><b>ONLINE</b></button><button data-demo-action="Database detayları"><span><i class="dot okdot"></i><strong>Database</strong><small>Karakter / item / hesap verisi</small></span><b>ONLINE</b></button><button data-demo-action="Admin Command Bus detayları"><span><i class="dot okdot"></i><strong>Admin Command Bus</strong><small>Panel ve oyun içi Owner komut köprüsü</small></span><b>READY</b></button></div></article>
-          <article class="panel danger-panel"><div class="panel-head"><div><small>KRİTİK OPERASYONLAR</small><h2>Owner Only</h2></div><span class="badge gold">ROOT ONLY</span></div><p>Restart, bakım ve shutdown işlemlerinde işlem nedeni + ikinci onay alınacak ve audit log tutulacak.</p><div class="critical-actions"><button data-critical="MAINTENANCE">BAKIM MODU <span>Oyuncu girişlerini kontrollü kapat / aç</span></button><button data-critical="RESTART_GAME">GAME SERVICE RESTART <span>Oyun servisini güvenli şekilde yeniden başlat</span></button><button class="danger" data-critical="SHUTDOWN">SERVER SHUTDOWN <span>Tüm sistemi kapat — ikinci onay gerekir</span></button></div></article>
-        </div>
-      </section>
+      <section id="server" class="view"><div class="server-stack"><article class="panel"><div class="panel-head"><div><small>OLDKO RUNTIME</small><h2>Server Services</h2></div><span class="live">● WS08 API</span></div><div class="service-list large-services"><button disabled><span><i class="dot okdot"></i><strong>Admin API</strong><small>Kimlik ve yönetim sözleşmesi</small></span><b id="serverAdminApi">SESSION VERIFIED</b></button><button disabled class="disabled-action"><span><i class="dot"></i><strong>Login Server</strong><small>WS08 bu servis için health endpointi sunmuyor</small></span><b>KULLANILAMAZ</b></button><button disabled class="disabled-action"><span><i class="dot"></i><strong>Game Server</strong><small>WS08 bu servis için health endpointi sunmuyor</small></span><b>KULLANILAMAZ</b></button><button disabled class="disabled-action"><span><i class="dot"></i><strong>Database</strong><small>Durum yalnız repository çağrılarıyla dolaylı doğrulanır</small></span><b>AYRI DURUM YOK</b></button></div></article><article class="panel danger-panel"><div class="panel-head"><div><small>KRİTİK OPERASYONLAR</small><h2>Owner Only</h2></div><span class="badge">BACKEND YOK</span></div><p>Restart, bakım ve shutdown için WS08 production sözleşmesinde endpoint bulunmuyor. Sahte başarı üretilmez.</p><div class="critical-actions"><button disabled class="disabled-action">BAKIM MODU <span>Şu anda kullanılamıyor</span></button><button disabled class="disabled-action">GAME SERVICE RESTART <span>Şu anda kullanılamıyor</span></button><button disabled class="danger disabled-action">SERVER SHUTDOWN <span>Şu anda kullanılamıyor</span></button></div></article></div></section>
 
-      <section id="logs" class="view"><article class="panel full"><div class="panel-head"><div><small>IMMUTABLE OWNER AUDIT</small><h2>Audit & Game Logs</h2></div></div><div class="table-wrap"><table><thead><tr><th>Saat</th><th>Yetkili</th><th>İşlem</th><th>Hedef</th><th>Sonuç</th><th>Trace</th></tr></thead><tbody id="auditRows"><tr><td>21:17:42</td><td>ORHAN</td><td>OWNER_LOGIN</td><td>OldKOWeb Control Center</td><td><span class="badge green">SUCCESS</span></td><td>OK-001</td></tr></tbody></table></div></article></section>
+      <section id="logs" class="view"><article class="panel full"><div class="panel-head"><div><small>IMMUTABLE OWNER AUDIT</small><h2>Audit & Game Logs</h2></div></div><div class="table-wrap"><table><thead><tr><th>Saat</th><th>Yetkili</th><th>İşlem</th><th>Hedef</th><th>Sonuç</th><th>Trace</th></tr></thead><tbody id="auditRows"><tr><td colspan="6">Canlı audit yüklenmedi.</td></tr></tbody></table></div></article></section>
     </main>
   </div>
+
   <div class="toast" id="toast"><strong id="toastTitle">Hazır</strong><span id="toastText"></span></div>
-  <div class="modal-backdrop" id="modalBackdrop" hidden><div class="modal"><small id="modalEyebrow">ROOT OWNER ACTION</small><h2 id="modalTitle">İşlemi onayla</h2><p id="modalText"></p><label class="field"><span>Audit nedeni</span><input id="modalReason" value="ROOT OWNER manual action" /></label><div class="modal-actions"><button id="modalCancel">VAZGEÇ</button><button class="danger" id="modalConfirm">ONAYLA</button></div></div></div>
-  <script src="../previewbridge1298.js?v=10"></script>
-  <script src="./admin.js?v=10"></script>
-  <script src="./preview-link.js?v=10"></script>
-  <script src="./character-control.js?v=10"></script>
+  <script src="./live-api.js?v=11"></script>
+  <script src="./admin.js?v=11"></script>
+  <script src="./character-control.js?v=11"></script>
 </body>
 </html>
