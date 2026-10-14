@@ -2,6 +2,8 @@ WS50
 
 Revalidate the latest staging candidate after canonical WS10 Moradon E2E PASS, the WS09 public-smoke null Content-Length fix, the WS12 public-browser gateway-preflight hardening, the WS01 public-staging WebSocket compatibility bridge, and the WS03 development/staging world-snapshot completion fix.
 
+STAGING_CANDIDATE_TRIGGER=WS03_WORLD_SNAPSHOT_FIX
+
 Canonical WS10 PASS:
 - run id: 38505039290
 - run number: 26
