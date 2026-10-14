@@ -1,0 +1,14 @@
+{
+  "ws10_run_id": "<successful-ws10-run-id>",
+  "ws10_head_sha": "<40-char-ws10-head-sha>",
+  "ws10_pass_artifact_name": "<exact-pass-evidence-artifact-name>",
+  "ws10_client_artifact_name": "<exact-frozen-client-artifact-name>",
+  "ws50_handoff_ref": "<40-char-ws50-ready-handoff-sha>",
+  "ws01_sha": "<40-char-ws01-sha-from-handoff>",
+  "ws02_sha": "<40-char-ws02-sha-from-handoff>",
+  "ws03_sha": "<40-char-ws03-sha-from-handoff>",
+  "ws12_sha": "<40-char-ws12-sha-from-handoff>",
+  "ws14_sha": "<40-char-ws14-sha-from-handoff>",
+  "ws38_sha": "<40-char-ws38-sha-from-handoff>",
+  "keepalive_minutes": "30"
+}
