@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const combatCodec = require('../../protocol-lab/runtime/playable-combat-codec.cjs');
 const { GAME, Writer, FrameDecoder } = require('../../services/ko1298-session/protocol');
 const { MemoryRepository } = require('../../services/ko1298-session/repository');
 const { GameSession } = require('../../services/ko1298-session/session');
@@ -26,6 +27,9 @@ function rotatePacket() {
 }
 function npcRequest(...ids) {
   const b = Buffer.alloc(3 + ids.length * 2); b[0] = GAME.REQUEST_NPC_IN; b.writeUInt16LE(ids.length, 1); ids.forEach((id, i) => b.writeUInt16LE(id, 3 + i * 2)); return b;
+}
+function targetHpRequest(id, updateImmediately = 1) {
+  const b = Buffer.alloc(4); b[0] = GAME.TARGET_HP; b.writeInt16LE(id, 1); b[3] = updateImmediately; return b;
 }
 function worldMock({ delay = null } = {}) {
   return {
@@ -65,13 +69,13 @@ test('canonical state transition table reaches WORLD_READY with one identity rec
   ]);
 });
 
-test('verified opcode matrix binds WS15/WS16/WS19 and leaves WS17/22 unguessed', () => {
+test('verified opcode matrix binds movement, combat, NPC interaction and WS25 target HP authority', () => {
   assert.equal(OPCODE_CONTRACTS.get(0x06).owner, 'WS15');
   assert.equal(OPCODE_CONTRACTS.get(0x09).owner, 'WS15');
   assert.equal(OPCODE_CONTRACTS.get(0x08).owner, 'WS19');
   assert.equal(OPCODE_CONTRACTS.get(0x31).owner, 'WS19');
   assert.equal(OPCODE_CONTRACTS.get(0x20).owner, 'WS16');
-  assert.equal(OPCODE_CONTRACTS.get(0x22).owner, 'WS16');
+  assert.equal(OPCODE_CONTRACTS.get(0x22).owner, 'WS25');
   assert.equal(OPCODE_CONTRACTS.get(0x1d).owner, 'WS14/WS16-CONFLICT');
   assert.match(UNBOUND_DOMAIN_CONTRACTS.WS17, /no additional client opcode/i);
   assert.equal(UNBOUND_DOMAIN_CONTRACTS.WS19, undefined);
@@ -127,7 +131,6 @@ test('malformed movement packet never reaches WS15 adapter', async () => {
   assert.equal(calls, 0);
 });
 
-
 test('WS14 zone transition resets WS15 baseline through verified teleport contract', async () => {
   const calls = [];
   const world = worldMock();
@@ -157,14 +160,19 @@ test('WS14 zone transition resets WS15 baseline through verified teleport contra
   assert.deepEqual(calls[1][2].position, { x: 320, y: 0, z: 410 });
 });
 
-test('WS16 NPC event/target packets receive immutable authenticated actor context', async () => {
+test('WS16 NPC event keeps immutable authenticated actor context while TARGET_HP reads WS25 combat authority', async () => {
   const calls = [];
   const npcRouter = { async route(packet, actor) { calls.push([Buffer.from(packet), actor]); return { kind: 'packets', packets: [Buffer.from([packet[0], 1])] }; } };
-  const session = await readySession({ npcRouter });
+  const combatAdapter = {
+    async execute() { return { ok: true }; },
+    getTargetCombatSnapshot(id) { return { runtimeId: id, maxHp: 100, hp: 80 }; },
+  };
+  const session = await readySession({ npcRouter, combatAdapter });
   const [eventReply] = await session.handle(Buffer.from([GAME.NPC_EVENT, 0x10, 0x27]));
-  const [hpReply] = await session.handle(Buffer.from([GAME.TARGET_HP, 0x10, 0x27, 1]));
+  const [hpReply] = await session.handle(targetHpRequest(10000));
   assert.deepEqual([...eventReply], [GAME.NPC_EVENT, 1]);
-  assert.deepEqual([...hpReply], [GAME.TARGET_HP, 1]);
+  assert.deepEqual(combatCodec.decodeTargetHp(hpReply), { targetId: 10000, updateImmediately: 1, maxHp: 100, currentHp: 80, hpDelta: 0 });
+  assert.equal(calls.length, 1, 'TARGET_HP must not leak back through WS16 NPC routing');
   assert.equal(calls[0][1].accountId, 'osevinc');
   assert.equal(calls[0][1].characterId, 'Hero');
   assert.equal(calls[0][1].state, 'WORLD_READY');
