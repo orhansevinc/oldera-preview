@@ -2,139 +2,149 @@
 
 ## State
 
-Production-oriented combat core expanded from the previous 17-test synthetic-skill framework into a source-bounded OldKO/Open-KO 1298 combat engine.
+Production-oriented combat core with a source-backed OldKO/Open-KO 1298 playable PvE slice.
 
-Local deterministic evidence at this revision:
+Deterministic evidence at this revision:
 
 - `node --test tests/ko1298-combat/*.test.js`
-- 56 tests / 56 pass / 0 fail
-- 5,000-attack deterministic normal-attack simulation included
-- verified golden skill fixtures are isolated from synthetic test fixtures
+- 66 tests / 66 pass / 0 fail
+- 5,000-attack deterministic PvE regression included
+- verified golden skill fixtures remain isolated from synthetic test fixtures
+
+Task-start provider locks for the playable PvE delta:
+
+- WS11 `4e86f75c55e66bef3da5cb8aa037d69b9f5c4852`
+- WS25 `18c9e9b8439fef88fc93d74bfec7981b0cb41958`
+- WS31 `56ada741532c8f6cabfc83b129a8e87e645db055`
+
+Canonical playable fixture:
+
+- Karus Warrior, level 3
+- Short Sword `120010000`
+- Slash `101003`
+- Bandicoot SID `850`
+
+Machine-readable authority: `workstreams/ws19/PLAYABLE_PVE_AUTHORITY.json`.
 
 ## Normal attack
 
-Implemented authoritative request lifecycle:
+The existing PvP normal-attack policy remains intact. Playable PvE uses a dedicated source-backed path in `pve-combat.js`.
 
-1. validate source/target identities
-2. reject self/dead source/dead target
-3. deduplicate ingress request key
-4. enforce same-zone through world snapshot port
-5. require WS17-style equipment combat snapshot
-6. resolve authoritative attack delay from injected policy or equipment snapshot
-7. enforce attack timer
-8. validate authoritative distance against weapon range through world port
-9. resolve Open-KO hit bucket
-10. resolve physical/AP-vs-AC damage core
-11. run optional item magic / weapon armor adapters
-12. apply authoritative HP delta
-13. emit one sticky death transition/event
+Player → mob follows pinned AIServer `CUser::GetDamage()` semantics:
 
-Client supplied attack interval/distance are not trusted as server authority. `attackDelayMs` conversion and weapon range must be supplied by a verified equipment/world adapter; missing authority fails closed.
+1. `HitB = trunc((playerAP * 200) / (mobAC + 240))`
+2. hit bucket from `playerHitRate / mobEvadeRate`
+3. FAIL = 0 damage
+4. successful normal hit = `trunc(0.85 * HitB + 0.3 * myrand(0, HitB))`
+5. no PvP `/3` final divisor
+6. no invented minimum damage
 
-## Combat state
+The target snapshot must supply exact WS25 HP/maxHP, AC, evade, hit, damage, attack delay/range, alive/targetable/attackable fields. Missing authority fails closed; source-valid zero values such as Bandicoot `sAtk=0` remain valid and are not replaced.
 
-Authoritative transient state now includes:
+Short Sword combat input is normalized-only: `weaponRange=1.0`, `attackDelayMs=1140`, `damage=4`, plus weapon identity/type. WS19 does not convert raw item units.
 
-- HP / max HP
-- MP or SP resource state
-- ALIVE / DEAD life state
-- attack ready time
-- server-injected skill cooldown map
-- deterministic effect collection for Type3 duration and Type4 states
-- death sequence and single death-event transition
+Mob HP is never shadow-owned by WS19. Successful player damage is committed as absolute HP through WS25 `applyCombatResult()`, including WS25's idempotency and exactly-once death transition.
 
-Cooldowns are transient by default. Persistence only occurs when an integration explicitly asks for cooldowns in the snapshot.
+## Slash 101003 PvE
 
-## Real 1298 skill data
+Verified/implemented production slice:
 
-Verified table adapters exist for:
+- Type1 only
+- EFFECTING only
+- ENEMY moral
+- level >= 3
+- weapon required
+- MP/SP cost 4
+- Type1 hit-rate modifier 100%
+- Type1 power 120%
 
-- `Skill_Magic_Main_us.tbl.csv` — exactly 30 columns
-- `Skill_Magic_1.tbl.csv` — exactly 12 columns
-- `Skill_Magic_2.tbl.csv` — exactly 6 columns
-- `skill_magic_3.tbl.csv` — exactly 7 columns
-- `skill_magic_4.tbl.csv` — exactly 26 columns
+Pinned AIServer Type1 PvE damage:
 
-Golden representative skills: **6**
+1. compute the same AP-vs-mob-AC `HitB`
+2. `skillHit = trunc(HitB * 120 / 100)`
+3. Type1 `type=0` hit bucket uses `(playerHitRate / mobEvadeRate) * 100/100`
+4. FAIL = 0
+5. success = `trunc(skillHit + 0.3 * myrand(0, skillHit) + 0.99)`
+6. apply absolute target HP through WS25
 
-- 101003 Slash — Type1
-- 102003 Archery — Type2
-- 103001 Flash — Type3 direct HP damage
-- 104001 Tiny Healing — Type3 direct HP heal
-- 104004 Strength — Type4 friendly buff
-- 104008 Tiny Restore — Type3 positive duration HP effect
+Resource mutation is exposed only through the public player combat port. For the canonical Warrior fixture the source-backed resource mode is SP, so Slash changes SP by `-4`; the shared skill-table field remains the 1298 MP/SP cost field.
 
-Primary provenance:
+### Slash range authority
 
-- `Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5`
-- `Open-KO/ko-client-assets@b4636332c7cd818b0ce171eccc973dd3d6b2e56d`
-- WS31 skill catalog is corroborating project data, not a substitute for the source table/parser evidence.
+`Skill_Magic_Main` has `iValidDist=0`, but that is not an unknown or unlimited-range semantic.
 
-## Skill lifecycle
+Pinned 1298 client `CMagicSkillMng::CheckValidDistance()` resolves Type1 fallback range as:
 
-Verified/implemented:
+`rightHand.siAttackRange / 10.0 + targetRadius + 1.0`
 
-- main-table loader + typed Type1..4 adapters
-- base-level vs class/skill-point requirement derived from `Skill % 10`
-- MP/SP abstraction and HP-cost boundary
-- required weapon/item-class gate (Open-KO `dwNeedItem` semantics; 0/9 unrestricted)
-- consumable item validation / Type2 arrow count
-- simple verified moral target classes
-- authoritative range port
-- client cast/recast metadata parsing
-- duplicate skill request rejection
-- optional server-authoritative cooldown policy
-- Type1/Type2 verified PvP physical damage core
-- Type3 direct HP heal
-- Type3 direct HP damage only through resistance-aware magic damage port
-- Type3 two-second duration scheduling
-- Type4 friendly same-BuffType non-stacking state
-- duration expiration and cancel/death cleanup
-- deterministic multi-effect ordering
-- client-facing 1298 magic-process result adapter
+For Short Sword the weapon component is `1.0`; WS19 does not invent a target radius to turn this into a guessed fixed distance.
 
-## Protocol
+The pinned Ebenezer `CMagicProcess::IsAvailable()` + AIServer Type1 execution path does not repeat this Type1 target-distance check as a server security gate. WS19 therefore records the exact client range rule but does not invent server enforcement.
 
-`WIZ_MAGIC_PROCESS` payload after the opcode is modeled as 21 bytes:
+The client recast value `3.1s` is metadata, not silently promoted to server-authoritative cooldown. A server cooldown can only be applied through an explicit injected policy.
 
-- command: byte
-- skill id: uint32
-- source id: int16
-- target id: int16
-- six int16 data fields
+## Mob → player
 
-Verified commands modeled:
+WS25 remains aggro/chase/attack-intent/lifecycle owner. WS19 consumes the enriched WS25 attack intent and verifies it against the current WS25 combat snapshot and authoritative position before resolving damage.
 
-1. CASTING
-2. FLYING
-3. EFFECTING
-4. FAIL
-5. DURATION_EXPIRED
-6. CANCEL
+Pinned `CNpc::GetFinalDamage()` semantics:
+
+- Attack = mob `sHitRate`
+- Avoid = player authoritative evasion
+- Hit = mob `sDamage` (not `sAtk`)
+- AC = player authoritative total AC
+- `HitB = trunc((Hit * 200) / (AC + 240))`
+- hit bucket = `sHitRate / playerEvasion`
+- NORMAL/SUCCESS = `trunc(0.3 * myrand(0, HitB)) + trunc(0.85 * HitB)`
+- GREAT_SUCCESS applies source `*3/2`
+- damage is clamped to `trunc(2.6 * sDamage)`
+- FAIL = 0
+
+Player HP mutation is delegated to the public `playerCombatPort.applyHealthResult()` boundary.
+
+## Combat events
+
+The playable PvE semantic layer emits no packet bytes. It produces:
+
+- `NORMAL_ATTACK_RESULT`
+- `TARGET_HP_CHANGED`
+- `MAGIC_PROCESS_RESULT`
+- `PLAYER_HP_CHANGED`
+- `TARGET_DIED`
+
+`TARGET_DIED` is emitted only on the authoritative death transition.
+
+## Existing generic combat / skills
+
+The earlier generic/PvP combat and verified table adapters remain available:
+
+- `Skill_Magic_Main_us.tbl.csv`
+- `Skill_Magic_1.tbl.csv`
+- `Skill_Magic_2.tbl.csv`
+- `skill_magic_3.tbl.csv`
+- `skill_magic_4.tbl.csv`
+
+Golden representative skills remain Slash, Archery, Flash, Tiny Healing, Strength and Tiny Restore.
 
 ## Integration ports
 
-- WS15-shaped authoritative world/position port
-- WS17-shaped equipment combat snapshot port
-- WS25-shaped mob combat port returning absolute authoritative target HP + death event
-- generic player combat port
-- WS27 remains owner of progression/XP/respawn consequences after WS19 death event
+- WS15-shaped authoritative world/position port, now also capable of mob attack-range validation
+- WS17-shaped normalized equipment combat snapshot port; old return shape remains backward compatible when newer fields are absent
+- WS25 `MobCombatService.getCombatSnapshot()` + `applyCombatResult()` consumed directly by playable PvE
+- public authoritative player combat port for HP/resource mutation
+- generic player combat port retained
+- WS27 remains owner of progression/XP/respawn consequences after WS19 death semantics
 
-## Fail-closed / UNKNOWN
+## Fail-closed / UNKNOWN outside this milestone
 
-Not presented as production-verified behavior:
+Not presented as production-verified behavior outside the playable slice:
 
 - Type5..Type10 execution semantics
 - Type3 DirectType 2/3/4 full production execution
 - Type3 elemental/resistance formula without magic damage adapter
 - hostile Type4 debuff replacement/stacking rules
 - area/corpse/undead target selection semantics
-- exact server-authoritative skill cooldown policy
-- server enforcement of client cast-time field
-- persistence of cooldowns across reconnect/restart
-- exact item elemental / drain / armor absorption formulas until WS17 provides verified adapters
-- NPC/mob physical skill damage equivalence to PvP Type1/Type2; current verified policy is explicitly PvP
+- persistence of optional injected cooldown policy across reconnect/restart
+- exact item elemental / drain / armor absorption formulas until a verified equipment adapter supplies them
 
-## Blockers
-
-No blocker for merging the combat core itself. Full production behavior for the UNKNOWN items depends on verified source/data or upstream adapters from WS15/WS17/WS25/WS27/WS31 rather than guessed constants.
+There is no remaining WS19 formula/range/cooldown blocker for the requested Karus Warrior → Bandicoot normal attack + Slash + Bandicoot retaliation domain slice. Packet encoding remains WS11 ownership and mob lifecycle remains WS25 ownership.
