@@ -68,3 +68,55 @@ jobs:
             --publication-marker "$OUT/_complete.json" \
             --require-publication-marker \
             --latest-pointer "$OUT/latest.json"
+
+      - name: Genuine playable-combat preload stage
+        shell: bash
+        env:
+          KO_ASSETS_SHA: 2055ee6ed77f1b5cfef23832dd5bc31909e14a66
+          PLAYABLE_MANIFEST: workstreams/ws38/MORADON_PLAYABLE_COMBAT_ASSET_MANIFEST.json
+        run: |
+          set -euo pipefail
+          ASSETS="${RUNNER_TEMP}/ko-assets"
+          STAGE="${RUNNER_TEMP}/ws38-playable-stage"
+          SPARSE="${RUNNER_TEMP}/ws38-playable-sparse.txt"
+
+          python -m tools.ws38_content.playable_assets \
+            --manifest "$PLAYABLE_MANIFEST" \
+            --validate \
+            --write-sparse-checkout "$SPARSE"
+
+          git init "$ASSETS"
+          git -C "$ASSETS" remote add origin https://github.com/ko4life-net/ko-assets.git
+          git -C "$ASSETS" sparse-checkout init --no-cone
+          git -C "$ASSETS" sparse-checkout set --stdin < "$SPARSE"
+          git -C "$ASSETS" fetch --depth=1 origin "$KO_ASSETS_SHA"
+          git -C "$ASSETS" checkout --detach FETCH_HEAD
+          test "$(git -C "$ASSETS" rev-parse HEAD)" = "$KO_ASSETS_SHA"
+
+          python -m tools.ws38_content.playable_assets \
+            --manifest "$PLAYABLE_MANIFEST" \
+            --asset-root "$ASSETS" \
+            --stage-root "$STAGE" \
+            --verify-stage
+
+          python - "$PLAYABLE_MANIFEST" "$STAGE/KnightOnLine.data.manifest.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          authority = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          packaged = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+          expected = {
+              entry["packaged_virtual_path"]
+              for entry in authority["entries"]
+              if entry["status"] in {"READY", "SOURCE_VERIFIED", "SOURCE_DISCOVERED"}
+          }
+          actual = {entry["packaged_virtual_path"] for entry in packaged["assets"]}
+          if expected != actual:
+              raise SystemExit(
+                  f"KnightOnLine.data preload manifest mismatch: missing={sorted(expected-actual)} "
+                  f"extra={sorted(actual-expected)}"
+              )
+          for path in sorted(actual):
+              print("WS38_PRELOAD_PATH", path)
+          PY
