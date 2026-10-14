@@ -1,13 +1,18 @@
 {
-  "schema_version": "ws13-production-account-service/v1",
+  "schema_version": "ws13-production-account-service/v2",
   "service": "oldko-account-api",
+  "release_id": "oldkoweb-domain-live-20261015",
   "branch": "ws13-account-api",
-  "parent_commit": "5777c865274cba26ca35a5e74bd13cb08530c5eb",
+  "task_start_head": "1ef67bd7c0c98a588bce4db6c0f1305b820af008",
   "pins": {
     "official_site_handoff_commit": "8370de2ebfdfd319cf8a719da79cbdef9853fd2f",
     "ws07_commit": "1ae85c96319cbab11648a91ed28300e17d4c607f",
     "ws07_account_adapter": "services/oldko-data/src/adapters/ws13-account-api.js",
-    "ws07_account_adapter_git_blob_sha1": "022c32abde503a6dc3af1ff9429c206a1b20ca63"
+    "ws07_account_adapter_git_blob_sha1": "022c32abde503a6dc3af1ff9429c206a1b20ca63",
+    "ws03_observed_head": "7c5f5f3584e7d3621aa5a318ad65c011bd77276f",
+    "ws03_credential_envelope_evidence": "workstreams/ws03/PRODUCTION_POSTGRES_COMPOSITION.json",
+    "ws11_protocol_commit": "013559b6e66ef9f6257403c96f3b012884739470",
+    "ko1298_client_source": "luisfelipe18/old-school-openko@97eb0ea20207afc0c360bfed6915113572711be3"
   },
   "public_origin": "https://oldkoweb.com",
   "public_api_base": "/api/account",
@@ -25,13 +30,22 @@
     "POST /api/account/v1/session/logout",
     "POST /api/account/v1/password/change",
     "POST /api/account/v1/password-reset/request",
-    "POST /api/account/v1/password-reset/confirm"
+    "POST /api/account/v1/password-reset/confirm",
+    "POST /api/account/v1/accounts/access-check"
   ],
   "frontend_compatibility_routes": [
     "POST /api/account/v1/accounts/password/change",
     "POST /api/account/v1/accounts/password-reset/request",
     "POST /api/account/v1/accounts/password-reset/confirm"
   ],
+  "credential_contract": "services/account-api/contracts/credential-policy.v1.json",
+  "credential_policy": {
+    "username": "exact 4-20 ASCII bytes; first letter; remaining letters/digits/underscore; lowercase canonical lookup; no input trim",
+    "password_write": "exact 10-12 printable ASCII bytes U+0021-U+007E; at least 3 character classes; no spaces/trim/Unicode normalization/truncation",
+    "applies_to": ["register", "password change newPassword", "password reset newPassword"],
+    "legacy_transition": "existing incompatible password may web-login exactly with credentialUpgradeRequired=true; game access-check rejects CREDENTIAL_UPGRADE_REQUIRED until change/reset",
+    "ko1298_packet_limits_changed": false
+  },
   "health": {
     "liveness": "GET /healthz",
     "readiness": "GET /readyz",
@@ -51,17 +65,28 @@
     "session_table": "oldko.account_sessions",
     "action_token_table": "oldko.account_action_tokens"
   },
+  "password_hash": {
+    "format": "scrypt$N$r$p$base64(salt)$base64(hash64)",
+    "params": {"N": 32768, "r": 8, "p": 1, "hash_bytes": 64},
+    "ws07_game_verifier": "services/oldko-data/src/index.js#verifyPassword",
+    "legacy_ws13_read_compatibility": true
+  },
   "rate_limit": {
     "backend": "PostgreSQL",
     "table": "oldko.account_rate_limits",
     "migration": "services/account-api/sql/0001_postgres_rate_limit.sql",
     "process_local_allowed_in_production": false,
-    "stored_key_material": "SHA-256 bucket hashes only"
+    "stored_key_material": "SHA-256 bucket hashes only",
+    "old_process_local_blocker": "closed"
   },
   "delivery": {
+    "contract": "services/account-api/contracts/mail-delivery-webhook.v1.json",
     "type": "signed HTTPS webhook",
+    "provider_acceptance_required": true,
+    "http_2xx_alone_is_success": false,
+    "mailbox_delivery_proven_by_provider_ack": false,
     "secret_source": "environment/deployment secret store only",
-    "token_transport": "JSON request body only",
+    "token_transport": "signed JSON request body only",
     "dev_token_public_output": false,
     "fake_mail": false
   },
@@ -71,6 +96,7 @@
     "OLDKO_ACCOUNT_REPOSITORY_MODULE",
     "OLDKO_ACCOUNT_DELIVERY_WEBHOOK_URL",
     "OLDKO_ACCOUNT_DELIVERY_WEBHOOK_SECRET",
+    "OLDKO_ACCOUNT_MAIL_FROM=<sender@oldkoweb.com>",
     "OLDKO_ACCOUNT_ALLOWED_ORIGINS=https://oldkoweb.com",
     "OLDKO_TRUST_PROXY=0|1"
   ],
@@ -79,26 +105,32 @@
     "Apply pinned WS07 migrations through database/migrations/0003_public_account_api.sql",
     "Apply services/account-api/sql/0001_postgres_rate_limit.sql",
     "Provide the exact pinned WS07 account repository module file",
-    "Provide real delivery webhook URL and secret"
+    "Provision signed HTTPS mail receiver URL/secret",
+    "Verify oldkoweb.com sender domain with the real provider and configure OLDKO_ACCOUNT_MAIL_FROM"
   ],
   "frontend_contract": {
     "handoff_commit": "8370de2ebfdfd319cf8a719da79cbdef9853fd2f",
     "asset": "account-v15.js",
     "account_api_base": "/api/account",
-    "changed": false,
-    "compatibility_aliases_retained": true
-  },
-  "password": {
-    "format": "scrypt$N$r$p$base64(salt)$base64(hash64)",
-    "legacy_ws13_read_compatibility": true,
-    "game_verifier_authority": "WS07 verifyPassword()"
+    "route_contract_changed": false,
+    "compatibility_aliases_retained": true,
+    "credential_policy_contract": "services/account-api/contracts/credential-policy.v1.json",
+    "legacy_upgrade_response_field": "credentialUpgradeRequired"
   },
   "security": {
-    "logout_origin_validation": true,
+    "trusted_origin_required_for_browser_mutations": true,
+    "internal_game_access_check_origin_exempt": true,
     "current_session_database_authoritative": true,
+    "password_rotation_invalidates_old_web_sessions_via_passwordVersion": true,
+    "tokens_single_use_and_ttl_backed": true,
+    "new_password_validated_before_reset_token_consumption": true,
     "tokens_logged": false,
     "tokens_in_urls": false,
     "secrets_in_repository": false
   },
-  "deployment_state": "READY_AFTER_EXTERNAL_SECRETS_AND_DATABASE_MIGRATIONS"
+  "validation_scope": {
+    "postgres": ["register", "verify", "login", "current", "logout", "change", "reset", "used token", "expired token", "disallowed Origin", "rate-limit persistence", "frontend aliases", "12-byte game access-check", "13-byte rejection"],
+    "mail": "CI verifies signed receiver contract and provider ACK semantics only; real provider acceptance is WS09 smoke and mailbox delivery is WS10"
+  },
+  "deployment_state": "READY_AFTER_WS09_DATABASE_MAIL_SECRETS_AND_REAL_PROVIDER_ACCEPTANCE_SMOKE"
 }
