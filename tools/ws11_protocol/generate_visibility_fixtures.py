@@ -22,5 +22,5 @@ OUT.mkdir(parents=True,exist_ok=True); entries=[]
 for fn,name,var,direction,values,role in specs:
     payload=encode_visibility_payload(name,var,values); raw=build_frame(payload); (OUT/fn).write_bytes(raw)
     entries.append({'file':fn,'name':name,'variant':var,'direction':direction,'role':role,'payload_bytes':len(payload),'frame_bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'frame_hex':raw.hex(),'provenance':'exact-layout / representative-values','source_commit':SOURCE})
-(OUT/'manifest.json').write_text(json.dumps({'format':'ko1298-visibility-golden-fixtures-v1','frame':'AA55 + u16le payload length + payload + 55AA','note':'Values are deterministic representatives; packet shapes/signedness are exact 1298 source-derived.','fixtures':entries},indent=2)+'\n',encoding='utf-8')
+(OUT/'manifest.json').write_text(json.dumps({'format':'ko1298-visibility-golden-fixtures-v1','frame':'AA55 + u16le payload length + payload + 55AA','note':'Values are deterministic representatives; packet shapes/signedness are exact 1298 source-derived.','fixtures':entries},separators=(',',':'))+'\n',encoding='utf-8')
 print(json.dumps({'generated':len(entries),'status':'PASS'}))
