@@ -1,0 +1,218 @@
+{
+  "schema_version": "ws09-domain-live/v1",
+  "release_id": "oldkoweb-domain-live-20261015",
+  "owner": "WS09",
+  "branch": "ws09-production-infra",
+  "source_commit": "85f0628c4178e2eaba6c03f0c9b312dba4c48b4a",
+  "status": "BLOCKED_NOT_LIVE",
+  "claim": "Production topology, fail-closed deployment gates, backup-gated migrations and a durable checksumed deployment candidate are prepared. No authorized persistent-origin deployment receipt, DNS cutover, live TLS acceptance or final WS10 production acceptance exists.",
+  "input_pins": {
+    "official_site": {
+      "handoff_commit": "8370de2ebfdfd319cf8a719da79cbdef9853fd2f",
+      "source_commit": "5f9a4f0ccd3d7d06e8b407bfca35266f1b2d3516",
+      "source_tree": "ee3ba5bfd85ff6951017befb748b71c3e5851f97",
+      "artifact_id": "official-site-static@5f9a4f0ccd3d7d06e8b407bfca35266f1b2d3516",
+      "artifact_digest": "git-tree-sha1:ee3ba5bfd85ff6951017befb748b71c3e5851f97",
+      "observed_newer_unhanded_head": "e5a7340bcd25a29112f52f91f51cd15380f1408f",
+      "newer_head_selected": false
+    },
+    "account": {
+      "ws13_head": "1ef67bd7c0c98a588bce4db6c0f1305b820af008",
+      "ws13_green_run_id": 38650301600,
+      "ws07_commit": "1ae85c96319cbab11648a91ed28300e17d4c607f",
+      "ws07_account_adapter_blob_sha1": "022c32abde503a6dc3af1ff9429c206a1b20ca63",
+      "repository": "PgWs13AccountRepository",
+      "shared_rate_limit_store": "PostgreSQL oldko.account_rate_limits"
+    },
+    "admin": {
+      "ws08_source_commit": "97771268f37735e6ebaad9ed48a6927438f65f59",
+      "ws08_handoff_commit": "1e3316727b079fbb03cbd9b09b257c1a0eb64f71",
+      "ws08_green_run_id": 38654675678,
+      "production_memory_fallback_allowed": false
+    },
+    "game_parent": {
+      "provider_set": "WS50-C5@sha256:7ac3b8a4c06b67e52b8d18518ef8c82209a60c6101c33609a4c16e64d84f119e",
+      "frozen_ws03_commit": "495de481726734d85cc28b3d432835799aff7e48",
+      "historical_ws10_run_id": 38604174659,
+      "historical_ws10_head": "163f2ebf81e750bf746fdaa277695329a0682e22",
+      "historical_client_artifact": "ws10-c5-visibility-passing-client-4",
+      "historical_client_artifact_id": 11915666463,
+      "historical_client_artifact_digest": "sha256:f749750fc5bb0249a67b712bd4e1a03847773d8845fd209508b8c95f6c447a83"
+    },
+    "game_persistence_observation": {
+      "newer_ws03_head": "7c5f5f3584e7d3621aa5a318ad65c011bd77276f",
+      "newer_ws03_green_run_id": 38650070368,
+      "selected_into_parent_c5": false
+    },
+    "ws50_domain_live": {
+      "source_commit": "396a765384f87fd97159204fd1eefc77702e6624",
+      "handoff_head": "4de620f22a5e015209191da2943151efd891fa10",
+      "green_run_id": 38654219214,
+      "accepted_owner_pins": {},
+      "child_candidate": null,
+      "integration_verified": false,
+      "domain_verified": false
+    },
+    "ws10_domain_live": {
+      "source_commit": "c3f25fd365d06f331daf33c965d99c4fc21fc8b0",
+      "handoff_head": "a0ae49f05c76c6eab1dd8c60ca17ffec67d50bf2",
+      "run_id": 38654558721,
+      "artifact_id": 11935968878,
+      "artifact_digest": "sha256:1c6ee2c0903e54f13dbc76c4a8f7f3f1c2f966a51e16a61f85fa75178b30aa22",
+      "workflow_conclusion": "SUCCESS",
+      "acceptance_overall": "BLOCKED"
+    }
+  },
+  "artifacts": {
+    "durable_release": {
+      "provider": "GitHub Release",
+      "release_id": 413277200,
+      "tag": "oldkoweb-domain-live-20261015-candidate",
+      "target_commit": "85f0628c4178e2eaba6c03f0c9b312dba4c48b4a",
+      "prerelease": true,
+      "explicitly_live": false
+    },
+    "bundle": {
+      "name": "oldkoweb-domain-live-20261015-candidate.tar.gz",
+      "asset_id": 642039472,
+      "size_bytes": 475510222,
+      "digest": "sha256:9db45d30fe46ca33da7b8c7b6762b7e45ee5ee546c358440ce707f02c8f21b29"
+    },
+    "bundle_checksum_file": {
+      "name": "oldkoweb-domain-live-20261015-candidate.tar.gz.sha256",
+      "asset_id": 642039474,
+      "digest": "sha256:7777aba41deee1c6d7db8f85ef711c16ff1cbfd432c9b5af33e4b97559259552"
+    },
+    "image_identities": {
+      "account_api": {
+        "source": "WS13 1ef67bd7c0c98a588bce4db6c0f1305b820af008 + WS07 1ae85c96319cbab11648a91ed28300e17d4c607f",
+        "bundle_identity_file": "images/account-api.image-id",
+        "bundle_image_tar": "images/account-api.tar.gz",
+        "external_registry_digest": null
+      },
+      "gateway": {
+        "source": "frozen parent C5 WS02",
+        "bundle_identity_file": "images/ws02-gateway.image-id",
+        "bundle_image_tar": "images/ws02-gateway.tar.gz",
+        "external_registry_digest": null
+      },
+      "session_world": {
+        "source": "frozen parent C5 WS03+WS14 composition only",
+        "bundle_identity_file": "images/session-world.image-id",
+        "bundle_image_tar": "images/session-world.tar.gz",
+        "external_registry_digest": null,
+        "production_persistence_accepted": false
+      },
+      "nginx_and_postgres": {
+        "bundle_identity_file": "images/base-images.env",
+        "external_registry_digest": "recorded_in_bundle"
+      },
+      "note": "Image identity receipts are checksum-covered inside the durable candidate. No production registry push or deployment digest receipt is claimed because no authorized production origin is connected."
+    }
+  },
+  "deployment": {
+    "deployment_id": null,
+    "deployment_receipt": null,
+    "authorized_origin": null,
+    "observed_public_dns_ipv4": "93.89.226.17",
+    "observed_ipv4_accepted_as_release_origin": false,
+    "dns_mutation": "NOT_RUN",
+    "tls_issuance": "NOT_RUN",
+    "tls_renewal_proof": "NOT_RUN",
+    "service_survival_after_runner_exit": "NOT_RUN_ON_PRODUCTION_ORIGIN"
+  },
+  "public_probe": {
+    "authority": "WS10 run 38654558721",
+    "dns": {
+      "oldkoweb.com": "93.89.226.17",
+      "play.oldkoweb.com": "93.89.226.17",
+      "admin.oldkoweb.com": "93.89.226.17"
+    },
+    "tls_443": {
+      "oldkoweb.com": "ECONNREFUSED",
+      "play.oldkoweb.com": "ECONNREFUSED",
+      "admin.oldkoweb.com": "ECONNREFUSED"
+    },
+    "account_browser_game_admin_gates": "NOT_RUN_TLS_PREREQUISITE_FAILED"
+  },
+  "checks": {
+    "ws09_deployment_config": {
+      "run_id": 38655599976,
+      "conclusion": "SUCCESS"
+    },
+    "ws09_production_readiness": {
+      "run_id": 38655599970,
+      "conclusion": "SUCCESS"
+    },
+    "ws09_permanent_release_bundle": {
+      "run_id": 38655600090,
+      "head_sha": "85f0628c4178e2eaba6c03f0c9b312dba4c48b4a",
+      "conclusion": "SUCCESS",
+      "durable_release_publish": "SUCCESS"
+    },
+    "final_ws10_domain_acceptance": {
+      "run_id": 38654558721,
+      "workflow_conclusion": "SUCCESS",
+      "acceptance_overall": "BLOCKED",
+      "reason": "all three public hostnames resolve but TCP/TLS 443 is refused; live browser gates were not run"
+    }
+  },
+  "external_access": {
+    "persistent_host_or_ssh_deploy_path": "UNAVAILABLE_IN_WS09_EXECUTION_CONTEXT",
+    "authoritative_dns_provider_access": "UNAVAILABLE_IN_WS09_EXECUTION_CONTEXT",
+    "production_secret_store_or_secure_config_channel": "UNAVAILABLE_IN_WS09_EXECUTION_CONTEXT",
+    "verification_reset_delivery_provider_configuration": "UNAVAILABLE_IN_WS09_EXECUTION_CONTEXT",
+    "github_repo_and_actions": "AVAILABLE"
+  },
+  "owner_blockers": [
+    {
+      "id": "PERSISTENT_ORIGIN_AND_SECURE_CONFIG",
+      "owner": "WS09_EXTERNAL_INFRA",
+      "required": "Authorize a long-running Linux origin with stable public IPv4, Docker/Compose and a secure deployment/configuration channel."
+    },
+    {
+      "id": "AUTHORITATIVE_DNS_ZONE_ACCESS",
+      "owner": "WS09_EXTERNAL_DNS",
+      "required": "Provide authorized zone read/write access so WS09 can snapshot and preserve NS/MX/TXT/SPF/DKIM/DMARC/CAA/ownership records before changing only apex/play/admin."
+    },
+    {
+      "id": "ACCOUNT_DELIVERY_CONFIGURATION",
+      "owner": "WS09_EXTERNAL_MAIL_DELIVERY",
+      "required": "Configure the real HTTPS WS13 verification/password-reset delivery webhook URL and secret through the secure production channel, never chat or Git."
+    },
+    {
+      "id": "ADMIN_PRODUCTION_COMPOSITION",
+      "owner": "WS07_WS03_WS45_WS28_OFFICIAL_SITE_THEN_WS08_WS50",
+      "required": "Supply WS08 production repository/runtime/command-bus adapters and the admin-v10 CSRF/idempotency/expectedVersion/capability/status frontend wiring; production memory fallback remains forbidden."
+    },
+    {
+      "id": "PERSISTENT_GAME_CHILD",
+      "owner": "WS50_THEN_WS10",
+      "required": "Select one immutable persistence-capable child including the newer WS03 composition and accept that exact child with affected WS10 real-browser/regression gates; do not transplant it into parent C5 without re-gating."
+    },
+    {
+      "id": "DOMAIN_LIVE_OWNER_HANDOFFS",
+      "owner": "WEBSITE_WS13_WS07_WS03_AND_COORDINATOR",
+      "required": "Land the remaining exact tested domain-live owner handoffs so WS50 can accept owner pins and produce an integration-verified child candidate."
+    }
+  ],
+  "resume_point": {
+    "when_external_and_owner_inputs_are_ready": [
+      "Verify/download durable bundle and SHA256SUMS to the authorized origin",
+      "Resolve accepted immutable production image identities and secure configuration",
+      "Take and verify PostgreSQL backup",
+      "Run backup-gated WS07/WS13 migrations",
+      "Start Compose and require all readiness checks green",
+      "Test real origin with Host/SNI before DNS mutation",
+      "Snapshot authoritative DNS and preserve mail/ownership records",
+      "Change only apex/play/admin to the verified origin",
+      "Issue and prove renewable TLS for all three hostnames",
+      "Run production smoke plus WS10 real browser/account/game/admin/restart/rollback acceptance"
+    ]
+  },
+  "links": {
+    "official": {"url": "https://oldkoweb.com/", "live_accepted": false},
+    "play": {"url": "https://play.oldkoweb.com/", "live_accepted": false},
+    "admin": {"url": "https://admin.oldkoweb.com/", "live_accepted": false}
+  }
+}
