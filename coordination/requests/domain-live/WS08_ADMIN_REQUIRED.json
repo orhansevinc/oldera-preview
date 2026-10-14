@@ -1,0 +1,44 @@
+{
+  "schema_version": "domain-live-owner-request/v1",
+  "release_id": "oldkoweb-domain-live-20261015",
+  "requester": "official-site-domain-release",
+  "owner": "WS08",
+  "owner_branch": "ws08-admin-api",
+  "observed_owner_head": "239cdacf0fb6bacde5017fb3b787451595a3be0d",
+  "requests": [
+    {
+      "id": "WS08_PRODUCTION_PERSISTENCE_ADAPTER",
+      "priority": "RELEASE_BLOCKER",
+      "problem": "Current WS08 production startup intentionally fails closed because the WS07-backed repository adapter is not wired. Memory repository is correctly forbidden in production.",
+      "required_change": "Wire a production repository implementing every services/admin-api/src/repository.js REQUIRED_METHODS against the shared persistent data source, preserving authoritative online-character mutation boundaries and append-only audit semantics.",
+      "acceptance": [
+        "NODE_ENV=production starts without MemoryAdminRepository.",
+        "overview/players/character/inventory/inn/transactions/sanctions/items/audit return persistent real data.",
+        "Dangerous mutations remain permission-checked, transactional, idempotent where contracted, and audited.",
+        "No seeded example accounts or demo records are reachable in production."
+      ]
+    },
+    {
+      "id": "WS08_COMMAND_TERMINAL_STATUS",
+      "priority": "RELEASE_BLOCKER_FOR_EXECUTION_CONFIRMATION",
+      "problem": "POST /commands returns an authoritative queued request (currently PENDING_BRIDGE) but WS08 exposes no read contract for terminal execution state. A frontend therefore cannot truthfully report succeeded/failed after enqueue.",
+      "required_change": "Expose a permission-protected command request status/read contract keyed by request id or trace id, with explicit lifecycle states at minimum PENDING, SUCCEEDED and FAILED plus timestamps/error summary. Keep POST /commands as queue acceptance, not execution success.",
+      "frontend_interim": "The v10 frontend displays the exact queued status/request id/trace and explicitly does not label the command as executed. It does not synthesize terminal success/failure.",
+      "acceptance": [
+        "A queued request can be polled/read until terminal state.",
+        "Succeeded means the authoritative game command bridge executed it, not merely that the DB/outbox write succeeded.",
+        "Failed state contains a non-sensitive operator-visible reason and remains auditable."
+      ]
+    }
+  ],
+  "non_blocking_missing_contracts": [
+    {
+      "id": "WS08_SERVER_CRITICAL_OPERATIONS",
+      "detail": "No current WS08 endpoint exists for maintenance/restart/shutdown. The accepted v10 controls are rendered disabled rather than faking success. Add a separately reviewed backend contract only if these operations are to be enabled."
+    }
+  ],
+  "files_not_owned_by_requester": [
+    "services/admin-api/**",
+    "database/**"
+  ]
+}
