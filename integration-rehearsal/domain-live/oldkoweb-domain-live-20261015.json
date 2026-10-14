@@ -1,0 +1,67 @@
+{
+  "schema_version": "ws50-domain-release/v1",
+  "release_id": "oldkoweb-domain-live-20261015",
+  "coordinator": "WS50",
+  "branch": "ws50-integration-rehearsal",
+  "parent_release": {
+    "provider_set": "WS50-C5@sha256:7ac3b8a4c06b67e52b8d18518ef8c82209a60c6101c33609a4c16e64d84f119e",
+    "ws50_handoff_commit": "7497087d4cf67e4e05a3a090f6edad3d206078cb",
+    "ws10_acceptance_run_id": 38604174659,
+    "client_artifact_id": 11915666463,
+    "client_artifact_digest": "sha256:f749750fc5bb0249a67b712bd4e1a03847773d8845fd209508b8c95f6c447a83"
+  },
+  "website": {
+    "source_commit": "5f9a4f0ccd3d7d06e8b407bfca35266f1b2d3516",
+    "handoff_commit": "8370de2ebfdfd319cf8a719da79cbdef9853fd2f"
+  },
+  "observed_owner_heads": {
+    "WEBSITE": "8370de2ebfdfd319cf8a719da79cbdef9853fd2f",
+    "WS13": "1ef67bd7c0c98a588bce4db6c0f1305b820af008",
+    "WS07": "1ae85c96319cbab11648a91ed28300e17d4c607f",
+    "WS03": "7c5f5f3584e7d3621aa5a318ad65c011bd77276f",
+    "WS08": "239cdacf0fb6bacde5017fb3b787451595a3be0d",
+    "WS09": "8c2624ec5f6f473cbb609d3cbd17406dce9bb225",
+    "WS10": "33bfef078f20bf4e97611f906fcc6ec7fd7fc277"
+  },
+  "pin_policy": "Observed branch heads are discovery only. Release pins come exclusively from validated coordination/handoffs/domain-live/<OWNER>.json source_commit fields.",
+  "accepted_owner_pins": {},
+  "child_candidate": null,
+  "ws03_visibility_guard": {
+    "c5_ws16_provider": "5ed48ff32187000312652838674388df52fc3fb7",
+    "preserved_ws03_composition_pin": "234657c1264ead6b8828425ae9e7fcdca0cca5c8",
+    "required_gate": "C5 NPC/mob provider visibility regression must pass with the new WS03 persistence composition before integration verification"
+  },
+  "artifacts": {
+    "existing_client": {
+      "artifact_id": 11915666463,
+      "digest": "sha256:f749750fc5bb0249a67b712bd4e1a03847773d8845fd209508b8c95f6c447a83",
+      "rebuild": false
+    },
+    "existing_ws09_permanent_bundle": {
+      "workflow_run_id": 38609175962,
+      "artifact_id": 11916143558,
+      "digest": "sha256:dace8c076b51eb70e4dc5196830655a32af17156ee04877402e080faa2a3e3ca",
+      "state": "READY_FOR_AUTHORIZED_HOST_TRANSFER"
+    }
+  },
+  "automation": {
+    "workflow": ".github/workflows/ws50-domain-live.yml",
+    "source_discovery": "tools/ws50_integration/domain_live.py",
+    "run_id": null,
+    "bootstrap_pr": null
+  },
+  "verification": {
+    "CI_VERIFIED": false,
+    "INTEGRATION_VERIFIED": false,
+    "DOMAIN_VERIFIED": false
+  },
+  "deployment_receipt": null,
+  "domain_acceptance_receipt": null,
+  "blockers": [
+    {"id": "UPSTREAM_DOMAIN_LIVE_HANDOFFS_MISSING", "owner": "WEBSITE/WS13/WS07/WS03/WS08/WS09/WS10", "required_action": "Each owner must publish its common domain-live handoff on its own branch with exact tested source_commit and real Actions URL."},
+    {"id": "ACTIONS_DEFAULT_BRANCH_REGISTRATION", "owner": "WS50", "required_action": "Register the narrow domain-live dispatch entry points on default branch through a reviewed bootstrap PR; current main exposes only legacy workflows."},
+    {"id": "PERSISTENT_HOST_TARGET_MISSING", "owner": "WS09", "required_action": "Provide an authorized persistent production host target and stable endpoint."},
+    {"id": "DNS_NOT_APPLIED", "owner": "WS09", "required_action": "Apply DNS only after the persistent target is verified, preserving unrelated DNS/mail/ownership records."},
+    {"id": "TLS_NOT_ISSUED", "owner": "WS09", "required_action": "Issue production TLS for oldkoweb.com, play.oldkoweb.com and admin.oldkoweb.com after DNS/host readiness."}
+  ]
+}
