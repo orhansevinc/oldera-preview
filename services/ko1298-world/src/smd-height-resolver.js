@@ -25,6 +25,7 @@ const MORADON_HEIGHT_AUTHORITY = Object.freeze({
   gitBlobSha1: 'cf47772b8e42a8bad71032419f47978c8bbd6142',
   byteLength: 786000,
   zoneCatalogSource: 'WS31 zone 21 / ZONE_INFO -> moradon_0826.smd',
+  xzOnlyPolicy: 'max(terrain, highest-shape)',
 });
 
 class BinaryReader {
@@ -224,33 +225,20 @@ class SmdHeightMap {
       return authoritative(useShape ? shapeHeight : terrainHeight, useShape ? 'shape' : 'terrain', {
         terrainHeight,
         shapeHeight: Number.isFinite(shapeHeight) ? shapeHeight : null,
+        policy: 'server-nearest-shape-with-y-hint',
         yHint,
       });
     }
 
-    // C3DMap::GetHeight(x,y,z) selects the shape nearest to y before comparing
-    // it to terrain. With no source Y, only return a height when every possible
-    // nearest-shape choice produces the same final surface. Otherwise fail closed.
-    if (shapeHeights.length === 0 || shapeHeights.every((height) => height <= terrainHeight)) {
-      return authoritative(terrainHeight, 'terrain', { terrainHeight, shapeHeight: null });
-    }
-
-    const above = shapeHeights.filter((height) => height > terrainHeight);
-    const atOrBelow = shapeHeights.length - above.length;
-    const uniqueAbove = [...new Set(above)];
-    if (atOrBelow === 0 && uniqueAbove.length === 1) {
-      return authoritative(uniqueAbove[0], 'shape', {
-        terrainHeight,
-        shapeHeight: uniqueAbove[0],
-      });
-    }
-
-    return Object.freeze({
-      status: HEIGHT_STATUS.UNRESOLVED,
-      reason: 'shape-y-hint-required',
+    // Exact X/Z-only 1.298 policy: the client WIZ_WARP path compares terrain
+    // with GetHeightWithShape(x,z), whose shape manager returns the highest
+    // intersected collision surface. No synthetic Y seed is required.
+    const shapeHeight = highestHeight(shapeHeights);
+    const useShape = Number.isFinite(shapeHeight) && shapeHeight > terrainHeight;
+    return authoritative(useShape ? shapeHeight : terrainHeight, useShape ? 'shape' : 'terrain', {
       terrainHeight,
-      shapeIntersectionCount: shapeHeights.length,
-      distinctAboveTerrainCount: uniqueAbove.length,
+      shapeHeight: Number.isFinite(shapeHeight) ? shapeHeight : null,
+      policy: 'xz-max-terrain-highest-shape',
     });
   }
 
@@ -260,8 +248,8 @@ class SmdHeightMap {
     if (mainX < 0 || mainZ < 0 || mainX >= this.mainCellCountX || mainZ >= this.mainCellCountZ) return null;
     const main = this.mainCells[mainZ * this.mainCellCountX + mainX];
     if (!main) return null;
-    const subX = Math.trunc(x) % CELL_MAIN_SIZE >> 2;
-    const subZ = Math.trunc(z) % CELL_MAIN_SIZE >> 2;
+    const subX = (Math.trunc(x) % CELL_MAIN_SIZE) >> 2;
+    const subZ = (Math.trunc(z) % CELL_MAIN_SIZE) >> 2;
     return main[subZ * CELL_MAIN_DIVIDE + subX] || null;
   }
 }
@@ -358,6 +346,14 @@ function nearestHeight(heights, yHint) {
   return nearest;
 }
 
+function highestHeight(heights) {
+  let highest = null;
+  for (const height of heights) {
+    if (highest === null || height > highest) highest = height;
+  }
+  return highest;
+}
+
 function readMainCell(reader, vertexCount, mainX, mainZ) {
   const shapeCount = reader.i32(`shape count ${mainX},${mainZ}`);
   if (shapeCount < 0) throw new Error(`negative shape count at ${mainX},${mainZ}`);
@@ -398,15 +394,13 @@ function intersectDownwardTriangle(x, z, vertices, index0, index1, index2) {
   if (det < TRIANGLE_EPSILON) return null;
 
   const tVec = { x: x - v0.x, y: SHAPE_RAY_ORIGIN_Y - v0.y, z: z - v0.z };
-  let u = dot(tVec, p);
+  const u = dot(tVec, p);
   if (u < 0 || u > det) return null;
   const q = cross(tVec, edge1);
-  let v = dot({ x: 0, y: -1, z: 0 }, q);
+  const v = dot({ x: 0, y: -1, z: 0 }, q);
   if (v < 0 || u + v > det) return null;
 
   const t = dot(edge2, q) / det;
-  u /= det;
-  v /= det;
   if (t < 0) return null;
   return SHAPE_RAY_ORIGIN_Y - t;
 }
