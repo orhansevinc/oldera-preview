@@ -15,13 +15,67 @@ on:
       - 'tests/ko1298-npc/**'
       - 'world-data/npc/**'
       - 'workstreams/ws16/**'
+      - '.github/workflows/ws16-npc.yml'
+
+permissions:
+  contents: read
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
+
+      - name: Checkout pinned WS14 height authority
+        uses: actions/checkout@v4
+        with:
+          repository: orhansevinc/oldera-preview
+          ref: 9b82adefb05a3cca32f430e25f8a1d9109db93b2
+          path: .authority/ws14
+          sparse-checkout: services/ko1298-world
+          fetch-depth: 1
+
+      - name: Checkout pinned 1298 Moradon server map
+        uses: actions/checkout@v4
+        with:
+          repository: Open-KO/KnightOnline
+          ref: 7d6cf81093e142c928c2ac9510512b2b182178b5
+          path: .authority/openko
+          sparse-checkout: |
+            assets/Server/MAP/moradon_0826.smd
+          sparse-checkout-cone-mode: false
+          fetch-depth: 1
+
+      - name: Checkout pinned WS31 NPC catalog
+        uses: actions/checkout@v4
+        with:
+          repository: orhansevinc/oldera-preview
+          ref: 546d2ab62cd46a97f3385ebcddbe0c775a02c2eb
+          path: .authority/ws31
+          sparse-checkout: |
+            data-catalog/npcs.json
+          sparse-checkout-cone-mode: false
+          fetch-depth: 1
+
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-      - run: node --test tests/ko1298-npc/*.test.js
+          node-version: '22'
+
+      - name: Run WS16 unit and real WS14 height integration tests
+        env:
+          WS16_WS14_MODULE: ${{ github.workspace }}/.authority/ws14/services/ko1298-world
+          WS16_MORADON_SMD: ${{ github.workspace }}/.authority/openko/assets/Server/MAP/moradon_0826.smd
+          WS16_WS31_NPC_CATALOG: ${{ github.workspace }}/.authority/ws31/data-catalog/npcs.json
+        run: |
+          set -o pipefail
+          node --test tests/ko1298-npc/*.test.js 2>&1 | tee ws16-test.log
+
+      - name: Upload WS16 diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ws16-npc-height-authority-diagnostics
+          path: ws16-test.log
+          if-no-files-found: error
+          retention-days: 7

@@ -1,13 +1,73 @@
 'use strict';
 
 const { NPC_BAND, INVALID_BAND, VIEW_DISTANCE, validateNpcRecord } = require('./protocol');
+const { assertAuthoritativeNpcPosition } = require('./data');
 
 function normalizedNpc(npc) {
-  return { ...npc, direction: npc.direction ?? 0 };
+  const runtimeId = npc.runtimeId ?? npc.instanceId;
+  const sourceInstanceKey = npc.sourceInstanceKey ?? npc.spawnKey ?? null;
+  const identity = Object.freeze({
+    templateSid: npc.templateSid,
+    instanceKey: sourceInstanceKey,
+    runtimeId,
+  });
+  const position = Object.freeze({
+    zoneId: npc.zoneId,
+    x: npc.x,
+    y: npc.y,
+    z: npc.z,
+  });
+  const positionAuthority = Object.freeze({ ...npc.positionAuthority });
+  return {
+    ...npc,
+    instanceId: runtimeId,
+    runtimeId,
+    sourceInstanceKey,
+    identity,
+    position,
+    positionAuthority,
+    direction: npc.direction ?? 0,
+  };
 }
 
 function sameNpc(a, b) {
   return JSON.stringify(a) === JSON.stringify(normalizedNpc(b));
+}
+
+function semanticSnapshot(npc) {
+  if (!npc) return null;
+  return Object.freeze({
+    instanceId: npc.instanceId,
+    runtimeId: npc.runtimeId,
+    templateSid: npc.templateSid,
+    sourceInstanceKey: npc.sourceInstanceKey,
+    identity: npc.identity,
+    zoneId: npc.zoneId,
+    position: npc.position,
+    positionAuthority: npc.positionAuthority,
+    resourceId: npc.resourceId,
+    npcType: npc.npcType,
+    sellingGroup: npc.sellingGroup,
+    size: npc.size,
+    weapon1: npc.weapon1,
+    weapon2: npc.weapon2,
+    name: npc.name,
+    group: npc.group,
+    level: npc.level,
+    maxHp: npc.maxHp,
+    hp: npc.hp,
+    direction: npc.direction,
+    gateOpen: npc.gateOpen,
+    objectType: npc.objectType,
+    enabled: npc.enabled,
+    dead: npc.dead,
+    role: npc.role,
+    interactionRoute: npc.interactionRoute,
+    interactionVerified: npc.interactionVerified,
+    sourcePopulation: npc.sourcePopulation,
+    populationCoverage: npc.populationCoverage,
+    spawnSource: npc.spawnSource,
+  });
 }
 
 class NpcWorld {
@@ -32,6 +92,7 @@ class NpcWorld {
   }
 
   _insert(npc) {
+    assertAuthoritativeNpcPosition(npc);
     validateNpcRecord(npc);
     if (this.byId.has(npc.instanceId)) throw new Error(`duplicate NPC instanceId ${npc.instanceId}`);
     const frozen = Object.freeze(normalizedNpc(npc));
@@ -71,6 +132,8 @@ class NpcWorld {
 
   get(instanceId) { return this.byId.get(instanceId) || null; }
 
+  detailSnapshot(instanceId) { return semanticSnapshot(this.get(instanceId)); }
+
   regionFor(x, z) {
     return { x: Math.trunc(x / this.viewDistance), z: Math.trunc(z / this.viewDistance) };
   }
@@ -88,6 +151,10 @@ class NpcWorld {
     return out.sort((a, b) => a.instanceId - b.instanceId);
   }
 
+  nearbySnapshot(zoneId, x, z) {
+    return this.nearby(zoneId, x, z).map(semanticSnapshot);
+  }
+
   regionDelta(zoneId, x, z, previousIds = []) {
     const current = this.nearby(zoneId, x, z);
     const currentIds = new Set(current.map(n => n.instanceId));
@@ -100,10 +167,21 @@ class NpcWorld {
     };
   }
 
+  regionDeltaSnapshot(zoneId, x, z, previousIds = []) {
+    const delta = this.regionDelta(zoneId, x, z, previousIds);
+    return Object.freeze({
+      enter: Object.freeze(delta.enter.map(semanticSnapshot)),
+      stay: Object.freeze(delta.stay.map(semanticSnapshot)),
+      leave: Object.freeze([...delta.leave]),
+      ids: Object.freeze([...delta.ids]),
+    });
+  }
+
   reloadZone(zoneId, npcs) {
     if (!Array.isArray(npcs)) throw new TypeError('npcs must be an array');
     const incoming = new Map();
     for (const npc of npcs) {
+      assertAuthoritativeNpcPosition(npc);
       validateNpcRecord(npc);
       if (npc.zoneId !== zoneId) throw new Error(`reload NPC ${npc.instanceId} belongs to zone ${npc.zoneId}, expected ${zoneId}`);
       if (incoming.has(npc.instanceId)) throw new Error(`duplicate NPC instanceId ${npc.instanceId} in reload`);
@@ -140,7 +218,22 @@ class NpcWorld {
   setState(instanceId, patch) {
     const old = this.get(instanceId);
     if (!old) return null;
-    const updated = { ...old, ...patch, instanceId: old.instanceId, zoneId: old.zoneId };
+    const updated = {
+      ...old,
+      ...patch,
+      instanceId: old.instanceId,
+      runtimeId: old.runtimeId,
+      templateSid: old.templateSid,
+      sourceInstanceKey: old.sourceInstanceKey,
+      identity: old.identity,
+      zoneId: old.zoneId,
+      x: old.x,
+      y: old.y,
+      z: old.z,
+      position: old.position,
+      positionAuthority: old.positionAuthority,
+    };
+    assertAuthoritativeNpcPosition(updated);
     validateNpcRecord(updated);
     this._delete(instanceId);
     const frozen = this._insert(updated);
@@ -154,4 +247,4 @@ class NpcWorld {
   }
 }
 
-module.exports = { NpcWorld };
+module.exports = { NpcWorld, semanticSnapshot };

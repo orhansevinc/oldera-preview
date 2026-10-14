@@ -5,28 +5,51 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const {
-  NpcWorld, NpcInteractionRouter, resolveNpcData, validateNpcCatalog, catalogStats,
-  createTerrainHeightResolver, encodeNpcIn, NPC_BAND,
+  NpcWorld, NpcInteractionRouter, resolveNpcData, materializeNpcPopulation,
+  validateNpcCatalog, catalogStats, createHeightAuthorityPort, encodeNpcIn,
+  NPC_BAND, HEIGHT_AUTHORITY_DEPENDENCY,
 } = require('../../services/ko1298-npc');
 
 const seedPath = path.join(__dirname, '../../world-data/npc/moradon.json');
 function loadDoc() { return JSON.parse(fs.readFileSync(seedPath, 'utf8')); }
-function loadMoradon(y = 12) { return resolveNpcData(loadDoc(), { terrainY: () => y }); }
+
+const testHeightAuthority = Object.freeze({
+  resolveHeight(zoneId, x, z) {
+    return {
+      status: 'authoritative',
+      height: Number((zoneId * 0.01 + x * 0.03125 + z * 0.015625).toFixed(5)),
+      surface: 'test-contract-only',
+    };
+  },
+});
+
+function loadMoradon() { return resolveNpcData(loadDoc(), { heightAuthority: testHeightAuthority }); }
 function loadCaspy() { return loadMoradon().find(n => n.templateSid === 13001); }
 function packetEvent(id) { const b = Buffer.alloc(3); b[0] = 0x20; b.writeUInt16LE(id, 1); return b; }
 function packetTarget(id) { const b = Buffer.alloc(4); b[0] = 0x22; b.writeUInt16LE(id, 1); b[3] = 1; return b; }
 
 function sample(overrides = {}) {
+  const base = { ...loadCaspy(), ...overrides };
+  const height = testHeightAuthority.resolveHeight(base.zoneId, base.x, base.z);
+  const runtimeId = base.instanceId;
+  const sourceInstanceKey = base.sourceInstanceKey || `test:${runtimeId}`;
   return {
-    instanceId: 10000, templateSid: 13001, resourceId: 22000, npcType: 21, sellingGroup: 203002,
-    size: 100, weapon1: 0, weapon2: 0, name: 'Caspy[Accessory]', group: 2,
-    level: 50, maxHp: 30000, hp: 30000, x: 307, y: 12, z: 398, gateOpen: 1, objectType: 0, zoneId: 21,
-    role: 'merchant', interactionRoute: 'merchant', interactionVerified: true,
-    enabled: true, dead: false, ...overrides,
+    ...base,
+    y: height.height,
+    runtimeId,
+    sourceInstanceKey,
+    identity: Object.freeze({ templateSid: base.templateSid, instanceKey: sourceInstanceKey, runtimeId }),
+    position: Object.freeze({ zoneId: base.zoneId, x: base.x, y: height.height, z: base.z }),
+    positionAuthority: Object.freeze({
+      dependency: HEIGHT_AUTHORITY_DEPENDENCY,
+      status: 'authoritative',
+      surface: height.surface,
+      source: null,
+    }),
   };
 }
 
-test('Moradon catalog is source-backed, duplicate-free and materially broader than Caspy', () => {
+test('Moradon catalog is source-backed, duplicate-free and preserves 31/39/43 regression', () => {
   const doc = loadDoc();
   assert.equal(validateNpcCatalog(doc), true);
   const stats = catalogStats(doc);
@@ -45,7 +68,7 @@ test('Moradon catalog is source-backed, duplicate-free and materially broader th
   assert.ok(doc.spawns.every(s => typeof s.sourceRow === 'string' && s.sourceRow.startsWith('ZoneID=21;')));
 });
 
-test('catalog refuses duplicate template and spawn records', () => {
+test('catalog refuses duplicate template/spawn records and any source-declared Y', () => {
   const doc = loadDoc();
   const dupTemplate = structuredClone(doc);
   dupTemplate.templates.push(structuredClone(doc.templates[0]));
@@ -53,33 +76,79 @@ test('catalog refuses duplicate template and spawn records', () => {
   const dupSpawn = structuredClone(doc);
   dupSpawn.spawns.push(structuredClone(doc.spawns[0]));
   assert.throws(() => validateNpcCatalog(dupSpawn), /duplicate NPC spawn/);
+  const withY = structuredClone(doc);
+  withY.spawns[0].anchor.y = 0;
+  assert.throws(() => validateNpcCatalog(withY), /must not declare Y/);
 });
 
-test('Moradon materialization refuses invented terrain height and skips non-anchored rows', () => {
+test('Moradon materialization consumes resolveHeight and fails closed unless status is authoritative', () => {
   const doc = loadDoc();
-  assert.throws(() => resolveNpcData(doc, { terrainY: () => null }), /unresolved terrain Y/);
-  const npcs = resolveNpcData(doc, { terrainY: () => 12 });
-  assert.equal(npcs.length, 37);
-  assert.equal(npcs[0].instanceId, NPC_BAND);
-  assert.equal(npcs.every(n => n.y === 12), true);
-  assert.equal(npcs.some(n => n.templateSid === 16082), false);
-  assert.equal(npcs.some(n => n.templateSid === 16083), false);
+  assert.throws(() => resolveNpcData(doc), /heightAuthority\.resolveHeight/);
+  assert.throws(
+    () => resolveNpcData(doc, { heightAuthority: { resolveHeight: () => ({ status: 'unresolved', reason: 'no-map' }) } }),
+    error => error?.code === 'NPC_HEIGHT_NOT_AUTHORITATIVE',
+  );
+  assert.throws(
+    () => resolveNpcData(doc, { heightAuthority: { resolveHeight: () => ({ status: 'authoritative', height: Number.NaN }) } }),
+    error => error?.code === 'NPC_HEIGHT_NOT_AUTHORITATIVE',
+  );
+  const report = materializeNpcPopulation(doc, { heightAuthority: testHeightAuthority });
+  assert.equal(report.records.length, 37);
+  assert.equal(report.authoritativeNpcCount, 37);
+  assert.equal(report.sourceDeclaredPopulation, 43);
+  assert.equal(report.unresolved.length, 2);
+  assert.deepEqual(report.unresolved.map(row => row.templateSid).sort((a, b) => a - b), [16082, 16083]);
+  assert.equal(report.records[0].instanceId, NPC_BAND);
+  assert.equal(report.records.every(n => n.positionAuthority.status === 'authoritative'), true);
+  assert.equal(report.records.some(n => n.templateSid === 16082), false);
+  assert.equal(report.records.some(n => n.templateSid === 16083), false);
 });
 
-test('terrain resolver mirrors client policy by preferring the higher terrain/shape height', () => {
-  const resolver = createTerrainHeightResolver({ terrainHeight: () => 8.5, shapeHeight: () => 11.25 });
-  assert.equal(resolver({ zoneId: 21, x: 307, z: 398 }), 11.25);
-  const terrainOnly = createTerrainHeightResolver({ terrainHeight: () => 7, shapeHeight: () => null });
-  assert.equal(terrainOnly({ zoneId: 21, x: 1, z: 1 }), 7);
+test('height authority port delegates to the public resolveHeight(zoneId,x,z) dependency without owning terrain logic', () => {
+  const calls = [];
+  const provider = {
+    resolveHeight(zoneId, x, z) {
+      calls.push([zoneId, x, z]);
+      return { status: 'authoritative', height: x - z, surface: 'provider' };
+    },
+  };
+  const port = createHeightAuthorityPort(provider);
+  assert.deepEqual(port.resolveHeight(21, 307, 398), { status: 'authoritative', height: -91, surface: 'provider' });
+  assert.deepEqual(calls, [[21, 307, 398]]);
+  assert.equal(port.dependency, 'terrain.height-authority');
+});
+
+test('NpcWorld rejects finite but unauthoritative Y before any visibility is produced', () => {
+  const world = new NpcWorld();
+  const unsafe = { ...sample(), positionAuthority: { dependency: HEIGHT_AUTHORITY_DEPENDENCY, status: 'unresolved' } };
+  assert.throws(() => world.add(unsafe), error => error?.code === 'NPC_POSITION_NOT_AUTHORITATIVE');
+  assert.equal(world.nearby(21, unsafe.x, unsafe.z).length, 0);
+  assert.equal(world.byId.size, 0);
 });
 
 test('nearby uses verified 48-unit, 3x3 region neighborhood', () => {
   const world = new NpcWorld();
   const caspy = loadCaspy();
   world.add(caspy);
-  world.add({ ...caspy, instanceId: 10100, name: 'Near', x: 370, z: 398 });
-  world.add({ ...caspy, instanceId: 10101, name: 'Far', x: 450, z: 398 });
+  world.add(sample({ instanceId: 10100, name: 'Near', x: 370, z: 398 }));
+  world.add(sample({ instanceId: 10101, name: 'Far', x: 450, z: 398 }));
   assert.deepEqual(world.nearby(21, 307, 398).map(n => n.instanceId), [caspy.instanceId, 10100].sort((a, b) => a - b));
+});
+
+test('detail/nearby semantic snapshots carry authoritative XYZ and separated identities', () => {
+  const world = new NpcWorld();
+  const npc = world.add(loadCaspy());
+  const detail = world.detailSnapshot(npc.instanceId);
+  assert.deepEqual(detail.position, { zoneId: 21, x: npc.x, y: npc.y, z: npc.z });
+  assert.equal(detail.positionAuthority.status, 'authoritative');
+  assert.deepEqual(detail.identity, {
+    templateSid: npc.templateSid,
+    instanceKey: npc.spawnKey,
+    runtimeId: npc.instanceId,
+  });
+  assert.equal(detail.templateSid, 13001);
+  assert.equal(detail.runtimeId, detail.instanceId);
+  assert.equal(world.nearbySnapshot(21, npc.x, npc.z)[0].position.y, npc.y);
 });
 
 test('spawn/despawn lifecycle publishes deterministic events', () => {
@@ -92,12 +161,14 @@ test('spawn/despawn lifecycle publishes deterministic events', () => {
   assert.equal(world.get(10000), null);
 });
 
-test('region enter/leave delta is deterministic', () => {
+test('region enter/leave delta is deterministic and semantic region snapshots retain authority', () => {
   const world = new NpcWorld();
   world.add(sample());
   world.add(sample({ instanceId: 10001, x: 370 }));
   const first = world.regionDelta(21, 307, 398, []);
   assert.deepEqual(first.ids, [10000, 10001]);
+  const semantic = world.regionDeltaSnapshot(21, 307, 398, []);
+  assert.equal(semantic.enter.every(n => n.positionAuthority.status === 'authoritative'), true);
   const second = world.regionDelta(21, 500, 500, first.ids);
   assert.deepEqual(second.ids, []);
   assert.deepEqual(second.leave, [10000, 10001]);
@@ -123,6 +194,26 @@ test('spawn reload is idempotent and reports updates/removals without duplicatio
   assert.equal(third.updated.length, 1);
   assert.equal(third.despawned.length, 1);
   assert.equal(world.byId.size, 1);
+});
+
+test('state mutation cannot replace authoritative identity or position', () => {
+  const world = new NpcWorld();
+  const before = world.add(sample());
+  const after = world.setState(before.instanceId, {
+    hp: before.hp - 1,
+    x: 1,
+    y: 2,
+    z: 3,
+    runtimeId: 19999,
+    templateSid: 99999,
+    sourceInstanceKey: 'forged',
+    positionAuthority: { dependency: HEIGHT_AUTHORITY_DEPENDENCY, status: 'unresolved' },
+  });
+  assert.equal(after.hp, before.hp - 1);
+  assert.deepEqual(after.position, before.position);
+  assert.deepEqual(after.identity, before.identity);
+  assert.equal(after.runtimeId, before.runtimeId);
+  assert.equal(after.templateSid, before.templateSid);
 });
 
 test('merchant interaction validates range/zone and returns standardized WS22 handoff result', () => {
@@ -241,7 +332,7 @@ test('despawn followed by region resync removes the NPC', () => {
   assert.deepEqual([...after.leavePackets[0]], [0x0a, 0x02, 0x10, 0x27]);
 });
 
-test('spawn packet encodes a catalog-backed Moradon NPC', () => {
+test('spawn packet encodes an already-authoritative catalog-backed Moradon NPC', () => {
   const p = encodeNpcIn(loadCaspy());
   assert.equal(p[0], 0x0a);
   assert.equal(p.readUInt16LE(4), 22000);

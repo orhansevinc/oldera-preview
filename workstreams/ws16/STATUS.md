@@ -2,72 +2,77 @@ WS16
 
 # STATUS
 
-DURUM: READY_FOR_INTEGRATION — verified Moradon population/lifecycle layer implemented; exact terrain source and exact interaction-distance constant remain external integration inputs.
+DURUM: MORADON_NPC_HEIGHT_AUTHORITY_READY — WS16 consumes WS14's public `resolveHeight(zoneId, x, z)` authority and fails closed before NPC visibility if the result is not authoritative.
 
-## Verified population
+## Dependency snapshot
+
+- `terrain.height-authority`: WS14 `ws14-world-session@9b82adefb05a3cca32f430e25f8a1d9109db93b2`.
+- `protocol NPC visibility profile`: WS11 `ws11-protocol-lab@944b6ff9b6329af29f1048a74aa6e14fca141639` (`WIZ_NPC_REGION` region-ID list verified; `WIZ_REQ_NPCIN` detail recovery collision resolved; `WIZ_NPC_INOUT` visibility verified).
+- `data WS31 NPC catalog`: WS31 `ws31-data-catalog@546d2ab62cd46a97f3385ebcddbe0c775a02c2eb`.
+- WS50-C3 remains immutable historical evidence. Its terrain/protocol blocker fields were produced against older provider SHAs; WS16 does not edit C3. A successor provider-set must pin this WS16 commit plus the resolved WS14/WS11 authorities.
+
+## Verified Moradon population
 
 - Patch/data target: KO 1298 / Moradon zone 21.
 - Source pin: `Open-KO/OpenKO-db@bec619466938d278339c30e5b1a4bff3c9413bab`.
 - `K_NPC` verified templates: **31 unique SIDs**.
-- `K_NPCPOS` verified static spawn groups in zone 21: **39**.
-- Source-declared `NumNPC` population across those groups: **43**.
-- Deterministic path anchors safe to materialize without inventing X/Z: **37**.
-- Two groups (`16082`, `16083`) have source rows with rectangles but no path point and remain catalog-only until a real placement resolver is available.
-- ActType=1 monster rows are intentionally excluded from WS16 NPC population.
+- `K_NPCPOS` verified static spawn groups: **39**.
+- Source-declared `NumNPC` population: **43**.
+- Source-verifiable X/Z path anchors: **37**.
+- `16082` and `16083` remain catalog-only because their source rows have rectangles but no source path point; WS16 does not invent placement.
+- `NumNPC > 1` groups retain source population metadata; WS16 does not clone guessed individual positions.
 
-Machine-readable source: `world-data/npc/moradon.json`. Every template/spawn record carries its exact source-row key; the catalog pins the corresponding `K_NPC` / `K_NPCPOS` source refs once at top level.
+## Authoritative height contract
 
-## Runtime / interaction
+`K_NPCPOS` has no Y. WS16 no longer implements terrain/shape selection logic and no longer accepts `terrainY`, constant Y, manual fixture Y or guessed Y as a production materialization input.
 
-Implemented:
+`materializeNpcPopulation(document, { heightAuthority })` requires a dependency with:
 
-- template/instance separation;
-- static/merchant/quest/gate/inn/other classification;
-- terrain+shape Y resolver port with fail-closed unresolved height;
-- spawn/despawn lifecycle events;
-- 48-unit 3x3 nearby region query;
-- region enter/stay/leave diff + packet resync;
-- target/select and authoritative HP response;
-- wrong-zone validation;
-- configurable/fail-closed interaction distance validation;
-- explicit disabled/dead interaction rejection;
-- standardized interaction result envelope;
-- verified merchant handoff port -> WS22 boundary;
-- verified Inn Hostess handoff port -> WS33 boundary;
-- quest handoff port -> WS23 boundary (seed candidates remain disabled until EVT semantics are verified);
-- gate/world-transition port -> WS14 boundary (Aban identity verified; destination/action unresolved);
-- concurrent multi-player interaction with no shared per-interaction mutable state;
-- runtime ID collision rejection;
-- idempotent zone reload;
-- data duplication/provenance validation;
-- malformed packet fail-closed handling.
+```text
+resolveHeight(zoneId, x, z) -> { status, height, ... }
+```
 
-## Terrain Y evidence
+Only `status === "authoritative"` plus a finite `height` is accepted. Missing, invalid, unresolved or thrown authority results raise `NpcHeightAuthorityError` before runtime IDs are allocated or NPCs are inserted into `NpcWorld`.
 
-`K_NPCPOS` stores X/Z/path/bounds but no Y. Open-KO/KnightOnline 1.298 client source resolves terrain height and shape height at runtime and uses the higher result. WS16 mirrors that policy through `createTerrainHeightResolver()` but does not own terrain assets/parsing.
+Every runtime record carries:
 
-## Tests
+- `templateSid`: source template identity;
+- `sourceInstanceKey` / `identity.instanceKey`: source spawn-group identity;
+- `instanceId` / `runtimeId`: allocated runtime/network identity;
+- authoritative top-level `x/y/z`;
+- immutable `position { zoneId, x, y, z }`;
+- `positionAuthority { dependency: terrain.height-authority, status: authoritative, ... }`.
 
-Local Node 20-compatible suite: **29/29 PASS**.
+`NpcWorld` independently rejects records without authoritative position metadata, so a finite but untrusted Y cannot enter nearby/region/detail visibility. Runtime `setState()` cannot replace identity or X/Y/Z.
 
-Coverage includes packet layout/parsers, verified catalog stats, duplication rejection, terrain resolution, spawn/despawn, region delta, nearby IDs, reload idempotency, merchant/quest/inn/world ports, range/zone/dead/disabled rejection, target HP, detail zone filtering, two players on one NPC, runtime-ID uniqueness, 180-NPC region simulation, malformed packet fuzz and despawn/resync.
+## Region / detail semantic surface
 
-CI: `.github/workflows/ws16-npc.yml` runs `node --test tests/ko1298-npc/*.test.js` on branch push/PR.
+- Existing packet encoders were not expanded or rewritten in this change.
+- `detailSnapshot(instanceId)`, `nearbySnapshot(zoneId,x,z)` and `regionDeltaSnapshot(...)` expose packet-ready semantic NPC records with authoritative X/Y/Z and separated identities.
+- Existing `nearby()` / `regionDelta()` records are also authority-gated because only authoritative records can enter `NpcWorld`.
 
-## UNKNOWN / blockers
+## Real integration acceptance
 
-1. Exact Moradon terrain/shape-height provider is not owned by WS16; real Y values must come from the verified zone runtime/assets.
-2. Exact KO 1298 **server** interaction-distance threshold is not source-verified; production must inject a verified range/policy. Default is fail-closed.
-3. Individual coordinates for extra members of `NumNPC > 1` groups are not explicitly present in `K_NPCPOS`; WS16 materializes one verified path anchor rather than cloning guessed positions.
-4. `16082`/`16083` lack path points; their source-row provenance is retained but deterministic placement is unresolved.
-5. Exact EVT semantics for quest-like byTypes and Aban's gate destination are not verified, so those interaction routes remain fail-closed even though NPC identity/spawn data is verified.
-6. `Miraselth[Warehouse Keeper]` byType 29 and `Selith[Special Store]` byType 23 need owning-domain semantics before interaction routing is enabled.
+`.github/workflows/ws16-npc.yml` pins and checks out:
+
+- WS14 `9b82adefb05a3cca32f430e25f8a1d9109db93b2` public world module;
+- Open-KO/KnightOnline `7d6cf81093e142c928c2ac9510512b2b182178b5` `moradon_0826.smd`;
+- WS31 `546d2ab62cd46a97f3385ebcddbe0c775a02c2eb` NPC catalog.
+
+The integration test calls the real WS14 `createMoradonHeightResolver()` and then WS16 materialization across every source-backed Moradon X/Z anchor. It verifies authoritative finite Y, WS31 Caspy identity/provenance cross-check, and authoritative detail/nearby snapshots.
+
+## Remaining non-height unknowns
+
+1. Two catalogued spawn groups (`16082`, `16083`) have no source path anchor; their X/Z placement remains unresolved and they produce no visibility.
+2. Exact KO 1298 server interaction-distance threshold remains outside this task; production interaction still requires injected verified range/policy.
+3. Quest/gate/special-store business semantics remain owned by their respective domains and stay fail-closed where unverified.
+4. `WIZ_TARGET_HP` broad S2C authority remains partial in WS11 but is non-blocking for NPC entity visibility.
 
 ## Handoff
 
-- WS14: use `NpcWorld.nearby()` for world snapshots; consume `worldTransition` only after gate event/destination is verified.
-- WS15: call `regionSync()`/`regionDelta()` after authoritative region crossing; WS16 does not own movement.
-- WS22: merchant route is source-verified for `sellingGroup > 0`; keep prices/items authoritative in WS22/WS17.
-- WS23: consume authoritative template identity only after EVT/action mapping is verified.
-- WS33: SID 12000 Inn Hostess is verified and may route to `createInnHostessHandler()`.
-- Integration/terrain owner: provide terrain+shape height resolver and verified interaction-range policy.
+requires:
+- `terrain.height-authority` — WS14 public resolver, exact provider pin required.
+- `protocol NPC visibility profile` — WS11 authority for region IDs, detail recovery and NPC IN/OUT; WS16 does not invent packet layouts.
+- `data WS31 NPC catalog` — verified 1298 NPC identity/data provenance.
+
+WS14/WS50 composition should load the WS16 catalog through `materializeNpcPopulation()` before `NpcWorld.reloadZone()`. Any non-authoritative height result aborts materialization; no partial visibility set is published.

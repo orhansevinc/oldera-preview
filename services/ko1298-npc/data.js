@@ -11,6 +11,18 @@ const NPC_ROLES = Object.freeze({
   OTHER: 'other',
 });
 
+const HEIGHT_AUTHORITY_DEPENDENCY = 'terrain.height-authority';
+const AUTHORITATIVE_HEIGHT_STATUS = 'authoritative';
+
+class NpcHeightAuthorityError extends Error {
+  constructor(code, message, details = {}) {
+    super(message || code);
+    this.name = 'NpcHeightAuthorityError';
+    this.code = code;
+    this.details = details;
+  }
+}
+
 function assertSource(record, fallbackSource, label) {
   const direct = record?.source;
   if (direct && typeof direct === 'object' && typeof direct.ref === 'string' && direct.ref.length > 0) return;
@@ -47,21 +59,23 @@ function validateNpcCatalog(document) {
       if (!Number.isFinite(spawn.anchor.x) || !Number.isFinite(spawn.anchor.z)) {
         throw new Error(`spawn ${key} has invalid anchor`);
       }
+      if (spawn.anchor.y != null) throw new Error(`spawn ${key} must not declare Y; terrain.height-authority owns Y`);
     }
+    if (spawn.y != null) throw new Error(`spawn ${key} must not declare Y; terrain.height-authority owns Y`);
   }
   return true;
 }
 
-function createTerrainHeightResolver({ terrainHeight, shapeHeight } = {}) {
-  if (typeof terrainHeight !== 'function' && typeof shapeHeight !== 'function') {
-    throw new TypeError('terrainHeight or shapeHeight resolver is required');
+function createHeightAuthorityPort(provider) {
+  if (!provider || typeof provider.resolveHeight !== 'function') {
+    throw new TypeError('heightAuthority.resolveHeight(zoneId, x, z) is required');
   }
-  return ({ zoneId, x, z, templateSid }) => {
-    const terrain = typeof terrainHeight === 'function' ? terrainHeight({ zoneId, x, z, templateSid }) : null;
-    const shape = typeof shapeHeight === 'function' ? shapeHeight({ zoneId, x, z, templateSid }) : null;
-    const candidates = [terrain, shape].filter(Number.isFinite);
-    return candidates.length ? Math.max(...candidates) : null;
-  };
+  return Object.freeze({
+    dependency: HEIGHT_AUTHORITY_DEPENDENCY,
+    resolveHeight(zoneId, x, z) {
+      return provider.resolveHeight(zoneId, x, z);
+    },
+  });
 }
 
 function defaultRuntimeAllocator(index) {
@@ -70,54 +84,169 @@ function defaultRuntimeAllocator(index) {
   return id;
 }
 
-function resolveNpcData(document, { terrainY, allocateInstanceId } = {}) {
-  validateNpcCatalog(document);
-  if (typeof terrainY !== 'function') throw new TypeError('terrainY resolver is required');
-  const templates = new Map(document.templates.map(t => [t.templateSid, t]));
-
-  if (Array.isArray(document.spawns)) {
-    const allocator = typeof allocateInstanceId === 'function' ? allocateInstanceId : ((spawn, index) => defaultRuntimeAllocator(index));
-    const out = [];
-    document.spawns.forEach((spawn, index) => {
-      if (!spawn.anchor) return;
-      const template = templates.get(spawn.templateSid);
-      const y = terrainY({ zoneId: spawn.zoneId, x: spawn.anchor.x, z: spawn.anchor.z, templateSid: spawn.templateSid });
-      if (!Number.isFinite(y)) throw new Error(`unresolved terrain Y for NPC template ${spawn.templateSid} spawn ${spawn.spawnKey}`);
-      const instanceId = allocator(spawn, index);
-      const row = {
-        ...template,
-        instanceId,
-        zoneId: spawn.zoneId,
-        x: spawn.anchor.x,
-        y,
-        z: spawn.anchor.z,
-        direction: spawn.direction ?? 0,
-        gateOpen: spawn.gateOpen ?? 1,
-        objectType: spawn.objectType ?? 0,
-        static: true,
-        enabled: true,
-        dead: false,
+function resolveSpawnPosition(heightAuthority, spawn) {
+  const { x, z } = spawn.anchor;
+  let result;
+  try {
+    result = heightAuthority.resolveHeight(spawn.zoneId, x, z);
+  } catch (error) {
+    throw new NpcHeightAuthorityError(
+      'NPC_HEIGHT_AUTHORITY_FAILED',
+      `height authority failed for NPC template ${spawn.templateSid} spawn ${spawn.spawnKey}`,
+      { spawnKey: spawn.spawnKey, templateSid: spawn.templateSid, zoneId: spawn.zoneId, x, z, cause: error.message },
+    );
+  }
+  if (!result || result.status !== AUTHORITATIVE_HEIGHT_STATUS || !Number.isFinite(result.height)) {
+    throw new NpcHeightAuthorityError(
+      'NPC_HEIGHT_NOT_AUTHORITATIVE',
+      `authoritative terrain height required for NPC template ${spawn.templateSid} spawn ${spawn.spawnKey}`,
+      {
         spawnKey: spawn.spawnKey,
-        sourcePopulation: spawn.spawnCount ?? 1,
-        populationCoverage: (spawn.spawnCount ?? 1) === 1 ? 'exact-anchor' : 'verified-anchor-only',
-        spawnSource: spawn.source || { ref: document.provenance?.positionSource?.ref, rowKey: spawn.sourceRow },
-      };
-      out.push(row);
-    });
-    return out;
+        templateSid: spawn.templateSid,
+        zoneId: spawn.zoneId,
+        x,
+        z,
+        status: result?.status ?? 'missing',
+        reason: result?.reason ?? null,
+      },
+    );
+  }
+  return {
+    x,
+    y: result.height,
+    z,
+    authority: Object.freeze({
+      dependency: HEIGHT_AUTHORITY_DEPENDENCY,
+      status: AUTHORITATIVE_HEIGHT_STATUS,
+      surface: result.surface ?? null,
+      source: result.source ?? null,
+    }),
+  };
+}
+
+function buildRuntimeRecord({ template, spawn, instanceId, resolvedPosition, fallbackPositionSource }) {
+  const identity = Object.freeze({
+    templateSid: spawn.templateSid,
+    instanceKey: spawn.spawnKey,
+    runtimeId: instanceId,
+  });
+  const position = Object.freeze({
+    zoneId: spawn.zoneId,
+    x: resolvedPosition.x,
+    y: resolvedPosition.y,
+    z: resolvedPosition.z,
+  });
+  return {
+    ...template,
+    instanceId,
+    runtimeId: instanceId,
+    sourceInstanceKey: spawn.spawnKey,
+    identity,
+    zoneId: spawn.zoneId,
+    x: position.x,
+    y: position.y,
+    z: position.z,
+    position,
+    positionAuthority: resolvedPosition.authority,
+    direction: spawn.direction ?? 0,
+    gateOpen: spawn.gateOpen ?? 1,
+    objectType: spawn.objectType ?? 0,
+    static: true,
+    enabled: true,
+    dead: false,
+    spawnKey: spawn.spawnKey,
+    sourcePopulation: spawn.spawnCount ?? 1,
+    populationCoverage: (spawn.spawnCount ?? 1) === 1 ? 'exact-anchor' : 'verified-anchor-only',
+    spawnSource: spawn.source || { ref: fallbackPositionSource?.ref, rowKey: spawn.sourceRow },
+  };
+}
+
+function materializeNpcPopulation(document, { heightAuthority, allocateInstanceId } = {}) {
+  validateNpcCatalog(document);
+  const authority = createHeightAuthorityPort(heightAuthority);
+  const templates = new Map(document.templates.map(t => [t.templateSid, t]));
+  const rawSpawns = Array.isArray(document.spawns)
+    ? document.spawns
+    : document.instances.map((instance, index) => ({
+      ...instance,
+      spawnKey: instance.spawnKey || `legacy:${instance.instanceId ?? index}`,
+      anchor: Number.isFinite(instance.x) && Number.isFinite(instance.z) ? { x: instance.x, z: instance.z } : null,
+      spawnCount: instance.spawnCount ?? 1,
+    }));
+
+  const unresolved = [];
+  const resolved = [];
+  for (const spawn of rawSpawns) {
+    if (!spawn.anchor) {
+      unresolved.push(Object.freeze({
+        spawnKey: spawn.spawnKey,
+        templateSid: spawn.templateSid,
+        zoneId: spawn.zoneId,
+        reason: 'source-anchor-unavailable',
+      }));
+      continue;
+    }
+    const template = templates.get(spawn.templateSid);
+    if (!template) throw new Error(`missing NPC template ${spawn.templateSid}`);
+    resolved.push({ spawn, template, position: resolveSpawnPosition(authority, spawn) });
   }
 
-  return document.instances.map(instance => {
-    const template = templates.get(instance.templateSid);
-    if (!template) throw new Error(`missing NPC template ${instance.templateSid}`);
-    const row = { ...template, ...instance };
-    if (row.y == null) {
-      const y = terrainY({ zoneId: row.zoneId, x: row.x, z: row.z, templateSid: row.templateSid });
-      if (!Number.isFinite(y)) throw new Error(`unresolved terrain Y for NPC template ${row.templateSid}`);
-      row.y = y;
+  const allocator = typeof allocateInstanceId === 'function'
+    ? allocateInstanceId
+    : ((spawn, index) => defaultRuntimeAllocator(index));
+  const records = resolved.map(({ spawn, template, position }, index) => {
+    const instanceId = allocator(spawn, index);
+    if (!Number.isInteger(instanceId) || instanceId < NPC_BAND || instanceId >= INVALID_BAND) {
+      throw new Error(`invalid runtime NPC instanceId ${instanceId} for spawn ${spawn.spawnKey}`);
     }
-    return row;
+    return buildRuntimeRecord({
+      template,
+      spawn,
+      instanceId,
+      resolvedPosition: position,
+      fallbackPositionSource: document.provenance?.positionSource,
+    });
   });
+
+  const stats = catalogStats(document);
+  return Object.freeze({
+    records: Object.freeze(records),
+    unresolved: Object.freeze(unresolved),
+    authoritativeNpcCount: records.length,
+    sourceDeclaredPopulation: stats.declaredPopulation,
+    stats: Object.freeze(stats),
+  });
+}
+
+function resolveNpcData(document, options = {}) {
+  return [...materializeNpcPopulation(document, options).records];
+}
+
+function isAuthoritativeNpcPosition(npc) {
+  return Boolean(
+    npc
+    && Number.isFinite(npc.x)
+    && Number.isFinite(npc.y)
+    && Number.isFinite(npc.z)
+    && npc.positionAuthority?.dependency === HEIGHT_AUTHORITY_DEPENDENCY
+    && npc.positionAuthority?.status === AUTHORITATIVE_HEIGHT_STATUS
+    && npc.position
+    && npc.position.zoneId === npc.zoneId
+    && npc.position.x === npc.x
+    && npc.position.y === npc.y
+    && npc.position.z === npc.z
+  );
+}
+
+function assertAuthoritativeNpcPosition(npc) {
+  if (!isAuthoritativeNpcPosition(npc)) {
+    throw new NpcHeightAuthorityError(
+      'NPC_POSITION_NOT_AUTHORITATIVE',
+      `NPC ${npc?.instanceId ?? 'unknown'} cannot enter visibility without authoritative X/Y/Z`,
+      { instanceId: npc?.instanceId ?? null, zoneId: npc?.zoneId ?? null },
+    );
+  }
+  return true;
 }
 
 function catalogStats(document) {
@@ -138,8 +267,14 @@ function catalogStats(document) {
 
 module.exports = {
   NPC_ROLES,
+  HEIGHT_AUTHORITY_DEPENDENCY,
+  AUTHORITATIVE_HEIGHT_STATUS,
+  NpcHeightAuthorityError,
   validateNpcCatalog,
-  createTerrainHeightResolver,
+  createHeightAuthorityPort,
+  materializeNpcPopulation,
   resolveNpcData,
+  isAuthoritativeNpcPosition,
+  assertAuthoritativeNpcPosition,
   catalogStats,
 };
