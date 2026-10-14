@@ -115,9 +115,30 @@ providerTest('current WS25 MobVisibilityService composes with real WS16 NPCs in 
     assert.equal(mob.heightAuthority.status, 'authoritative');
   }
 
+  const npcWorld = new ws16.NpcWorld();
+  for (const record of npcPopulation.records) npcWorld.add(record);
+
+  let probeMob = null;
+  let nearbyNpcs = [];
+  for (const mob of mobs) {
+    const candidates = npcWorld.nearby(21, mob.position.x, mob.position.z);
+    if (candidates.length === 0) continue;
+    probeMob = mob;
+    nearbyNpcs = candidates;
+    break;
+  }
+  assert.ok(probeMob, 'expected at least one real Moradon region containing both WS16 NPC and WS25 mob authority');
+  const probePosition = probeMob.position;
+  const nearbyMobs = mobService.getNearby({
+    zoneId: 21,
+    x: probePosition.x,
+    z: probePosition.z,
+  });
+  assert.ok(nearbyMobs.length > 0, 'expected real nearby WS25 mobs in the selected source-backed visibility region');
+
   const repository = new MockWorldRepository({
     characters: [character()],
-    npcs: npcPopulation.records,
+    npcs: nearbyNpcs,
   });
   let movementRegistrations = 0;
   const world = new WorldSessionService({
@@ -129,10 +150,12 @@ providerTest('current WS25 MobVisibilityService composes with real WS16 NPCs in 
     },
   });
 
-  await world.beginSelectedCharacter({
+  await world.beginWorldEntry({
     accountId: 'ws14-provider',
     characterId: 'VisibilityProbe',
     socketId: 414,
+    zoneId: 21,
+    position: probePosition,
   });
 
   const loading = await world.handleClientPacket(414, phase(OPCODE.GAMESTART, GAMESTART_PHASE.LOADING));
@@ -141,12 +164,10 @@ providerTest('current WS25 MobVisibilityService composes with real WS16 NPCs in 
   const regionPacket = loading.clientPackets.find((packet) => packet[0] === OPCODE.REGION_NPC_IDS);
   assert.ok(regionPacket, 'expected unified WIZ_NPC_REGION packet');
   const unifiedIds = regionIds(regionPacket);
-  const nearbyMobs = mobService.getNearby({ zoneId: 21, x: 312, z: 402 });
-  assert.ok(nearbyMobs.length > 0, 'expected real nearby WS25 mobs at Moradon world bootstrap');
-  assert.ok(unifiedIds.includes(npcPopulation.records[0].runtimeId), 'unified 0x1C must include WS16 NPC ID');
+  assert.ok(unifiedIds.includes(nearbyNpcs[0].runtimeId), 'unified 0x1C must include WS16 NPC ID');
   assert.ok(unifiedIds.includes(nearbyMobs[0].runtimeId), 'unified 0x1C must include WS25 mob ID');
 
-  const requestedNpc = npcPopulation.records[0];
+  const requestedNpc = nearbyNpcs[0];
   const requestedMob = nearbyMobs[0];
   const details = await world.handleClientPacket(
     414,
@@ -180,8 +201,10 @@ providerTest('current WS25 MobVisibilityService composes with real WS16 NPCs in 
     npcRuntimeIds: npcIds.length,
     mobRuntimeIds: mobIds.length,
     crossDomainCollisions: 0,
-    unifiedRegionIds: unifiedIds.length,
+    probePosition,
+    nearbyNpcs: nearbyNpcs.length,
     nearbyMobs: nearbyMobs.length,
+    unifiedRegionIds: unifiedIds.length,
     worldReady: true,
     movementRegistrations,
   }));
