@@ -18,7 +18,7 @@ A CI receipt is intentionally separate from a source manifest. It records the ex
 ```bash
 node contracts/pilot-moradon-visibility/tooling.cjs dependencies WS16
 node contracts/pilot-moradon-visibility/tooling.cjs impact npc.nearby
-node contracts/pilot-moradon-visibility/tooling.cjs inbox UNASSIGNED
+node contracts/pilot-moradon-visibility/tooling.cjs inbox WS14
 ```
 
 The WS16 discovery answer includes direct world/movement capabilities, WS11 protocol requirements, WS31 data requirements, ACCEPTED/CANDIDATE provider-set identities, and open contract requests without reading all workstream status files.

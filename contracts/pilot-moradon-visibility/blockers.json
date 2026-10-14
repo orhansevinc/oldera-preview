@@ -4,7 +4,7 @@
     {
       "request_id": "REQ-TERRAIN-HEIGHT-001",
       "consumer": "WS16",
-      "owner": "UNASSIGNED",
+      "owner": "WS14",
       "capability": "terrain.height-authority",
       "provider_set": null,
       "required_behavior": "Provide a source-verified Moradon terrain + shape height resolver usable by NPC placement and compatible terrain validation without guessed Y values.",
