@@ -114,7 +114,7 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags --depth=1000 origin \
-            +refs/heads/ws07-database-persistence:refs/remotes/origin/ws07-database-persistence \
+            +refs/heads/ws07-database:refs/remotes/origin/ws07-database \
             +refs/heads/ws13-account-api:refs/remotes/origin/ws13-account-api \
             +refs/heads/ws14-world-session:refs/remotes/origin/ws14-world-session
           for sha in "$WS07_SHA" "$WS13_SHA" "$WS14_SHA"; do git cat-file -e "$sha^{commit}"; done
