@@ -86,10 +86,22 @@ jobs:
         env:
           NODE_ENV: test
         run: node --test tests/account-api/frontend-contract.test.mjs
-      - name: Verify PostgreSQL account lifecycle and game hash
+      - name: Verify register verify and game hash
         env:
           NODE_ENV: test
-        run: node --test --test-name-pattern="PostgreSQL-backed account lifecycle" tests/account-api/postgres.integration.test.mjs
+        run: node --test --test-name-pattern="register verify and WS07 game hash" tests/account-api/postgres.integration.test.mjs
+      - name: Verify login current logout and revocation
+        env:
+          NODE_ENV: test
+        run: node --test --test-name-pattern="login current logout and revoked session" tests/account-api/postgres.integration.test.mjs
+      - name: Verify password change
+        env:
+          NODE_ENV: test
+        run: node --test --test-name-pattern="password change invalidates" tests/account-api/postgres.integration.test.mjs
+      - name: Verify password reset
+        env:
+          NODE_ENV: test
+        run: node --test --test-name-pattern="password reset rotates" tests/account-api/postgres.integration.test.mjs
       - name: Verify shared PostgreSQL rate limiting
         env:
           NODE_ENV: test
