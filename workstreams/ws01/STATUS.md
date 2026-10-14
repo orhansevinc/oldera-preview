@@ -1,140 +1,151 @@
 WS01
 
-# STATUS — Public WSS Transport Control
+# STATUS — True Widescreen / Native Backing-Store Runtime
 
 ## Decision
 
-**PUBLIC WSS TRANSPORT: READY**
+**TRUE WIDESCREEN RUNTIME: READY**
 
 Branch: `ws01-runtime-build`
-Validated implementation commit: `41097de4e6204b93da7b0c6ef3ef229fc41120c4`
+Validated implementation commit: `bbafbcfa0ddfcae307d26ac39d4bc7ed4727038b`
 
-This control session is the existing WS01 workstream from `coordination/inbox/WS01.md`; no new workstream was created.
+This is the existing WS01 control session. No new workstream was created.
 
 ## Problem closed
 
-WS50 isolated staging rehearsal proved that the real Emscripten/OpenKO browser transport still generated only:
+The real OpenKO/Emscripten browser baseline forced the native client to `1024x768` inside generated `WarFareMainSDL.cpp`. The canonical WS10 Moradon PASS therefore rendered a genuine `1024x768` framebuffer; preserving aspect ratio on a 16:9 browser correctly produced side bars.
+
+WS01 now removes that unconditional browser-only `1024x768` backing assumption and supplies a config-driven native SDL/Emscripten/WebGL2 display path. This is not CSS stretch and does not recreate the game UI in HTML.
+
+## Delivered runtime behavior
+
+### Native resolution modes
+
+- default `viewport`: native SDL logical size and Emscripten canvas/default framebuffer follow the browser viewport;
+- `classic`: authentic `1024x768` native fallback;
+- `fixed`: explicit native dimensions such as `1920x1080`.
+
+Validated widescreen matrix:
 
 ```text
-ws://<server-host>:<port>
+1280x720
+1366x768
+1600x900
+1920x1080
 ```
 
-That could not satisfy WS09's public HTTPS staging topology, which publishes packet-agnostic gateways at same-origin:
+### Native backing, not presentation scaling
+
+Initial dimensions are resolved before SDL window/renderer/UI initialization. Runtime viewport/fullscreen changes use `SDL_SetWindowSize()` and synchronize:
+
+- `CN3Base::s_Options.iViewWidth/iViewHeight`;
+- Emscripten canvas/default framebuffer dimensions;
+- full D3D/RHI viewport;
+- RHIDeviceGL cached framebuffer dimensions and pixel-density bookkeeping.
+
+`RHIDeviceGL` refreshes the browser default-framebuffer size before draw state/viewport/scissor application as well as after present, preventing a stale one-frame `1024x768` geometry after resize.
+
+### DPR invariant
+
+WS43 requires browser `devicePixelRatio` not to silently multiply the selected native resolution. WS01 therefore disables `SDL_WINDOW_HIGH_PIXEL_DENSITY` only for the Emscripten browser window. Native desktop builds preserve upstream high-DPI behavior.
+
+The final real Chromium smoke runs at `devicePixelRatio=2` and requires the selected logical size, canvas backing, default framebuffer and WebGL/RHI viewport to remain exactly the target size. `1920x1080` therefore stays native `1920x1080`, not `3840x2160`.
+
+### UI / input / fullscreen
+
+- genuine KO UIF/N3 UI is retained;
+- no Three.js, Canvas2D or fake HTML HUD was added;
+- no non-uniform canvas/UI stretch or crop is used;
+- CSS only performs aspect-preserving presentation fit when needed;
+- SDL mouse coordinates remain logical-window coordinates;
+- browser diagnostic mapping verifies native pointer alignment;
+- browser resize and `fullscreenchange` feed the same native display resolver/sync path;
+- browser fullscreen entry/exit is delegated to a genuine browser input event rather than a fake native fullscreen mode switch.
+
+### Public WSS retained
+
+The existing config-driven browser transport remains intact:
 
 ```text
-wss://<temporary-host>/auth
-wss://<temporary-host>/game
+server target *:15100 -> same-origin auth endpoint /auth
+server target *:15001 -> same-origin game endpoint /game
+HTTPS -> wss://
+local HTTP -> ws://
 ```
 
-WS12 could resolve and probe those endpoints but intentionally did not rewrite native C++ `CAPISocket` transport. WS01 therefore owned the remaining structural browser transport blocker.
-
-The WS01 implementation now removes that hardcoded browser URL while retaining the real KO C++ packet/framing/cryption path.
-
-## Implementation
-
-### Browser transport selection
-
-`tools/ws01_runtime/prepare_browser_source.py` still runs after the existing `openko-browser-port` patches. It now additionally patches only the generated Emscripten `CAPISocket` source so that:
-
-- native desktop builds keep the original Asio/TCP `CAPISocket` path unchanged;
-- Emscripten builds call `OldKOWebResolveWebSocketUrl(serverHost, serverPort)` before creating the browser WebSocket;
-- a missing or invalid mapping returns `-1` and fails closed;
-- the old generated `const std::string url = "ws://" + szIP + ":" + ...` anchor is explicitly rejected by CI.
-
-The KO send/receive framing, cryption and binary WebSocket forwarding remain in the existing C++ `CAPISocket` implementation. No JavaScript packet parser, fake login response or gameplay/network protocol implementation was added.
-
-### Config-driven public endpoint contract
-
-`tools/ws01_runtime/browser_transport_pre.js` is linked into the generated Emscripten JS with `--pre-js`. It performs endpoint selection only; it does not send or receive KO packets.
-
-The canonical bootstrap exposes this default domain-independent contract:
-
-```js
-Module.oldkoTransport = {
-  routes: {
-    auth: { serverPorts: [15100], endpoint: '/auth' },
-    game: { serverPorts: [15001], endpoint: '/game' }
-  }
-};
-```
-
-An embedding launcher/staging page may provide `window.__OLDKO_TRANSPORT_CONFIG__` before the canonical bootstrap executes to override those routes without rebuilding C++.
-
-Deterministic resolution rules:
-
-- server target `*:15100` -> configured `auth` route;
-- server target `*:15001` -> configured `game` route;
-- relative `/auth` or `/game` on an HTTP page -> same-origin `ws://...`;
-- relative `/auth` or `/game` on an HTTPS page -> same-origin `wss://...`;
-- explicit `ws://` remains valid for local HTTP testing;
-- explicit insecure `ws://` from an HTTPS page is rejected;
-- missing config, malformed endpoint, unknown target port or ambiguous port mapping is rejected instead of guessed.
-
-The server-provided host and port still enter the real `CAPISocket::Connect` call. For the browser staging boundary, the fixed KO target port deterministically selects the public auth/game gateway route while the public origin comes from the configured endpoint/page origin. Native desktop builds continue to connect directly to the server-provided host/port over TCP.
+Native desktop TCP remains unchanged. The final validation reran the public transport tests: **9/9 PASS**.
 
 ## Dependency evidence consumed
 
-- `main` observed during control: `692c780451782310669646859a4dac4ec937661c`.
-- browser baseline `openko-browser-port`: `18282d0e70de7ccb30244a9f09e2b3bff3040155`.
-- WS02 packet-agnostic gateway: `1738f60945b24e00bdd2266e6600b5c0cf3c64cf`.
-- WS09 staging/deployment current head: `2d4ec8ab89637d08b1f37c12dde0c93b89f8dc70`; its strict MIME follow-up is now READY.
-- WS12 launcher: `77f55b2949844e0fdd279526dab0fba4e8ab4f94`.
-- WS50 integration rehearsal: `94715058fdedc0a4fbab3a5f5c2ab29602fe747b`.
-- pinned OpenKO source: `97eb0ea20207afc0c360bfed6915113572711be3`.
+- `main` observed: `c75118905217343d30d3e25cf24a1552a5dc82b1`.
+- browser baseline: `18282d0e70de7ccb30244a9f09e2b3bff3040155`.
+- pinned OpenKO: `97eb0ea20207afc0c360bfed6915113572711be3`.
 - pinned genuine KO 1298 assets: `2055ee6ed77f1b5cfef23832dd5bc31909e14a66`.
 - Emscripten: `6.0.12`.
+- WS43 exact display contract head: `8ccf0fcb643ec1ebb5f019e8f53c8d3d93f85e03`.
+- canonical WS10 Moradon PASS: run `38505039290` (#26), tested harness commit `f0cadfb50b5d1a36d2bfe4e5bf0a68f7c3061f41`, frozen client artifact `11867980473`.
+- WS50 READY handoff head observed: `9e0fc1822351965755fc490c2d2abf34d40f430d`.
+- WS09 public ephemeral evidence: run `38510331579`, job `115677506671`; HTTPS publication, strict MIME, WSS `/auth` + `/game` smoke and WS12 preflight passed before keepalive.
 
-Full dependency handoff is recorded in `workstreams/ws01/DEPENDENCY_SNAPSHOT.md`.
+Full dependency detail is in `workstreams/ws01/DEPENDENCY_SNAPSHOT.md`.
 
 ## Verification actually run
 
 GitHub Actions:
 
-- workflow: `WS01 Runtime Build`
-- run: `38496614280` (run 3)
-- job: `runtime-build` / `115633714791`
-- implementation head: `41097de4e6204b93da7b0c6ef3ef229fc41120c4`
-- result: **SUCCESS**
-- evidence artifact: `ws01-runtime-evidence` / `11864182177`
-- artifact digest: `sha256:89e775de0cb059fbbb95c556de57aba579d85bf75b111afa5cfc35584f0d64f7`
+```text
+workflow  WS01 Runtime Build
+run       38513332857 (#12)
+job       115686662234
+head      bbafbcfa0ddfcae307d26ac39d4bc7ed4727038b
+result    SUCCESS
+artifact  ws01-runtime-evidence / 11870948283
+digest    sha256:d93e427d5ddeed22b18af3af548c5ea42482d2ded543ac540b43cd28cffe5878
+```
 
-Passing evidence includes:
+Passing gates include:
 
-- pinned OpenKO source verification: PASS
-- pinned genuine KO 1298 asset slice verification: PASS
-- transport mapping unit tests: **9/9 PASS**
-- committed browser package verification: PASS
-- real browser patch application + hardcoded `ws://host:port` absence gate: PASS
-- pinned Emscripten `6.0.12` setup/toolchain check: PASS
-- real WarFare Emscripten configure: PASS
-- real WarFare WASM build: PASS
-- rebuilt package verification: PASS
-- real Chromium WebGL2/OpenGL runtime bootstrap smoke: PASS
-- runtime evidence upload: PASS
+- pinned OpenKO and authentic 1298 asset verification: PASS;
+- public WebSocket transport tests: **9/9 PASS**;
+- native browser display contract tests: **8/8 PASS**;
+- fixed Emscripten `1024x768` override absence gate: PASS;
+- generated browser resize/DPR guard source validation: PASS;
+- real Emscripten 6.0.12 configure: PASS;
+- real WarFare WASM build: PASS;
+- rebuilt package validation: PASS;
+- real Chromium WebGL2/OpenGL login bootstrap: PASS;
+- real Chromium native resize matrix at DPR=2: PASS;
+- `1280x720`, `1366x768`, `1600x900`, `1920x1080`: PASS;
+- classic native `1024x768` fallback: PASS;
+- canvas/default framebuffer/RHI/WebGL full viewport agreement: PASS;
+- pointer-center alignment and aspect-distortion rejection: PASS;
+- fullscreen-change native resize path: PASS;
+- runtime evidence upload: PASS.
 
-## WS50 handoff
+## Canonical WS10 relation
 
-WS50's existing narrow composition rule remains valid: copy WS01 `openko-web/index.html` and `tools/ws01_runtime/**`, apply the browser baseline patches first, then run `python3 tools/ws01_runtime/prepare_browser_source.py` at the established point in the build order.
+The frozen WS10 PASS artifact remains immutable proof of the previous real `1024x768` Moradon path. WS01 did not alter that artifact or claim it became widescreen.
 
-No full merge of divergent browser branches is required. No WS02, WS09, WS12 or WS50 provider code change is required to consume this fix.
+A new downstream WS10/WS43 integration acceptance should rebuild/compose the client with this WS01 provider and capture Moradon HUD/inventory/dialog plus edge/corner clicks and real headed fullscreen at widescreen. That is a downstream live-state acceptance step, not a remaining WS01 native backing-store blocker.
 
-The exact WS50 integration instructions and acceptance checks are in `workstreams/ws01/INTEGRATION_PATCH.md`.
+## WS50 / staging handoff
 
-## Remaining gates outside WS01
+Use the narrow composition documented in `workstreams/ws01/INTEGRATION_PATCH.md`: consume `openko-web/index.html` and `tools/ws01_runtime/**`, apply the established browser/provider patches first, then run both:
 
-There is no remaining WS01 structural public-WSS blocker.
+```bash
+python3 tools/ws01_runtime/prepare_browser_source.py
+python3 tools/ws01_runtime/normalize_generated_browser_source.py
+```
 
-Project publication still depends on downstream integration/acceptance gates owned elsewhere, including a current WS10 native browser/Moradon E2E PASS against the selected provider set and a WS50 rerun proving the composed staging candidate. WS01 does not claim those downstream gates here.
+WS50/WS09 must re-freeze this new provider before any public link is described as the widescreen build. Existing public staging proves the WSS/publication topology but contains the older WS01 provider.
 
 ## Boundaries
 
-- no merge to `main`
-- no force push
-- no other workstream branch modified
-- no WS02 gateway behavior modified
-- no WS09 infrastructure modified
-- no WS12 launcher implementation modified
-- no fake JS/HTML KO protocol implementation added
-- no production domain, DNS, certificate or secret assumed
+- no merge to `main`;
+- no force push;
+- no other workstream branch modified;
+- no WS02/WS09/WS12 provider implementation modified;
+- no fake KO renderer/UI added;
+- no production DNS/domain/certificate assumption introduced.
 
 BU SOHBETE ARTIK GEREK VAR MI?: HAYIR
