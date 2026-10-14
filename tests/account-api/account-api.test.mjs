@@ -30,7 +30,7 @@ test('registration hashes password and enforces canonical uniqueness', async () 
   const created = await f.service.register(account, ctx());
   const stored = await f.repository.findByUsernameCanonical('playerone');
   assert.equal(created.username, 'PlayerOne');
-  assert.match(stored.passwordHash, /^\$scrypt\$/);
+  assert.match(stored.passwordHash, /^scrypt\$/);
   assert.equal(stored.passwordHash.includes(account.password), false);
   assert.equal(f.delivery.verifications.length, 1);
   await assert.rejects(() => f.service.register({ ...account, username: 'PLAYERONE', email: 'other@example.test' }, ctx('203.0.113.6')), (e) => e.code === 'USERNAME_TAKEN');

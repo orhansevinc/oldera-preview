@@ -2,32 +2,32 @@ import crypto from 'node:crypto';
 import { promisify } from 'node:util';
 
 const scrypt = promisify(crypto.scrypt);
-const PARAMS = Object.freeze({ N: 32768, r: 8, p: 1, keylen: 32 });
+const PARAMS = Object.freeze({ N: 32768, r: 8, p: 1, keylen: 64 });
 
 export class ScryptPasswordHasher {
   async hash(password) {
     const salt = crypto.randomBytes(16);
     const derived = await scrypt(password, salt, PARAMS.keylen, { N: PARAMS.N, r: PARAMS.r, p: PARAMS.p, maxmem: 64 * 1024 * 1024 });
-    return `$scrypt$N=${PARAMS.N},r=${PARAMS.r},p=${PARAMS.p}$${salt.toString('base64url')}$${Buffer.from(derived).toString('base64url')}`;
+    return `scrypt$${PARAMS.N}$${PARAMS.r}$${PARAMS.p}$${salt.toString('base64')}$${Buffer.from(derived).toString('base64')}`;
   }
 
   async verify(password, encoded) {
     try {
       if (typeof encoded !== 'string') return false;
-      if (encoded.startsWith('$scrypt$')) return this.#verifyWs13(password, encoded);
-      if (encoded.startsWith('scrypt$')) return this.#verifyWs07(password, encoded);
+      if (encoded.startsWith('$scrypt$')) return this.#verifyLegacyWs13(password, encoded);
+      if (encoded.startsWith('scrypt$')) return this.#verifyCanonical(password, encoded);
       return false;
     } catch { return false; }
   }
 
-  async #verifyWs13(password, encoded) {
+  async #verifyLegacyWs13(password, encoded) {
     const parts = encoded.split('$');
     if (parts.length !== 5 || parts[1] !== 'scrypt') return false;
     const params = Object.fromEntries(parts[2].split(',').map((entry) => entry.split('=')));
     return verifyDerived(password, Buffer.from(parts[3], 'base64url'), Buffer.from(parts[4], 'base64url'), Number(params.N), Number(params.r), Number(params.p));
   }
 
-  async #verifyWs07(password, encoded) {
+  async #verifyCanonical(password, encoded) {
     const [kind, nRaw, rRaw, pRaw, saltRaw, hashRaw] = encoded.split('$');
     if (kind !== 'scrypt' || !hashRaw) return false;
     return verifyDerived(password, Buffer.from(saltRaw, 'base64'), Buffer.from(hashRaw, 'base64'), Number(nRaw), Number(rRaw), Number(pRaw));
