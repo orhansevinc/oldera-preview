@@ -88,10 +88,16 @@ test('Alt+Enter delegates browser fullscreen from the input event and fullscreen
   assert.ok(state.generation > generation);
 });
 
-test('HiDPI diagnostic pointer mapping stays in SDL logical coordinates, not physical framebuffer pixels', () => {
+test('devicePixelRatio never multiplies the selected native browser target', () => {
+  const resolved = display.resolveDisplay(
+    { mode: 'viewport' },
+    { innerWidth: 1920, innerHeight: 1080, devicePixelRatio: 2 }
+  );
+  assert.deepEqual([resolved.width, resolved.height], [1920, 1080]);
+
   const canvas = {
-    width: 3840,
-    height: 2160,
+    width: 1920,
+    height: 1080,
     getBoundingClientRect() { return { left: 0, top: 0, width: 1920, height: 1080 }; }
   };
   assert.deepEqual(display.mapClientPoint(canvas, 960, 540, 1920, 1080), { x: 960, y: 540 });
