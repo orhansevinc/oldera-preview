@@ -11,13 +11,35 @@ MAIN = ROOT / 'GameProcMain.cpp'
 BASE = ROOT / 'PlayerBase.cpp'
 
 
+def matching_function_end(text: str, start_index: int, start: str) -> int:
+    brace = text.find('{', start_index + len(start))
+    if brace < 0:
+        raise SystemExit(f'missing opening brace for function anchor: {start}')
+    depth = 0
+    for index in range(brace, len(text)):
+        ch = text[index]
+        if ch == '{':
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0:
+                return index + 1
+    raise SystemExit(f'missing closing brace for function anchor: {start}')
+
+
 def function_slice(text: str, start: str, end: str | None):
     a = text.find(start)
     if a < 0:
         raise SystemExit(f'missing function anchor: {start}')
-    b = text.find(end, a + len(start)) if end else len(text)
-    if end and b < 0:
-        raise SystemExit(f'missing end anchor: {end}')
+    if end:
+        b = text.find(end, a + len(start))
+        if b < 0:
+            # Earlier browser instrumentation may alter or move the following
+            # function declaration. Bound the current function structurally
+            # instead of failing on a cosmetic next-function anchor.
+            b = matching_function_end(text, a, start)
+    else:
+        b = matching_function_end(text, a, start)
     return a, b
 
 
