@@ -187,10 +187,10 @@ await test('WS07 production persistence contracts', async (t) => {
 async function createFixture(username,names) {
   const passwordHash=await hashPassword(password);
   return withTransaction(pool,async db=>{
-    const account=(await db.query(`INSERT INTO oldko.accounts(username,username_key,password_hash,status,nation) VALUES($1,lower($1),$2,'active',1) RETURNING id`,[username,passwordHash])).rows[0];
+    const account=(await db.query(`INSERT INTO oldko.accounts(username,username_key,password_hash,status,nation) VALUES($1::varchar(32),lower($1::varchar(32)),$2,'active',1) RETURNING id`,[username,passwordHash])).rows[0];
     const ids=[];
     for(let slot=0;slot<names.length;slot++){
-      const c=(await db.query(`INSERT INTO oldko.characters(account_id,slot,name,name_key,nation,race,class_id,zone_id,pos_x,pos_y,pos_z,world_state) VALUES($1,$2,$3,lower($3),1,1,101,21,312,0,402,'{}'::jsonb) RETURNING id`,[account.id,slot,names[slot]])).rows[0];
+      const c=(await db.query(`INSERT INTO oldko.characters(account_id,slot,name,name_key,nation,race,class_id,zone_id,pos_x,pos_y,pos_z,world_state) VALUES($1,$2,$3::varchar(20),lower($3::varchar(20)),1,1,101,21,312,0,402,'{}'::jsonb) RETURNING id`,[account.id,slot,names[slot]])).rows[0];
       await db.query(`INSERT INTO oldko.character_stats(character_id) VALUES($1)`,[c.id]); ids.push(c.id);
     }
     return {username,accountId:account.id,characterIds:ids,names};

@@ -67,7 +67,7 @@ export class PgWs03SessionRepository {
         const characterResult = await db.query(
           `INSERT INTO oldko.characters
              (account_id,slot,name,name_key,nation,race,class_id,face,hair,zone_id,pos_x,pos_y,pos_z)
-           VALUES ($1,$2,$3,lower($3),$4,$5,$6,$7,$8,21,312,0,402)
+           VALUES ($1,$2,$3::varchar(20),lower($3::varchar(20)),$4,$5,$6,$7,$8,21,312,0,402)
            RETURNING id,slot,name,nation,race,class_id,face,hair,zone_id,world_state`,
           [account.id,spec.slot,spec.name,account.nation,spec.race,spec.classId,spec.face,spec.hair],
         );
