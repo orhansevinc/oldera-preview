@@ -1,17 +1,19 @@
 {
-  "schema_version": "ws09-domain-release-requests/v2",
-  "updated_at": "2026-10-15T02:35:00+03:00",
+  "schema_version": "ws09-domain-release-requests/v3",
+  "updated_at": "2026-10-15T02:45:00+03:00",
   "release_target": "oldkoweb-domain-live-20261015",
   "requests": [
     {
-      "id": "OFFICIAL_SITE_HANDOFF",
+      "id": "OFFICIAL_SITE_RELEASE_HANDOFF",
       "owner": "official-site-domain-release",
-      "state": "SATISFIED",
+      "state": "SATISFIED_FOR_APPROVED_STATIC_SOURCE",
       "evidence": {
         "handoff_commit": "8370de2ebfdfd319cf8a719da79cbdef9853fd2f",
         "source_commit": "5f9a4f0ccd3d7d06e8b407bfca35266f1b2d3516",
-        "artifact_digest": "git-tree-sha1:ee3ba5bfd85ff6951017befb748b71c3e5851f97"
-      }
+        "artifact_digest": "git-tree-sha1:ee3ba5bfd85ff6951017befb748b71c3e5851f97",
+        "observed_unhanded_newer_head": "e5a7340bcd25a29112f52f91f51cd15380f1408f"
+      },
+      "note": "WS09 keeps the approved handed-off source and does not silently promote the newer account-v15.js change. A domain-live owner handoff and the WS08-required admin-v10 production frontend wiring are still coordinator inputs."
     },
     {
       "id": "WS13_WS07_SHARED_ACCOUNT_SOURCE",
@@ -23,70 +25,98 @@
         "ws07_commit": "1ae85c96319cbab11648a91ed28300e17d4c607f",
         "ws07_adapter_blob": "022c32abde503a6dc3af1ff9429c206a1b20ca63"
       },
-      "remaining_external": "real HTTPS verification/password-reset delivery webhook configuration plus backup-gated production migrations"
+      "remaining": [
+        "real HTTPS verification/password-reset delivery webhook configuration through secure production configuration",
+        "backup-gated production migrations",
+        "domain-live WS13 and WS07 owner handoffs for WS50 exact pin acceptance",
+        "one-real-PostgreSQL register/verify/website-login/game-login acceptance once the game child exists"
+      ]
     },
     {
       "id": "WS50_PERSISTENT_GAME_CHILD",
       "owner": "WS50_THEN_WS10",
       "state": "BLOCKING",
       "evidence": {
+        "parent_provider_set": "WS50-C5@sha256:7ac3b8a4c06b67e52b8d18518ef8c82209a60c6101c33609a4c16e64d84f119e",
         "frozen_c5_ws03": "495de481726734d85cc28b3d432835799aff7e48",
         "observed_newer_ws03_head": "7c5f5f3584e7d3621aa5a318ad65c011bd77276f",
         "observed_newer_ws03_green_run_id": 38650070368,
-        "current_ws50_handoff": "7497087d4cf67e4e05a3a090f6edad3d206078cb"
+        "ws50_domain_live_source": "396a765384f87fd97159204fd1eefc77702e6624",
+        "ws50_domain_live_run_id": 38654219214,
+        "accepted_owner_pins": {},
+        "child_candidate": null,
+        "integration_verified": false
       },
       "acceptance": [
-        "WS50 selects an immutable child candidate containing the persistent game/account composition",
-        "WS10 accepts that exact candidate with affected contract/scenario/real-browser gates",
-        "WS09 receives exact provider-set, server image and client identities",
-        "WS09 does not silently replace the WS03 pin inside frozen C5"
+        "required owner domain-live handoffs land with exact tested commits and run URLs",
+        "WS50 accepts the exact owner pins and builds one immutable persistence-capable child candidate",
+        "C5 NPC/mob visibility regression remains green with the new WS03 composition",
+        "WS10 accepts that exact child with affected contract/scenario/real-browser gates",
+        "WS09 receives exact provider-set, server-image and client identities without mutating parent C5"
       ]
     },
     {
-      "id": "WS08_WS07_ADMIN_PRODUCTION_ADAPTER",
-      "owner": "WS08_WITH_WS07_AND_GAME_COMMAND_BRIDGE",
-      "state": "BLOCKING",
+      "id": "WS08_ADMIN_PRODUCTION_COMPOSITION",
+      "owner": "WS07_WS03_WS45_WS28_OFFICIAL_SITE_THEN_WS08_WS50",
+      "state": "BLOCKING_EXTERNAL_INPUTS",
       "evidence": {
-        "ws08_head": "239cdacf0fb6bacde5017fb3b787451595a3be0d",
-        "current_repository": "MemoryAdminRepository for tests/development",
-        "current_command_forwarding": "not a real game-server bridge"
+        "ws08_handoff_commit": "1e3316727b079fbb03cbd9b09b257c1a0eb64f71",
+        "ws08_source_commit": "97771268f37735e6ebaad9ed48a6927438f65f59",
+        "ws08_green_run_id": 38654675678,
+        "memory_repository_production_allowed": false,
+        "silent_fallback_allowed": false
       },
       "acceptance": [
-        "production PostgreSQL adapter implements WS08 REQUIRED_METHODS",
-        "MemoryAdminRepository is impossible in production",
-        "admin login/session authorization remains server-side and fail-closed",
-        "admin reads/mutations/audit survive restart",
-        "real game command bridge is connected and verified"
+        "WS07 supplies createAdminRepository with durable admin session/idempotency/command outbox semantics",
+        "WS03/WS45 supplies createAdminRuntimeAuthority over authoritative online state",
+        "WS28/WS50 supplies createAdminCommandBus with real downstream completion semantics",
+        "approved admin-v10 frontend sends Origin-bound CSRF, Idempotency-Key and expectedVersion and consumes capability/command status results",
+        "WS08 production image is built from its exact accepted source and starts fail-closed with those modules",
+        "WS10 verifies real auth/read/mutation/audit/command/restart behavior"
       ]
     },
     {
-      "id": "EXTERNAL_PRODUCTION_INFRASTRUCTURE",
+      "id": "EXTERNAL_PERSISTENT_ORIGIN_AND_SECURE_CONFIG",
       "owner": "WS09_EXTERNAL",
       "state": "BLOCKING",
+      "current_public_observation": {
+        "ws10_run_id": 38654558721,
+        "resolved_ipv4": "93.89.226.17",
+        "tls_443": "ECONNREFUSED for oldkoweb.com, play.oldkoweb.com and admin.oldkoweb.com"
+      },
       "acceptance": [
-        "authorized persistent Linux host with stable public IPv4 and Docker/Compose is connected",
-        "production secrets/configuration channel is available without exposing values in chat/repository",
-        "real WS13 delivery webhook URL/secret is configured through that channel",
-        "authoritative DNS zone is readable and can be snapshotted before changes",
-        "existing MX/TXT/mail/ownership/nameserver records are preserved",
-        "only apex/play/admin are changed after Host/SNI origin tests pass"
+        "authorized long-running Linux origin with stable public IPv4 and Docker/Compose is connected",
+        "WS09 can deploy through an authorized provider/SSH path and configure secrets without exposing values in chat/repository",
+        "real WS13 delivery webhook URL/secret is configured through that secure channel",
+        "authoritative DNS zone can be read and snapshotted before any change",
+        "existing NS/MX/TXT/SPF/DKIM/DMARC/CAA/ownership records are preserved",
+        "only apex/play/admin change after Host/SNI origin tests pass"
       ]
     },
     {
       "id": "DNS_TLS_LIVE_ACCEPTANCE",
       "owner": "WS09_THEN_WS10",
-      "state": "BLOCKED_BY_EXTERNAL_INFRASTRUCTURE_AND_OWNER_GATES",
+      "state": "BLOCKED",
+      "current_ws10_evidence": {
+        "source_commit": "c3f25fd365d06f331daf33c965d99c4fc21fc8b0",
+        "handoff_head": "a0ae49f05c76c6eab1dd8c60ca17ffec67d50bf2",
+        "run_id": 38654558721,
+        "artifact_id": 11935968878,
+        "artifact_digest": "sha256:1c6ee2c0903e54f13dbc76c4a8f7f3f1c2f966a51e16a61f85fa75178b30aa22",
+        "workflow_conclusion": "SUCCESS",
+        "acceptance_overall": "BLOCKED"
+      },
       "acceptance": [
-        "valid SAN TLS covers oldkoweb.com, play.oldkoweb.com and admin.oldkoweb.com and renewal is proven",
-        "API paths never fall through to static HTML",
-        "WSS /auth and /game work on the real hostname",
-        "WASM MIME, .data ranges and launcher manifest checks pass",
-        "registration/login/password flows and one-database game login pass",
-        "Moradon NPC/mob/movement real-browser acceptance passes",
-        "admin authentication/data/commands pass",
-        "account and character persistence survive service restart",
-        "application/static rollback is verified without destructive DB rollback",
-        "final WS10 domain gate is green"
+        "valid renewable TLS covers oldkoweb.com, play.oldkoweb.com and admin.oldkoweb.com",
+        "website/account API paths never fall through to static HTML",
+        "WSS /auth and /game work on play.oldkoweb.com",
+        "WASM MIME, .data byte-range 206 and launcher manifest/_complete exact identities pass",
+        "registration/verification/login/logout/password change/reset and same-account game login pass",
+        "real browser reaches Moradon and proves NPC/mob detail plus movement/reconnect",
+        "admin auth/data/audit/supported command completion and no-demo fallback pass",
+        "controlled service restart preserves account/character/admin durable state",
+        "application/static rollback passes without destructive database downgrade",
+        "final WS10 domain-live acceptance is GREEN"
       ]
     }
   ]
