@@ -52,6 +52,8 @@ jobs:
     env:
       DATABASE_URL: postgresql://oldko:oldko@127.0.0.1:5432/oldko_test
       OLDKO_POSTGRES_INTEGRATION: '1'
+      OLDKO_ACCOUNT_REPOSITORY_MODULE: ${{ github.workspace }}/ws07-source/services/oldko-data/src/adapters/ws13-account-api.js
+      OFFICIAL_ACCOUNT_JS: ${{ github.workspace }}/official-site-source/account-v15.js
     steps:
       - name: Checkout WS13 candidate
         uses: actions/checkout@v4
@@ -76,9 +78,19 @@ jobs:
         run: npm run migrate --prefix ws07-source/services/oldko-data
       - name: Apply WS13 shared rate-limit migration
         run: npm run migrate:rate-limit --prefix services/account-api
-      - name: Run real PostgreSQL + frontend contract gates
+      - name: Verify production pin and readiness
         env:
           NODE_ENV: test
-          OLDKO_ACCOUNT_REPOSITORY_MODULE: ${{ github.workspace }}/ws07-source/services/oldko-data/src/adapters/ws13-account-api.js
-          OFFICIAL_ACCOUNT_JS: ${{ github.workspace }}/official-site-source/account-v15.js
-        run: npm test --prefix services/account-api
+        run: node --test --test-name-pattern="production runtime" tests/account-api/postgres.integration.test.mjs
+      - name: Verify official frontend contract
+        env:
+          NODE_ENV: test
+        run: node --test tests/account-api/frontend-contract.test.mjs
+      - name: Verify PostgreSQL account lifecycle and game hash
+        env:
+          NODE_ENV: test
+        run: node --test --test-name-pattern="PostgreSQL-backed account lifecycle" tests/account-api/postgres.integration.test.mjs
+      - name: Verify shared PostgreSQL rate limiting
+        env:
+          NODE_ENV: test
+        run: node --test --test-name-pattern="rate-limit state is shared" tests/account-api/postgres.integration.test.mjs
