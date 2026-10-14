@@ -9,8 +9,8 @@ WS09
 **EPHEMERAL TEST LINK: NOT LIVE — WAITING FOR EXACT WS10 PASS + WS50 READY HANDOFF**
 
 Branch: `ws09-production-infra`
-Validated implementation head: `4e7c16ac7979b1a0c768f542cc7941f96172e7fb`.
-Validation: `WS09 deployment config` run #23, run id `38503743821` — **SUCCESS**.
+Branch-native publisher implementation validated at: `75078d2d6f1251ac3e5b0160769de84088ff1d4e`.
+Validation: `WS09 deployment config` run #27, run id `38504031520` — **SUCCESS**.
 
 This is the existing WS09 control session. No new workstream was created.
 
@@ -18,7 +18,7 @@ This is the existing WS09 control session. No new workstream was created.
 
 ### Fail-closed ephemeral publisher
 
-`.github/workflows/ws09-ephemeral-staging.yml` is a manual publisher for a temporary no-domain staging link. It accepts only exact inputs:
+`.github/workflows/ws09-ephemeral-staging.yml` accepts exact release identities and refuses stale or incomplete inputs:
 
 - successful WS10 Moradon E2E run id + exact head SHA;
 - explicit WS10 PASS evidence artifact name;
@@ -28,6 +28,14 @@ This is the existing WS09 control session. No new workstream was created.
 - bounded keepalive duration, 5–45 minutes.
 
 It fails before publication if any identity is stale/missing/mismatched, if WS10 did not complete with `conclusion=success`, or if WS50 is still `READY_PENDING_WS10`.
+
+### Branch-native trigger — no main merge required
+
+`workstreams/ws09/EPHEMERAL_REQUEST.example.json` defines the exact operational request schema.
+
+When WS10 PASS + WS50 READY arrive, copy/fill it as `workstreams/ws09/EPHEMERAL_REQUEST.json` and push that file to `ws09-production-infra`. The publisher watches that exact path and starts on the branch itself, so production-domain work and a main merge are not prerequisites for the test link.
+
+`workflow_dispatch` inputs remain available for environments where GitHub exposes this workflow through manual dispatch from the repository default branch.
 
 ### Exact passing client, no provider rebuild
 
@@ -51,7 +59,7 @@ Strict MIME remains:
 
 ### Temporary HTTPS/WSS edge
 
-The job downloads a pinned `cloudflared 2026.10.0` linux-amd64 binary and verifies its SHA-256 before use. It opens a Cloudflare Quick Tunnel to the existing WS09 staging Nginx edge.
+The job downloads pinned `cloudflared 2026.10.0` linux-amd64 and verifies its SHA-256 before use. It opens a Cloudflare Quick Tunnel to the existing WS09 staging Nginx edge.
 
 One temporary HTTPS origin serves:
 
@@ -59,7 +67,7 @@ One temporary HTTPS origin serves:
 - `wss://<temporary-host>/auth`
 - `wss://<temporary-host>/game`
 
-No `oldkoweb.com` purchase, production DNS, production certificate, or repository secret is required.
+No `oldkoweb.com` purchase, production DNS, production certificate, repository secret, or main merge is required by the branch-native path.
 
 ### Public acceptance gates
 
@@ -82,19 +90,18 @@ The link is ephemeral and lives only while the workflow process stays alive for 
 
 ## Reproducibility
 
-`workstreams/ws09/RUNBOOK.md` now contains the full `gh workflow run ws09-ephemeral-staging.yml ...` command and all required exact inputs.
+`workstreams/ws09/RUNBOOK.md` documents both the branch-native request-file trigger and optional manual dispatch.
 
-`workstreams/ws09/DEPENDENCY_SNAPSHOT.md` records the current upstream state and acceptance boundaries.
+`workstreams/ws09/DEPENDENCY_SNAPSHOT.md` records the current upstream state and exact acceptance boundaries.
 
 ## Verification
 
-Validated implementation head: `4e7c16ac7979b1a0c768f542cc7941f96172e7fb`.
-
-GitHub Actions:
+GitHub Actions validated the branch-native publisher implementation:
 
 - workflow: `WS09 deployment config`
-- run number: `23`
-- run id: `38503743821`
+- run number: `27`
+- run id: `38504031520`
+- implementation head: `75078d2d6f1251ac3e5b0160769de84088ff1d4e`
 - conclusion: **SUCCESS**
 
 Passing coverage includes:
@@ -114,7 +121,7 @@ Passing coverage includes:
 - WS50 current checked head: `bfedd39a085494f229f6d602b4bb427ce4bbc288`; `integration-rehearsal/STAGING_LINK_HANDOFF.md` is not present at the closure observation point.
 - WS10 run #25 (`38503397843`, head `419d52b363a73c8ab77ff8ad944a30968fda967d`) is still `in_progress` at the closure observation point. Previous run #24 failed and is explicitly ineligible for publication.
 
-Therefore WS09 does **not** claim a live TEST_LINK yet. The pipeline is ready to publish immediately once WS10 produces the exact PASS/frozen-client artifact and WS50 produces the matching READY handoff.
+Therefore WS09 does **not** claim a live TEST_LINK yet. The pipeline is ready to publish as soon as WS10 supplies the exact successful PASS/frozen-client artifact and WS50 supplies the matching READY handoff.
 
 ## Boundaries
 
