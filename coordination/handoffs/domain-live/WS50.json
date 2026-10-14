@@ -1,0 +1,49 @@
+{
+  "schema_version": "oldkoweb-domain-live-handoff/v1",
+  "release_id": "oldkoweb-domain-live-20261015",
+  "owner": "WS50",
+  "branch": "ws50-integration-rehearsal",
+  "source_commit": "396a765384f87fd97159204fd1eefc77702e6624",
+  "input_pins": {
+    "parent_provider_set": "WS50-C5@sha256:7ac3b8a4c06b67e52b8d18518ef8c82209a60c6101c33609a4c16e64d84f119e",
+    "website_source": "5f9a4f0ccd3d7d06e8b407bfca35266f1b2d3516",
+    "website_handoff": "8370de2ebfdfd319cf8a719da79cbdef9853fd2f",
+    "ws39": "8a80a506d813dab9c6777275e3fa39c63d248992",
+    "ws10_c5_run": "38604174659",
+    "client_artifact": "11915666463",
+    "client_digest": "sha256:f749750fc5bb0249a67b712bd4e1a03847773d8845fd209508b8c95f6c447a83"
+  },
+  "contracts": [
+    {"commit": "396a765384f87fd97159204fd1eefc77702e6624", "path": "tools/ws50_integration/domain_live.py"},
+    {"commit": "396a765384f87fd97159204fd1eefc77702e6624", "path": ".github/workflows/ws50-domain-live.yml"},
+    {"commit": "8851d3e6487e741e42264b643d98945714ec382c", "path": "integration-rehearsal/domain-live/oldkoweb-domain-live-20261015.json"}
+  ],
+  "artifacts": [
+    {
+      "name": "ws50-domain-live-discovery-1",
+      "workflow_run_id": 38654219214,
+      "artifact_id": 11935439132,
+      "digest": "sha256:4c267dc523d2d0c4057603843b086700d1ba21d6a5aa431e938e463cf576bab3"
+    },
+    {
+      "name": "existing-c5-browser-client",
+      "artifact_id": 11915666463,
+      "digest": "sha256:f749750fc5bb0249a67b712bd4e1a03847773d8845fd209508b8c95f6c447a83",
+      "reused_without_rebuild": true
+    }
+  ],
+  "checks": [
+    {
+      "name": "WS50 OldKOWeb Domain Live Coordinator / owner-handoff-discovery",
+      "url": "https://github.com/orhansevinc/oldera-preview/actions/runs/38654219214",
+      "tested_sha": "396a765384f87fd97159204fd1eefc77702e6624",
+      "result": "SUCCESS"
+    }
+  ],
+  "blockers": [
+    {"id": "UPSTREAM_DOMAIN_LIVE_HANDOFFS_MISSING", "owner": "WEBSITE/WS13/WS07/WS03/WS08/WS09/WS10", "required_action": "Each owner must publish coordination/handoffs/domain-live/<OWNER>.json with an exact tested source_commit and real Actions run/job URL."},
+    {"id": "DEFAULT_BRANCH_BOOTSTRAP_PR_OPEN", "owner": "WS50", "required_action": "Review PR #2; do not bypass main protections. Default-branch registration remains pending until that PR is merged through normal policy."},
+    {"id": "WS09_PERSISTENT_HOST_TARGET_MISSING", "owner": "WS09", "required_action": "Provide and verify an authorized persistent production host target before DNS/TLS/deploy."},
+    {"id": "WS10_DOMAIN_ACCEPTANCE_ENTRYPOINT_MISSING", "owner": "WS10", "required_action": "Publish a domain-live acceptance handoff and registered exact-candidate browser/domain gate; do not reuse a hard-coded C5 build as proof of the changed persistent composition."}
+  ]
+}
