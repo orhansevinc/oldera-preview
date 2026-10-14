@@ -1,21 +1,102 @@
 'use strict';
 
+const fs = require('node:fs');
 const net = require('node:net');
 const path = require('node:path');
 
 const ws03Root = process.env.WS03_ROOT;
 const ws14Root = process.env.WS14_ROOT;
-if (!ws03Root || !ws14Root) throw new Error('WS03_ROOT and WS14_ROOT are required');
+const ws16Root = process.env.WS16_ROOT;
+const ws25Root = process.env.WS25_ROOT;
+const smdPath = process.env.WS14_MORADON_SMD;
+const npcDataPath = process.env.WS16_NPC_DATA;
+const mobDataPath = process.env.WS25_MOB_DATA;
+if (![ws03Root, ws14Root, ws16Root, ws25Root, smdPath, npcDataPath, mobDataPath].every(Boolean)) {
+  throw new Error('WS03_ROOT, WS14_ROOT, WS16_ROOT, WS25_ROOT, WS14_MORADON_SMD, WS16_NPC_DATA and WS25_MOB_DATA are required');
+}
 
 const protocol = require(path.resolve(ws03Root, 'services/ko1298-session/protocol.js'));
 const { AuthSession, GameSession } = require(path.resolve(ws03Root, 'services/ko1298-session/session.js'));
-const { WorldSessionService } = require(path.resolve(ws14Root, 'services/ko1298-world/index.js'));
+const worldApi = require(path.resolve(ws14Root, 'services/ko1298-world/index.js'));
+const ws16 = require(path.resolve(ws16Root, 'services/ko1298-npc'));
+const ws25 = require(path.resolve(ws25Root, 'services/ko1298-mobs'));
+const {
+  WorldSessionService,
+  createMoradonHeightResolver,
+  createSharedNpcRuntimeIdNamespace,
+} = worldApi;
 const { FrameDecoder, frame, CHARACTER_SLOT_COUNT } = protocol;
 
+const expectedProviderSet = process.env.WS50_PROVIDER_SET || 'WS50-C5@sha256:7ac3b8a4c06b67e52b8d18518ef8c82209a60c6101c33609a4c16e64d84f119e';
 const username = process.env.WS10_TEST_ID || 'ws10e2e';
 const password = process.env.WS10_TEST_PW || 'ws10pass';
 const authPort = Number(process.env.AUTH_TCP_PORT || 16100);
 const gamePort = Number(process.env.GAME_TCP_PORT || 16101);
+
+const resolver = createMoradonHeightResolver({ smdPath });
+const npcDocument = JSON.parse(fs.readFileSync(npcDataPath, 'utf8'));
+const npcPopulation = ws16.materializeNpcPopulation(npcDocument, { heightAuthority: resolver });
+const npcWorld = new ws16.NpcWorld();
+for (const record of npcPopulation.records) npcWorld.add(record);
+
+const runtimeNamespace = createSharedNpcRuntimeIdNamespace({
+  minInclusive: ws25.RUNTIME_ID_CONTRACT.NPC_BAND,
+  maxExclusive: ws25.RUNTIME_ID_CONTRACT.INVALID_BAND,
+  reserved: npcPopulation.records,
+});
+const mobDocument = JSON.parse(fs.readFileSync(mobDataPath, 'utf8'));
+const mobDefinition = ws25.loadVerifiedWorldDefinition(mobDocument);
+const mobService = new ws25.MobVisibilityService(mobDefinition, {
+  terrain: {
+    resolveHeight(zoneId, x, z) {
+      return resolver.resolveHeight(Number(zoneId), x, z);
+    },
+  },
+  runtimeIds: runtimeNamespace,
+});
+const mobPopulation = mobService.initialize(0);
+if (npcPopulation.records.length !== 37) throw new Error(`expected 37 authoritative Moradon NPCs, got ${npcPopulation.records.length}`);
+if (mobPopulation.length !== 135) throw new Error(`expected 135 authoritative Moradon mobs, got ${mobPopulation.length}`);
+
+function runtimeIdOf(record) {
+  return record?.runtimeId ?? record?.instanceId ?? record?.nid ?? record?.id;
+}
+function nameOf(record) {
+  return record?.name ?? record?.detailRecord?.name ?? record?.visibilityRecord?.name ?? 'unknown';
+}
+function templateOf(record) {
+  return record?.templateResourceId ?? record?.pid ?? record?.templateId ?? record?.detailRecord?.templateResourceId ?? 0;
+}
+function positionOf(record) {
+  return record?.position || record?.detailRecord?.position || record;
+}
+
+const npcIdSet = new Set(npcPopulation.records.map(runtimeIdOf));
+const mobIdSet = new Set(mobPopulation.map(runtimeIdOf));
+for (const id of npcIdSet) {
+  if (mobIdSet.has(id)) throw new Error(`cross-domain runtime ID collision ${id}`);
+}
+
+let overlap = null;
+for (const mob of mobPopulation) {
+  const p = positionOf(mob);
+  const npcs = npcWorld.nearby(21, p.x, p.z);
+  const mobs = mobService.getNearby({ zoneId: 21, x: p.x, z: p.z });
+  if (npcs.length > 0 && mobs.length > 0) {
+    overlap = { position: { x: p.x, y: p.y, z: p.z }, npcs, mobs };
+    break;
+  }
+}
+if (!overlap) throw new Error('no source-backed Moradon overlap region contains both NPC and mob visibility');
+
+console.log(`WS10_AUTH provider_set=${expectedProviderSet} npc_total=${npcPopulation.records.length} mob_total=${mobPopulation.length} collision=0`);
+console.log(`WS10_AUTH spawn x=${overlap.position.x} y=${overlap.position.y} z=${overlap.position.z} nearby_npc=${overlap.npcs.length} nearby_mob=${overlap.mobs.length}`);
+for (const record of overlap.npcs) {
+  console.log(`WS10_AUTH type=npc id=${runtimeIdOf(record)} template=${templateOf(record)} name=${JSON.stringify(nameOf(record))}`);
+}
+for (const record of overlap.mobs) {
+  console.log(`WS10_AUTH type=mob id=${runtimeIdOf(record)} template=${templateOf(record)} name=${JSON.stringify(nameOf(record))}`);
+}
 
 function clone(value) {
   return value == null ? value : structuredClone(value);
@@ -139,32 +220,34 @@ const repo = {
   async getSurroundingUsers() {
     return [];
   },
-  async getSurroundingNpcs({ zoneId }) {
+  async getSurroundingNpcs({ zoneId, x, z }) {
     if (zoneId !== 21) return [];
-    return [{
-      nid: 10001,
-      pid: 12000,
-      zoneId: 21,
-      npcType: 0,
-      sellingGroup: 0,
-      size: 100,
-      weapon1: 0,
-      weapon2: 0,
-      name: 'MoradonGateKeeper',
-      group: 0,
-      level: 1,
-      x: 315,
-      z: 405,
-      y: 0,
-      gateOpen: 1,
-      objectType: 0,
-      direction: 0,
-    }];
+    return npcWorld.nearby(21, x, z);
   },
 };
 
-const worldSession = new WorldSessionService({ repository: repo });
+const worldSession = new WorldSessionService({
+  repository: repo,
+  mobPort: mobService,
+  moradonSpawn: overlap.position,
+});
 let nextSocketId = 1;
+
+function parseRequestedIds(payload) {
+  if (!payload || payload[0] !== 0x1d || payload.length < 3) return [];
+  const count = payload.readInt16LE(1);
+  if (count < 0 || payload.length !== 3 + count * 2) return [];
+  const ids = [];
+  for (let index = 0; index < count; index += 1) ids.push(payload.readInt16LE(3 + index * 2));
+  return ids;
+}
+function classifyIds(ids) {
+  return {
+    npc: ids.filter((id) => npcIdSet.has(id)),
+    mob: ids.filter((id) => mobIdSet.has(id)),
+    unknown: ids.filter((id) => !npcIdSet.has(id) && !mobIdSet.has(id)),
+  };
+}
 
 function listen(port, kind) {
   const server = net.createServer((socket) => {
@@ -177,6 +260,9 @@ function listen(port, kind) {
           onWorldBroadcast: ({ packet, snapshot }) => {
             console.log(`WS10_COMPOSE event=world-broadcast opcode=0x${packet[0].toString(16).padStart(2, '0')} state=${snapshot?.state || 'unknown'}`);
           },
+          onGameplayBroadcast: ({ owner, packet }) => {
+            console.log(`WS10_COMPOSE event=gameplay-broadcast owner=${owner} opcode=0x${packet[0].toString(16).padStart(2, '0')}`);
+          },
         });
     const decoder = new FrameDecoder();
     let queue = Promise.resolve();
@@ -185,9 +271,22 @@ function listen(port, kind) {
       queue = queue.then(async () => {
         for (const payload of decoder.push(chunk)) {
           console.log(`WS10_COMPOSE event=${kind}-rx opcode=0x${payload[0].toString(16).padStart(2, '0')} bytes=${payload.length}`);
+          if (kind === 'game' && payload[0] === 0x1d) {
+            const requested = parseRequestedIds(payload);
+            const classified = classifyIds(requested);
+            console.log(`WS10_AUTH event=client-detail-request ids=${requested.join(',')} npc=${classified.npc.join(',')} mob=${classified.mob.join(',')} unknown=${classified.unknown.join(',')}`);
+          }
+          if (kind === 'game' && payload[0] === 0x06) {
+            console.log(`WS10_AUTH event=browser-movement bytes=${payload.length}`);
+          }
           const responses = await session.handle(payload);
           for (const response of responses) {
             console.log(`WS10_COMPOSE event=${kind}-tx opcode=0x${response[0].toString(16).padStart(2, '0')} bytes=${response.length}`);
+            if (kind === 'game' && response[0] === 0x1c) {
+              const ids = parseRequestedIds(Buffer.concat([Buffer.from([0x1d]), response.subarray(1)]));
+              const classified = classifyIds(ids);
+              console.log(`WS10_AUTH event=region-list count=${ids.length} npc=${classified.npc.join(',')} mob=${classified.mob.join(',')} unknown=${classified.unknown.join(',')}`);
+            }
             socket.write(frame(response));
           }
         }

@@ -43,9 +43,7 @@ page.on('crash', () => {
   lines.push(text);
   console.error(text);
 });
-page.on('close', () => {
-  pageClosed = true;
-});
+page.on('close', () => { pageClosed = true; });
 page.on('websocket', (ws) => {
   const rec = { url: ws.url(), sent: 0, received: 0 };
   network.push(rec);
@@ -83,7 +81,7 @@ let worldWaitStartedAt = 0;
 let nextWorldHeartbeat = 0;
 function latestWorldProgress() {
   for (let i = lines.length - 1; i >= 0; i--) {
-    if (/WS05_GATE|WS04_GL_CAPTURE|WS10_CAPTURE_ARMED|InitZone|loading|preload|resource|terrain|shape|player|%/i.test(lines[i])) {
+    if (/WS05_GATE|WS04_GL_CAPTURE|WS10_CAPTURE_ARMED|WS10_VISIBILITY|InitZone|loading|preload|resource|terrain|shape|player|%/i.test(lines[i])) {
       return lines[i].replace(/\s+/g, ' ').slice(0, 320);
     }
   }
@@ -114,8 +112,6 @@ async function waitWorld(needle) {
       console.log(`[ws10-driver] WS10_WORLD_WAIT target='${needle}' elapsed_ms=${elapsed} remaining_ms=${remaining} latest='${latestWorldProgress()}'`);
       nextWorldHeartbeat = now + worldHeartbeatMs;
     }
-    // Deliberately poll only in Node. Do not call page.evaluate()/waitForTimeout()
-    // while the synchronous WASM world loader owns the browser main thread.
     await sleep(100);
   }
   throw new Error(`world timeout waiting for ${needle} after ${worldTimeoutMs}ms; latest=${latestWorldProgress()}`);
@@ -135,32 +131,21 @@ function ppmToPng(buffer) {
   if (header[0] !== 'P6' || header[3] !== '255' || rgb.length !== width * height * 3) throw new Error('invalid native GL PPM payload');
   const png = new PNG({ width, height });
   for (let s = 0, d = 0; s < rgb.length; s += 3, d += 4) {
-    png.data[d] = rgb[s];
-    png.data[d + 1] = rgb[s + 1];
-    png.data[d + 2] = rgb[s + 2];
-    png.data[d + 3] = 255;
+    png.data[d] = rgb[s]; png.data[d + 1] = rgb[s + 1]; png.data[d + 2] = rgb[s + 2]; png.data[d + 3] = 255;
   }
   return png;
 }
 
-const nativeCaptureId = 1010;
-async function collectNativeMoradonCapture() {
-  const id = nativeCaptureId;
+async function collectNativeCapture(id, fileName, successMarker) {
   const captureLine = await waitWorld(`WS04_GL_CAPTURE id=${id} ok=1`);
-  if (!captureLine.includes('source=present')) {
-    throw new Error(`native GL capture used wrong source: ${captureLine}`);
-  }
-  // Normalize the provider marker for the WS10 gate while preserving the full
-  // provider-emitted line (which may contain size/path metadata in between).
+  if (!captureLine.includes('source=present')) throw new Error(`native GL capture used wrong source: ${captureLine}`);
   console.log(`[ws10-driver] WS04_GL_CAPTURE id=${id} ok=1 source=present normalized=1`);
   const ready = await page.evaluate(() => globalThis.WS04_CAPTURE_READY || 0);
-  if (ready !== id) throw new Error(`native GL capture not ready: ${ready}`);
+  if (ready !== id) throw new Error(`native GL capture not ready: expected=${id} actual=${ready}`);
   const b64 = await page.evaluate((requestId) => {
     const bytes = Module.FS.readFile(`/ws04-frame-${requestId}.ppm`);
     let binary = '';
-    for (let off = 0; off < bytes.length; off += 0x8000) {
-      binary += String.fromCharCode(...bytes.subarray(off, Math.min(off + 0x8000, bytes.length)));
-    }
+    for (let off = 0; off < bytes.length; off += 0x8000) binary += String.fromCharCode(...bytes.subarray(off, Math.min(off + 0x8000, bytes.length)));
     return btoa(binary);
   }, id);
   const png = ppmToPng(Buffer.from(b64, 'base64'));
@@ -170,13 +155,15 @@ async function collectNativeMoradonCapture() {
     if (png.data[i + 3] && (png.data[i] > 10 || png.data[i + 1] > 10 || png.data[i + 2] > 10)) nonBlack++;
   }
   const ratio = total ? nonBlack / total : 0;
-  fs.writeFileSync(path.join(out, 'moradon-native.png'), PNG.sync.write(png));
-  console.log(`[ws10-driver] WS10_NATIVE_GL nonBlack=${nonBlack}/${total} ratio=${ratio.toFixed(4)}`);
+  fs.writeFileSync(path.join(out, fileName), PNG.sync.write(png));
+  console.log(`[ws10-driver] WS10_NATIVE_GL id=${id} nonBlack=${nonBlack}/${total} ratio=${ratio.toFixed(4)}`);
   if (ratio < 0.02) throw new Error(`native Moradon framebuffer effectively black ratio=${ratio.toFixed(4)}`);
-  console.log(`[ws10-driver] WS05_MORADON_VISUAL_OK source=pre-swap-gl ratio=${ratio.toFixed(4)}`);
+  console.log(`[ws10-driver] ${successMarker} source=pre-swap-gl id=${id} ratio=${ratio.toFixed(4)}`);
   return { width: png.width, height: png.height, nonBlack, total, ratio };
 }
 
+const initialCaptureId = 1010;
+const visibilityCaptureId = 2020;
 let result = { status: 'FAIL' };
 try {
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -208,9 +195,7 @@ try {
   await page.waitForTimeout(500);
   await page.mouse.click(170, 325, { delay: 100 });
   await page.waitForTimeout(1200);
-
   for (let i = 0; i < 12; i++) await heldClick(925, 114, 90, 110);
-
   await page.mouse.click(510, 678, { delay: 80 });
   await page.keyboard.press('Control+A');
   await page.keyboard.type(charName, { delay: 25 });
@@ -221,51 +206,50 @@ try {
   await wait('WS04_CHAR_CREATE_RESPONSE code=0', 30000);
   await wait('scene change: character-create -> character-select', 30000);
   await wait('WS04_CHAR_LIST parsed result=1 slots=3 occupied=1', 30000);
-
   await page.locator('#canvas').focus();
   await held('Enter', 100);
   await wait('WS04_CHAR_SELECT_REQUEST index=0', 15000);
   await wait('WS04_CHAR_SELECT_RESPONSE success=1', 30000);
 
-  // The selected-character transition begins the one shared world-load deadline.
-  // All waits below are Node-only so the genuine synchronous WASM loader is never
-  // interrupted by Playwright evaluate/poll calls.
   startWorldWait();
   await waitWorld('WS05_GATE event=moradon-zone-begin zone=21');
   await waitWorld('WS05_GATE event=moradon-assets-loaded zone=21');
-  await waitWorld(`WS10_CAPTURE_ARMED id=${nativeCaptureId} trigger=moradon-assets-loaded mode=present-only`);
+  await waitWorld(`WS10_CAPTURE_ARMED id=${initialCaptureId} trigger=moradon-assets-loaded mode=present-only`);
   await waitWorld('WS05_GATE event=moradon-terrain-rendered zone=21');
   await waitWorld('WS05_GATE event=moradon-shapes-rendered zone=21');
   await waitWorld('WS05_GATE event=moradon-local-player-rendered zone=21');
+  const nativeFrame = await collectNativeCapture(initialCaptureId, 'moradon-native.png', 'WS05_MORADON_VISUAL_OK');
 
-  const nativeFrame = await collectNativeMoradonCapture();
+  await waitWorld('WS10_VISIBILITY REGION_PARSE count=');
+  await waitWorld('WS10_VISIBILITY DETAIL_BATCH_PARSE count=');
+  await waitWorld('WS10_VISIBILITY ENTITY_CREATE id=');
+  await waitWorld('WS10_VISIBILITY MODEL_READY id=');
+  await waitWorld('WS10_VISIBILITY RENDERED id=');
+
+  await page.locator('#canvas').focus();
+  await held('w', 650);
+  await held('ArrowUp', 650);
+  await sleep(1200);
+  console.log('[ws10-driver] WS10_BROWSER_MOVEMENT_INPUT complete=1');
+
+  await page.evaluate((id) => {
+    globalThis.WS04_CAPTURE_READY = 0;
+    globalThis.WS04_CAPTURE_INFLIGHT = 0;
+    globalThis.WS04_CAPTURE_PRESENT_ONLY = 1;
+    globalThis.WS04_CAPTURE_REQUEST = id;
+  }, visibilityCaptureId);
+  console.log(`[ws10-driver] WS10_VISIBILITY_CAPTURE_ARMED id=${visibilityCaptureId} mode=present-only`);
+  const visibilityFrame = await collectNativeCapture(visibilityCaptureId, 'moradon-visibility-native.png', 'WS10_VISIBILITY_CAPTURE_OK');
+
   const fatal = lines.filter((line) => /\[pageerror\]|\[pagecrash\]|GL_INVALID_(ENUM|VALUE|OPERATION)|WebGL: INVALID_|WebGL: too many errors|render backend: Null/i.test(line));
   if (fatal.length) throw new Error(`fatal renderer/browser evidence: ${fatal.slice(0, 5).join(' | ')}`);
 
   result = {
-    status: 'PASS',
-    username,
-    charName,
-    version: 1298,
-    zone: 21,
-    nativeZone: 210,
-    worldTimeoutMs,
-    nativeFrame,
-    requiredMarkers: [
-      'WS04_CHAR_CREATE_SENT opcode=0x02',
-      'WS04_CHAR_CREATE_RESPONSE code=0',
-      'WS04_CHAR_LIST parsed result=1 slots=3 occupied=1',
-      'WS04_CHAR_SELECT_REQUEST index=0',
-      'WS04_CHAR_SELECT_RESPONSE success=1',
-      'WS05_GATE event=moradon-zone-begin zone=21',
-      'WS05_GATE event=moradon-assets-loaded zone=21',
-      `WS10_CAPTURE_ARMED id=${nativeCaptureId} trigger=moradon-assets-loaded mode=present-only`,
-      'WS05_GATE event=moradon-terrain-rendered zone=21',
-      'WS05_GATE event=moradon-shapes-rendered zone=21',
-      'WS05_GATE event=moradon-local-player-rendered zone=21',
-      `WS04_GL_CAPTURE id=${nativeCaptureId} ok=1 source=present`,
-      'WS05_MORADON_VISUAL_OK source=pre-swap-gl',
-    ],
+    status: 'PASS', username, charName, version: 1298, zone: 21, nativeZone: 210, worldTimeoutMs,
+    nativeFrame, visibilityFrame,
+    visibilityMarkers: {
+      regionParse: true, detailBatchParse: true, entityCreate: true, modelReady: true, rendered: true,
+    },
   };
   console.log('WS10_MORADON_E2E_PASS');
 } catch (error) {

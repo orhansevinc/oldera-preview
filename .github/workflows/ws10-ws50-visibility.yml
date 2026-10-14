@@ -1,327 +1,372 @@
-name: WS10 WS50-C3 Visibility E2E Gate
+name: WS10 WS50-C5 Real Browser Visibility Gate
 
 on:
   workflow_dispatch:
   push:
-    branches:
-      - ws10-qa-integration
+    branches: [ws10-qa-integration]
     paths:
-      - .github/workflows/ws10-ws50-visibility.yml
-      - qa/moradon/**
+      - '.github/workflows/ws10-ws50-visibility.yml'
+      - '.github/workflows/ws10-e2e.yml'
+      - 'qa/moradon/**'
+      - 'workstreams/ws10/**'
 
 permissions:
   contents: read
   actions: read
 
 env:
-  PROVIDER_SET_ID: WS50-C3
-  PROVIDER_SET_KEY: WS50-C3@sha256:a9c808898bd1cb9f3cadfb44ddbabadaf34448f9aef0a4990ca91958053458aa
-  WS50_FREEZE_SHA: 15eb5b83bfadb7bb9ad131997730ef5adf0abcc8
-  WS10_HARNESS_SHA: 4a81c6cf7e11514ca01f0730ecc57010c9ea37fb
+  PROVIDER_SET_KEY: WS50-C5@sha256:7ac3b8a4c06b67e52b8d18518ef8c82209a60c6101c33609a4c16e64d84f119e
+  WS50_MANIFEST_COMMIT: 0d5001095fa3b43693b4fa0cda615f84e2cb7df5
+  WS02_SHA: 1738f60945b24e00bdd2266e6600b5c0cf3c64cf
+  WS03_SHA: 495de481726734d85cc28b3d432835799aff7e48
+  WS05_SHA: 0537c481383a69c534799b43810f35e7279c5578
+  WS11_SHA: 944b6ff9b6329af29f1048a74aa6e14fca141639
+  WS14_SHA: ed5f806ce7505f4dfae406e4164735def63b6c86
+  WS16_SHA: 5ed48ff32187000312652838674388df52fc3fb7
+  WS25_SHA: 13c9bafe287b250d56b52f19e97a02e7ef18e6e5
+  WS31_SHA: 546d2ab62cd46a97f3385ebcddbe0c775a02c2eb
   CANONICAL_RUN_ID: '38505039290'
-  CANONICAL_CLIENT_ARTIFACT: ws10-moradon-passing-client-26
-  CANONICAL_CLIENT_ARTIFACT_ID: '11867980473'
-  CANONICAL_CLIENT_ZIP_SHA256: ff9fb679ad1b3caa184ad098cff81cfb5469b0698d5e5f3b76ef4fab2ea775b3
+  CANONICAL_EVIDENCE_ARTIFACT: ws10-moradon-e2e-26
+  OPENKO_SHA: 97eb0ea20207afc0c360bfed6915113572711be3
+  KO_ASSETS_SHA: 2055ee6ed77f1b5cfef23832dd5bc31909e14a66
   WS10_TEST_ID: ws10e2e
   WS10_TEST_PW: ws10pass
   WS10_CHAR_NAME: Ws10Hero
   WS10_RUNTIME_TIMEOUT_MS: '300000'
   WS10_WORLD_TIMEOUT_MS: '600000'
   WS10_WORLD_HEARTBEAT_MS: '15000'
+  QA_ARTIFACT_DIR: artifacts/moradon
 
 jobs:
-  canonical-browser-regression:
-    name: canonical-browser-regression
+  c5-real-browser-visibility:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 90
     steps:
-      - name: Checkout exact WS10 harness
+      - name: Checkout WS10 harness
         uses: actions/checkout@v4
         with:
-          ref: ${{ env.WS10_HARNESS_SHA }}
           fetch-depth: 0
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
 
-      - name: Download immutable canonical passing client
+      - name: Bind this run to exact immutable WS50-C5
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/moradon .qa-providers
+          git fetch --no-tags origin "$WS50_MANIFEST_COMMIT"
+          git show "$WS50_MANIFEST_COMMIT:release/sets/ws50/C5.json" > artifacts/moradon/ws50-c5.json
+          python3 - <<'PY'
+          import hashlib, json
+          p='artifacts/moradon/ws50-c5.json'
+          d=json.load(open(p))
+          expected='WS50-C5@sha256:7ac3b8a4c06b67e52b8d18518ef8c82209a60c6101c33609a4c16e64d84f119e'
+          x=dict(d); x.pop('content_hash',None); x.pop('immutable_key',None)
+          encoded=json.dumps(x,sort_keys=True,separators=(',',':'))
+          h='sha256:'+hashlib.sha256(encoded.encode()).hexdigest()
+          assert h==d['content_hash'], (h,d['content_hash'])
+          assert d['immutable_key']==expected
+          assert d['candidate_result']=='PASS'
+          providers={p['ws']:p['exact_sha'] for p in d['providers']}
+          required={
+            'WS02':'1738f60945b24e00bdd2266e6600b5c0cf3c64cf',
+            'WS03':'495de481726734d85cc28b3d432835799aff7e48',
+            'WS05':'0537c481383a69c534799b43810f35e7279c5578',
+            'WS11':'944b6ff9b6329af29f1048a74aa6e14fca141639',
+            'WS14':'ed5f806ce7505f4dfae406e4164735def63b6c86',
+            'WS16':'5ed48ff32187000312652838674388df52fc3fb7',
+            'WS25':'13c9bafe287b250d56b52f19e97a02e7ef18e6e5',
+            'WS31':'546d2ab62cd46a97f3385ebcddbe0c775a02c2eb',
+          }
+          for ws,sha in required.items(): assert providers[ws]==sha,(ws,providers.get(ws),sha)
+          print('WS10_C5_MANIFEST_BINDING PASS',expected)
+          PY
+
+      - name: Prove canonical client lacks required visibility boundary observability
         uses: actions/download-artifact@v4
         with:
-          name: ${{ env.CANONICAL_CLIENT_ARTIFACT }}
-          path: canonical-client
+          name: ${{ env.CANONICAL_EVIDENCE_ARTIFACT }}
+          path: artifacts/canonical-evidence
           github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: orhansevinc/oldera-preview
           run-id: ${{ env.CANONICAL_RUN_ID }}
 
-      - name: Verify client is unchanged
+      - name: Record source-only observability rebuild necessity
         shell: bash
         run: |
           set -euo pipefail
-          PASS_ROOT="$(dirname "$(find canonical-client -type f -name KnightOnLine.js -print -quit)")"
-          test -n "$PASS_ROOT"
-          test -s "$PASS_ROOT/KnightOnLine.js"
-          test -s "$PASS_ROOT/KnightOnLine.wasm"
-          test -s "$PASS_ROOT/KnightOnLine.data"
-          test -s "$PASS_ROOT/ws10-moradon.html"
-          test -s "$PASS_ROOT/SHA256SUMS.txt"
-          (cd "$PASS_ROOT" && sha256sum -c SHA256SUMS.txt)
-          test "$(stat -c %s "$PASS_ROOT/KnightOnLine.js")" = 1493510
-          test "$(stat -c %s "$PASS_ROOT/KnightOnLine.wasm")" = 5631727
-          test "$(stat -c %s "$PASS_ROOT/KnightOnLine.data")" = 615930538
-          echo "PASS_ROOT=$PASS_ROOT" >> "$GITHUB_ENV"
-          mkdir -p artifacts/ws50-c3-regression
-          {
-            echo "role=canonical-regression-only"
-            echo "provider_set_id=$PROVIDER_SET_ID"
-            echo "provider_set_key=$PROVIDER_SET_KEY"
-            echo "canonical_run_id=$CANONICAL_RUN_ID"
-            echo "canonical_client_artifact=$CANONICAL_CLIENT_ARTIFACT"
-            echo "canonical_client_artifact_id=$CANONICAL_CLIENT_ARTIFACT_ID"
-            echo "canonical_client_zip_sha256=$CANONICAL_CLIENT_ZIP_SHA256"
-            echo "client_rebuilt=false"
-            echo "harness_sha=$WS10_HARNESS_SHA"
-          } > artifacts/ws50-c3-regression/identity.txt
-          cp "$PASS_ROOT/SHA256SUMS.txt" artifacts/ws50-c3-regression/client-SHA256SUMS.txt
+          if grep -R -q 'WS10_VISIBILITY' artifacts/canonical-evidence; then
+            echo 'canonical evidence unexpectedly already has visibility boundary markers' >&2
+            exit 1
+          fi
+          cat > artifacts/moradon/observability-rebuild.txt <<'EOF'
+          Canonical run 38505039290 proves KO1298 browser/Moradon rendering and 0x1C->0x1D network flow,
+          but exposes no client-internal parse/entity/model/render markers. Stage-4 requires those exact
+          boundaries, so the client is rebuilt from the same pinned OpenKO source, KO assets, and WS04/WS05
+          browser patches with logging-only markers. No packet, entity, model-selection, transform, or render
+          behavior is substituted or changed by the WS10 observability patch.
+          EOF
 
-      - name: Stage exact canonical regression providers
+      - name: Stage exact C5 provider commits without branch resolution
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p .providers
           stage() {
-            local name="$1" sha="$2"
+            key="$1"; sha="$2"
             git fetch --no-tags origin "$sha"
             test "$(git rev-parse FETCH_HEAD)" = "$sha"
-            git worktree add --detach ".providers/$name" "$sha"
+            git worktree add --detach ".qa-providers/$key" "$sha"
+            printf '%s %s\n' "$key" "$sha" >> artifacts/moradon/provider-refs.txt
           }
-          # Exact provider SHAs recorded by canonical browser PASS run 38505039290.
-          stage ws02 1738f60945b24e00bdd2266e6600b5c0cf3c64cf
-          stage ws03 d634870bbcd2c541695516643d34e0ac119354d7
-          stage ws14 82cdcef40bed265ff4c4ce0fb7c8f6ad8cf2f52b
-          {
-            echo 'WS02=1738f60945b24e00bdd2266e6600b5c0cf3c64cf'
-            echo 'WS03=d634870bbcd2c541695516643d34e0ac119354d7'
-            echo 'WS14=82cdcef40bed265ff4c4ce0fb7c8f6ad8cf2f52b'
-          } > artifacts/ws50-c3-regression/canonical-provider-refs.txt
+          : > artifacts/moradon/provider-refs.txt
+          stage ws02 "$WS02_SHA"
+          stage ws03 "$WS03_SHA"
+          stage ws05 "$WS05_SHA"
+          stage ws11 "$WS11_SHA"
+          stage ws14 "$WS14_SHA"
+          stage ws16 "$WS16_SHA"
+          stage ws25 "$WS25_SHA"
+          stage ws31 "$WS31_SHA"
 
-      - name: Install browser test runtime
+      - name: Fetch exact Moradon SMD height authority
         shell: bash
         run: |
           set -euo pipefail
+          SMD="$RUNNER_TEMP/moradon_0826.smd"
+          curl --fail --location --silent --show-error \
+            'https://raw.githubusercontent.com/Open-KO/KnightOnline/7d6cf81093e142c928c2ac9510512b2b182178b5/assets/Server/MAP/moradon_0826.smd' \
+            --output "$SMD"
+          python3 - "$SMD" <<'PY'
+          import hashlib,pathlib,sys
+          p=pathlib.Path(sys.argv[1]); data=p.read_bytes()
+          assert len(data)==786000,len(data)
+          actual=hashlib.sha1(f'blob {len(data)}\0'.encode()+data).hexdigest()
+          assert actual=='cf47772b8e42a8bad71032419f47978c8bbd6142',actual
+          print('WS10_MORADON_SMD_IDENTITY PASS',actual,len(data))
+          PY
+          echo "WS14_MORADON_SMD=$SMD" >> "$GITHUB_ENV"
+
+      - name: Re-prove exact C5 visibility composition before browser
+        shell: bash
+        env:
+          WS14_WS11_VISIBILITY_FIXTURES: ${{ github.workspace }}/.qa-providers/ws11/protocol-lab/visibility-fixtures
+          WS14_WS16_PROVIDER_ROOT: ${{ github.workspace }}/.qa-providers/ws16
+          WS14_WS16_NPC_DATA: ${{ github.workspace }}/.qa-providers/ws16/world-data/npc/moradon.json
+          WS14_WS25_PROVIDER_ROOT: ${{ github.workspace }}/.qa-providers/ws25
+          WS14_WS25_MOB_DATA: ${{ github.workspace }}/.qa-providers/ws25/world-data/mobs/verified/moradon-zone21.verified.json
+          WS14_WS11_PROVIDER_SHA: 944b6ff9b6329af29f1048a74aa6e14fca141639
+          WS14_WS16_PROVIDER_SHA: 5ed48ff32187000312652838674388df52fc3fb7
+          WS14_WS25_PROVIDER_SHA: 13c9bafe287b250d56b52f19e97a02e7ef18e6e5
+          WS14_WS31_PROVIDER_SHA: 546d2ab62cd46a97f3385ebcddbe0c775a02c2eb
+        run: node --test .qa-providers/ws14/tests/ko1298-world/visibility-provider-composition.test.js | tee artifacts/moradon/c5-composition.log
+
+      - name: Checkout exact browser-capable OpenKO source
+        uses: actions/checkout@v4
+        with:
+          repository: luisfelipe18/old-school-openko
+          ref: 97eb0ea20207afc0c360bfed6915113572711be3
+          path: openko
+          submodules: false
+          fetch-depth: 1
+
+      - name: Checkout exact genuine KO1298 assets
+        uses: actions/checkout@v4
+        with:
+          repository: ko4life-net/ko-assets
+          ref: 2055ee6ed77f1b5cfef23832dd5bc31909e14a66
+          path: ko-assets
+          fetch-depth: 1
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            Data
+            UI_US
+            Snd/Intro_Sound.mp3
+            Server.ini
+
+      - name: Verify exact client source and asset identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C openko rev-parse HEAD)" = "$OPENKO_SHA"
+          test "$(git -C ko-assets rev-parse HEAD)" = "$KO_ASSETS_SHA"
+          test "$(git -C ko-assets rev-parse HEAD^{tree})" = '705874881c8308e0a45a0c849e4b3881088d8138'
+          printf 'openko=%s\nko-assets=%s\nko-assets-tree=%s\n' \
+            "$(git -C openko rev-parse HEAD)" "$(git -C ko-assets rev-parse HEAD)" "$(git -C ko-assets rev-parse HEAD^{tree})" \
+            > artifacts/moradon/client-source-identity.txt
+
+      - name: Apply canonical browser patches plus logging-only visibility observability
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .qa-providers/ws05/tools/patch_openko_browser.py
+          python3 .qa-providers/ws05/tools/patch_openko_browser_gateway.py
+          python3 .qa-providers/ws05/tools/fix_browser_server_ini_case.py
+          python3 .qa-providers/ws05/tools/patch_openko_browser_serverlist_probe.py
+          python3 .qa-providers/ws05/tools/patch_openko_browser_auth_probe.py
+          python3 .qa-providers/ws05/tools/ws04_character/patch_character_client.py
+          python3 .qa-providers/ws05/tools/ws04_character/patch_frame_capture.py
+          python3 .qa-providers/ws05/tools/ws05_moradon/patch_moradon_client.py
+          python3 qa/moradon/patch_visibility_observability.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('openko/src/Client/WarFare/RHIDeviceGL.cpp'); s=p.read_text()
+          if 'request >= 1000' not in s or 'WS04ServiceCaptureRequest("present", false)' not in s:
+              raise SystemExit('WS04 Present-only capture contract changed')
+          bad=r'#version 300 es\nprecision highp float;'; good='#version 300 es\nprecision highp float;'
+          if s.count(bad)!=2: raise SystemExit('escaped GLSL anchors changed')
+          p.write_text(s.replace(bad,good))
+          PY
+          grep -q 'WS05_GATE event=moradon-local-player-rendered zone=21' openko/src/Client/WarFare/GameProcMain.cpp
+          grep -q 'WS10_VISIBILITY DETAIL_RECORD' openko/src/Client/WarFare/GameProcMain.cpp
+          grep -q 'WS10_VISIBILITY RENDERED' openko/src/Client/WarFare/PlayerBase.cpp
+
+      - name: Install build and browser tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake python3 git
           npm install --prefix qa --no-audit --no-fund
           npx --prefix qa playwright install --with-deps chromium
 
-      - name: Run unchanged real KO1298 browser regression
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest
+          actions-cache-folder: emsdk-cache
+
+      - name: Build real KO1298 C++ Emscripten WebGL2 client
         shell: bash
-        env:
-          QA_ARTIFACT_DIR: artifacts/ws50-c3-regression/browser
+        run: |
+          set -o pipefail
+          emcc --version | tee artifacts/moradon/emscripten-version.txt
+          emcmake cmake -S openko -B build-web -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_FLAGS='-DBOOST_HAS_PTHREADS=1' \
+            -DCMAKE_CXX_FLAGS='-DBOOST_HAS_PTHREADS=1 -DASIO_DISABLE_THREADS=1 -fexceptions' \
+            -DCMAKE_EXE_LINKER_FLAGS='-fexceptions' \
+            -DOPENKO_BUILD_CLIENT=ON \
+            -DOPENKO_CLIENT_POSIX_EXPERIMENTAL=ON \
+            -DOPENKO_BUILD_CLIENT_TOOLS=OFF \
+            -DOPENKO_BUILD_TOOLS=OFF \
+            -DOPENKO_BUILD_SERVERS=OFF \
+            -DOPENKO_BUILD_TESTS=OFF \
+            -DOPENKO_FETCH_CLIENT_ASSETS=OFF \
+            -DOPENKO_COMPILE_WARNINGS_AS_ERROR=OFF \
+            2>&1 | tee artifacts/moradon/configure.log
+          cmake --build build-web --target WarFare -j2 2>&1 | tee artifacts/moradon/build.log
+          OUT=build-web/bin/Release
+          test -s "$OUT/KnightOnLine.js" && test -s "$OUT/KnightOnLine.wasm" && test -s "$OUT/KnightOnLine.data"
+          stat -c '%n %s' "$OUT/KnightOnLine.js" "$OUT/KnightOnLine.wasm" "$OUT/KnightOnLine.data" | tee artifacts/moradon/client-build-sizes.txt
+
+      - name: Run exact C5 real browser visibility E2E
+        shell: bash
         run: |
           set -euo pipefail
-          mkdir -p artifacts/ws50-c3-regression/browser
-          WS03_ROOT="$GITHUB_WORKSPACE/.providers/ws03" \
-          WS14_ROOT="$GITHUB_WORKSPACE/.providers/ws14" \
-          AUTH_TCP_PORT=16100 GAME_TCP_PORT=16101 \
+          OUT="$GITHUB_WORKSPACE/build-web/bin/Release"
+          cat > "$OUT/ws10-moradon.html" <<'EOF'
+          <!doctype html><html><body style="margin:0;background:#000;overflow:hidden">
+          <canvas id="canvas" width="1024" height="768" tabindex="0"></canvas><pre id="status" style="display:none"></pre>
+          <script>
+          (()=>{const status=document.getElementById('status');const initial=1010;let armed=false;
+          const arm=(line)=>{if(armed||!line.includes('WS05_GATE event=moradon-assets-loaded zone=21'))return;armed=true;globalThis.WS04_CAPTURE_READY=0;globalThis.WS04_CAPTURE_INFLIGHT=0;globalThis.WS04_CAPTURE_PRESENT_ONLY=1;globalThis.WS04_CAPTURE_REQUEST=initial;console.log(`WS10_CAPTURE_ARMED id=${initial} trigger=moradon-assets-loaded mode=present-only`);};
+          const write=(kind,args)=>{const line='['+kind+'] '+args.join(' ');status.textContent+=line+'\n';console.log(line);arm(line);};
+          window.Module={canvas:document.getElementById('canvas'),arguments:['--renderer','gl','--data','/data'],print:(...a)=>write('OUT',a),printErr:(...a)=>write('ERR',a),onRuntimeInitialized:()=>write('SMOKE',['WASM_RUNTIME_READY'])};})();
+          </script><script src="KnightOnLine.js"></script></body></html>
+          EOF
+
+          WS50_PROVIDER_SET="$PROVIDER_SET_KEY" \
+          WS03_ROOT="$GITHUB_WORKSPACE/.qa-providers/ws03" \
+          WS14_ROOT="$GITHUB_WORKSPACE/.qa-providers/ws14" \
+          WS16_ROOT="$GITHUB_WORKSPACE/.qa-providers/ws16" \
+          WS25_ROOT="$GITHUB_WORKSPACE/.qa-providers/ws25" \
+          WS14_MORADON_SMD="$WS14_MORADON_SMD" \
+          WS16_NPC_DATA="$GITHUB_WORKSPACE/.qa-providers/ws16/world-data/npc/moradon.json" \
+          WS25_MOB_DATA="$GITHUB_WORKSPACE/.qa-providers/ws25/world-data/mobs/verified/moradon-zone21.verified.json" \
           WS10_TEST_ID="$WS10_TEST_ID" WS10_TEST_PW="$WS10_TEST_PW" \
-            node qa/moradon/integration-server.cjs >artifacts/ws50-c3-regression/composition-server.log 2>&1 &
+          AUTH_TCP_PORT=16100 GAME_TCP_PORT=16101 \
+            node qa/moradon/integration-server.cjs >artifacts/moradon/composition-server.log 2>&1 &
           COMPOSE_PID=$!
-
-          GATEWAY_MODE=auth AUTH_TCP_HOST=127.0.0.1 AUTH_TCP_PORT=16100 \
-          LISTEN_HOST=127.0.0.1 PORT=15100 WS_PATH=/ REQUIRE_ORIGIN=false \
-            node .providers/ws02/services/ko-gateway/src/server.js >artifacts/ws50-c3-regression/gateway-auth.log 2>&1 &
+          GATEWAY_MODE=auth AUTH_TCP_HOST=127.0.0.1 AUTH_TCP_PORT=16100 LISTEN_HOST=127.0.0.1 PORT=15100 WS_PATH=/ REQUIRE_ORIGIN=false \
+            node .qa-providers/ws02/services/ko-gateway/src/server.js >artifacts/moradon/gateway-auth.log 2>&1 &
           AUTH_GW_PID=$!
-
-          GATEWAY_MODE=game GAME_TCP_HOST=127.0.0.1 GAME_TCP_PORT=16101 \
-          LISTEN_HOST=127.0.0.1 PORT=15001 WS_PATH=/ REQUIRE_ORIGIN=false \
-            node .providers/ws02/services/ko-gateway/src/server.js >artifacts/ws50-c3-regression/gateway-game.log 2>&1 &
+          GATEWAY_MODE=game GAME_TCP_HOST=127.0.0.1 GAME_TCP_PORT=16101 LISTEN_HOST=127.0.0.1 PORT=15001 WS_PATH=/ REQUIRE_ORIGIN=false \
+            node .qa-providers/ws02/services/ko-gateway/src/server.js >artifacts/moradon/gateway-game.log 2>&1 &
           GAME_GW_PID=$!
-
-          python3 -m http.server 8000 --bind 127.0.0.1 --directory "$PASS_ROOT" >artifacts/ws50-c3-regression/http.log 2>&1 &
+          python3 -m http.server 8000 --bind 127.0.0.1 --directory "$OUT" >artifacts/moradon/http.log 2>&1 &
           HTTP_PID=$!
           trap 'kill $HTTP_PID $AUTH_GW_PID $GAME_GW_PID $COMPOSE_PID 2>/dev/null || true' EXIT
           sleep 3
+          set +e
+          node qa/moradon/browser-e2e.cjs 2>&1 | tee artifacts/moradon/driver.log
+          DRIVER_RC=${PIPESTATUS[0]}
+          set -e
+          cat artifacts/moradon/composition-server.log
+          test "$DRIVER_RC" -eq 0
+          grep -q 'WS10_AUTH event=region-list' artifacts/moradon/composition-server.log
+          grep -q 'WS10_AUTH event=client-detail-request' artifacts/moradon/composition-server.log
+          grep -q 'WS10_COMPOSE event=game-tx opcode=0x1d' artifacts/moradon/composition-server.log
+          grep -q 'WS10_VISIBILITY DETAIL_RECORD' artifacts/moradon/driver.log
+          grep -q 'WS10_VISIBILITY ENTITY_CREATE' artifacts/moradon/driver.log
+          grep -q 'WS10_VISIBILITY MODEL_READY' artifacts/moradon/driver.log
+          grep -q 'WS10_VISIBILITY RENDERED' artifacts/moradon/driver.log
+          grep -q 'WS10_VISIBILITY_CAPTURE_OK' artifacts/moradon/driver.log
+          grep -q 'WS10_MORADON_E2E_PASS' artifacts/moradon/driver.log
+          node qa/moradon/verify-visibility-evidence.cjs artifacts/moradon/composition-server.log artifacts/moradon/driver.log artifacts/moradon/visibility-proof.json | tee artifacts/moradon/visibility-gate.log
+          python3 .qa-providers/ws05/tools/ws05_moradon/moradon_gate.py artifacts/moradon/driver.log | tee artifacts/moradon/ws05-gate.log
 
-          WS10_CLIENT_URL=http://127.0.0.1:8000/ws10-moradon.html \
-            node qa/moradon/browser-e2e.cjs 2>&1 | tee artifacts/ws50-c3-regression/driver.log
+      - name: Stage exact passing visibility client
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$GITHUB_WORKSPACE/build-web/bin/Release"
+          PASS="$GITHUB_WORKSPACE/artifacts/passing-client"
+          mkdir -p "$PASS/evidence"
+          cp "$OUT/KnightOnLine.js" "$OUT/KnightOnLine.wasm" "$OUT/KnightOnLine.data" "$OUT/ws10-moradon.html" "$PASS/"
+          cp artifacts/moradon/ws50-c5.json "$PASS/"
+          cp artifacts/moradon/provider-refs.txt "$PASS/"
+          cp artifacts/moradon/client-source-identity.txt "$PASS/"
+          cp artifacts/moradon/emscripten-version.txt "$PASS/"
+          cp artifacts/moradon/client-build-sizes.txt "$PASS/"
+          cp artifacts/moradon/observability-rebuild.txt "$PASS/"
+          cp artifacts/moradon/browser-result.json "$PASS/evidence/"
+          cp artifacts/moradon/visibility-proof.json "$PASS/evidence/"
+          cp artifacts/moradon/driver.log "$PASS/evidence/"
+          cp artifacts/moradon/visibility-gate.log "$PASS/evidence/"
+          cp artifacts/moradon/moradon-native.png "$PASS/evidence/"
+          cp artifacts/moradon/moradon-visibility-native.png "$PASS/evidence/"
+          (cd "$PASS" && sha256sum KnightOnLine.js KnightOnLine.wasm KnightOnLine.data ws10-moradon.html > SHA256SUMS.txt)
+          {
+            echo 'MORADON REAL NPC/MOB VISIBILITY E2E: PASS'
+            echo "provider_set=$PROVIDER_SET_KEY"
+            echo "github_run_id=$GITHUB_RUN_ID"
+            echo "github_run_number=$GITHUB_RUN_NUMBER"
+            echo "ws10_commit=$GITHUB_SHA"
+            echo "canonical_baseline_run=$CANONICAL_RUN_ID"
+            echo "openko_source=$OPENKO_SHA"
+            echo "ko_assets=$KO_ASSETS_SHA"
+            echo 'client_delta=logging-only visibility observability'
+          } > "$PASS/PASS_METADATA.txt"
 
-          grep -q 'WS10_MORADON_E2E_PASS' artifacts/ws50-c3-regression/driver.log
-          grep -q 'WS05_GATE event=moradon-terrain-rendered zone=21' artifacts/ws50-c3-regression/driver.log
-          grep -q 'WS05_GATE event=moradon-shapes-rendered zone=21' artifacts/ws50-c3-regression/driver.log
-          grep -q 'WS05_GATE event=moradon-local-player-rendered zone=21' artifacts/ws50-c3-regression/driver.log
-          grep -q 'WS10_NATIVE_GL nonBlack=' artifacts/ws50-c3-regression/driver.log
-          grep -q 'game-tx opcode=0x1c' artifacts/ws50-c3-regression/composition-server.log
-          grep -q 'game-rx opcode=0x1d' artifacts/ws50-c3-regression/composition-server.log
-          grep -q 'game-tx opcode=0x1d' artifacts/ws50-c3-regression/composition-server.log
-          grep -q 'state=WORLD_READY' artifacts/ws50-c3-regression/composition-server.log
-
-          python3 - <<'PY'
-          import json, hashlib, os
-          from pathlib import Path
-          root = Path(os.environ['PASS_ROOT'])
-          out = Path('artifacts/ws50-c3-regression')
-          digests = {}
-          for name in ('KnightOnLine.js','KnightOnLine.wasm','KnightOnLine.data'):
-              h = hashlib.sha256()
-              with (root/name).open('rb') as f:
-                  for chunk in iter(lambda: f.read(8*1024*1024), b''):
-                      h.update(chunk)
-              digests[name] = {'sha256': h.hexdigest(), 'bytes': (root/name).stat().st_size}
-          evidence = {
-              'role': 'canonical-regression-only',
-              'providerSetId': os.environ['PROVIDER_SET_ID'],
-              'providerSetKey': os.environ['PROVIDER_SET_KEY'],
-              'canonicalRunId': os.environ['CANONICAL_RUN_ID'],
-              'canonicalClientArtifact': os.environ['CANONICAL_CLIENT_ARTIFACT'],
-              'clientRebuilt': False,
-              'realBrowser': True,
-              'terrain': 'PASS', 'shapes': 'PASS', 'localPlayer': 'PASS',
-              'nonBlackFramebuffer': 'PASS',
-              'npcHandshakeRegression': {'0x1cReceived': True, '0x1dRequested': True, '0x1dReturned': True},
-              'visibilityProductionProof': False,
-              'note': 'Historical canonical harness uses its original synthetic NPC fixture; this is regression evidence only and is never accepted as WS50-C3 visibility PASS.',
-              'clientDigests': digests,
-          }
-          (out/'regression-evidence.json').write_text(json.dumps(evidence, indent=2) + '\n')
-          PY
-
-      - name: Upload canonical regression evidence
+      - name: Upload WS10 C5 visibility evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ws10-ws50-c3-canonical-regression-${{ github.run_number }}
-          path: artifacts/ws50-c3-regression/**
-          retention-days: 30
+          name: ws10-c5-visibility-e2e-${{ github.run_number }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            artifacts/moradon/**
+            !artifacts/passing-client/**
 
-  frozen-c3-visibility-boundary:
-    name: frozen-c3-visibility-boundary
-    needs: canonical-browser-regression
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - name: Checkout exact WS10 harness
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ env.WS10_HARNESS_SHA }}
-          fetch-depth: 0
-
-      - name: Stage frozen WS50-C3 and exact visibility providers
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p .providers artifacts/ws50-c3-visibility
-          stage() {
-            local name="$1" sha="$2"
-            git fetch --no-tags origin "$sha"
-            test "$(git rev-parse FETCH_HEAD)" = "$sha"
-            git worktree add --detach ".providers/$name" "$sha"
-          }
-          stage ws50 "$WS50_FREEZE_SHA"
-          stage ws14 c1a1d454285db02c6de0c087a2d65434bfb4593b
-          stage ws16 234657c1264ead6b8828425ae9e7fcdca0cca5c8
-          stage ws25 a42b489e1a17d7c2889cfd92909ddd45c65e825e
-          stage ws31 546d2ab62cd46a97f3385ebcddbe0c775a02c2eb
-          cp .providers/ws50/release/sets/ws50/C3.json artifacts/ws50-c3-visibility/provider-set.json
-          cp .providers/ws50/release/sets/ws50/current-candidate.json artifacts/ws50-c3-visibility/current-candidate.json
-
-      - name: Verify immutable candidate identity and source-backed blockers
-        shell: bash
-        run: |
-          set -euo pipefail
-          node - <<'NODE'
-          const fs = require('node:fs');
-          const candidate = JSON.parse(fs.readFileSync('.providers/ws50/release/sets/ws50/current-candidate.json','utf8'));
-          const c3 = JSON.parse(fs.readFileSync('.providers/ws50/release/sets/ws50/C3.json','utf8'));
-          const expectedId = process.env.PROVIDER_SET_ID;
-          const expectedKey = process.env.PROVIDER_SET_KEY;
-          if (candidate.set_id !== expectedId || candidate.immutable_key !== expectedKey) throw new Error('current-candidate identity mismatch');
-          if (c3.set_id !== expectedId || c3.immutable_key !== expectedKey) throw new Error('C3 identity mismatch');
-          const pins = c3.providers || c3.provider_pins || {};
-          const text = JSON.stringify(c3);
-          for (const [name, sha] of Object.entries({
-            WS14:'c1a1d454285db02c6de0c087a2d65434bfb4593b',
-            WS16:'234657c1264ead6b8828425ae9e7fcdca0cca5c8',
-            WS25:'a42b489e1a17d7c2889cfd92909ddd45c65e825e',
-            WS31:'546d2ab62cd46a97f3385ebcddbe0c775a02c2eb',
-            WS10:'4a81c6cf7e11514ca01f0730ecc57010c9ea37fb'
-          })) {
-            if (!text.includes(sha)) throw new Error(`C3 manifest missing exact ${name} pin ${sha}`);
-          }
-          const blockers = candidate.blockers || [];
-          for (const b of ['WORLD_TERRAIN_HEIGHT_AUTHORITY','NPC_REGION_BODY_AUTHORITY','MOB_BROWSER_BOOTSTRAP_ENCODER_AUTHORITY']) {
-            if (!blockers.includes(b)) throw new Error(`frozen current-candidate no longer records blocker ${b}`);
-          }
-          NODE
-
-          grep -q 'terrain+shape Y resolver port with fail-closed unresolved height' .providers/ws16/workstreams/ws16/STATUS.md
-          grep -q 'real Y values must come from the verified zone runtime/assets' .providers/ws16/workstreams/ws16/STATUS.md
-          grep -q 'buildMobBootstrap' .providers/ws14/services/ko1298-world/src/world-session-service.js
-          grep -q 'mobPort.getNearby' .providers/ws14/services/ko1298-world/src/world-session-service.js
-
-          if grep -R -E 'buildMobBootstrap|WIZ_NPC_REGION|WIZ_REQ_NPCIN' .providers/ws25/services/ko1298-mobs >/tmp/ws25-wire-hits.txt; then
-            echo 'Frozen WS25 unexpectedly owns KO visibility packet encoding:' >&2
-            cat /tmp/ws25-wire-hits.txt >&2
-            exit 2
-          fi
-
-      - name: Record first real failing boundary
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import json, os
-          from pathlib import Path
-          out = Path('artifacts/ws50-c3-visibility')
-          evidence = {
-            'status': 'FAIL',
-            'providerSetId': os.environ['PROVIDER_SET_ID'],
-            'providerSetKey': os.environ['PROVIDER_SET_KEY'],
-            'providerSetFreezeSha': os.environ['WS50_FREEZE_SHA'],
-            'latestHeadResolvedAfterFreeze': False,
-            'client': {
-              'artifact': os.environ['CANONICAL_CLIENT_ARTIFACT'],
-              'artifactId': os.environ['CANONICAL_CLIENT_ARTIFACT_ID'],
-              'zipSha256': os.environ['CANONICAL_CLIENT_ZIP_SHA256'],
-              'rebuilt': False,
-              'rebuildRequiredForNpcHandshake': False,
-              'basis': 'canonical run 38505039290 already proves 0x1C -> client 0x1D -> server 0x1D with this exact client artifact'
-            },
-            'firstFailingBoundary': 'SERVER',
-            'firstBlocker': 'WORLD_TERRAIN_HEIGHT_AUTHORITY',
-            'serverEvidence': {
-              'npc': 'Frozen WS16 requires authoritative terrain+shape Y and fails closed when unresolved; C3 has no resolved authority in its immutable composition.',
-              'mob': 'Frozen WS14 requires an injected buildMobBootstrap port while frozen WS25 exports domain/AI services and no KO1298 visibility packet encoder.',
-              'candidateManifestStatus': 'BLOCKED'
-            },
-            'network': {
-              'npcCanonicalRegression': {'0x1c': 'PASS', '0x1dRequest': 'PASS', '0x1dReturn': 'PASS'},
-              'npcC3VerifiedProvider': 'NOT_REACHED_SERVER_BLOCKER',
-              'mobC3VerifiedProvider': 'NOT_REACHED_SERVER_BLOCKER'
-            },
-            'entityCreate': {'npc': 'NOT_REACHED', 'mob': 'NOT_REACHED'},
-            'render': {'npc': 'NOT_REACHED', 'mob': 'NOT_REACHED'},
-            'movement': 'NOT_REACHED_ON_C3_VISIBILITY_CANDIDATE',
-            'disconnect': 'NOT_APPLICABLE_CANDIDATE_NOT_STARTED',
-            'publicationReady': False,
-            'passArtifactProduced': False,
-            'antiFake': {
-              'syntheticFixtureAcceptedAsVisibilityPass': False,
-              'domEntity': False,
-              'htmlOverlay': False,
-              'threeJs': False
-            }
-          }
-          (out/'boundary-evidence.json').write_text(json.dumps(evidence, indent=2) + '\n')
-          PY
-          cat artifacts/ws50-c3-visibility/boundary-evidence.json
-          echo 'WS10_VISIBILITY_BOUNDARY=SERVER'
-          echo 'Frozen WS50-C3 is not browser-visibility-ready; refusing to manufacture a PASS.' >&2
-          exit 1
-
-      - name: Upload frozen C3 boundary evidence
-        if: always()
+      - name: Freeze WS10 C5 passing client
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: ws10-ws50-c3-visibility-boundary-${{ github.run_number }}
-          path: artifacts/ws50-c3-visibility/**
+          name: ws10-c5-visibility-passing-client-${{ github.run_number }}
           retention-days: 30
+          compression-level: 0
+          if-no-files-found: error
+          path: artifacts/passing-client/**
