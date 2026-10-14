@@ -8,6 +8,7 @@ on:
       - 'deploy/**'
       - 'workstreams/ws09/**'
       - 'docker-compose.ws09.yml'
+      - 'docker-compose.ws09-staging.yml'
       - '.github/workflows/ws09-deploy.yml'
   pull_request:
     paths:
@@ -15,6 +16,7 @@ on:
       - 'deploy/**'
       - 'workstreams/ws09/**'
       - 'docker-compose.ws09.yml'
+      - 'docker-compose.ws09-staging.yml'
       - '.github/workflows/ws09-deploy.yml'
 
 permissions:
@@ -28,8 +30,14 @@ jobs:
 
       - name: Prepare non-secret CI fixtures
         run: |
-          mkdir -p deploy/secrets deploy/tls deploy/artifacts/{site,play,admin}
+          mkdir -p deploy/secrets deploy/tls deploy/artifacts/{site,play,admin,staging-play/play-shell,staging-play/real1298}
           printf 'ci-only-not-a-secret\n' > deploy/secrets/postgres_password.txt
+          touch deploy/artifacts/staging-play/play-shell/index.html
+          printf '{}\n' > deploy/artifacts/staging-play/play-shell/config.json
+          touch deploy/artifacts/staging-play/real1298/index.html
+          touch deploy/artifacts/staging-play/real1298/KnightOnLine.js
+          touch deploy/artifacts/staging-play/real1298/KnightOnLine.wasm
+          touch deploy/artifacts/staging-play/real1298/KnightOnLine.data
           openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
             -subj '/CN=oldkoweb.local' \
             -keyout deploy/tls/privkey.pem \
@@ -38,8 +46,11 @@ jobs:
       - name: Static validation
         run: sh deploy/verify-config.sh
 
-      - name: Docker Compose validation
+      - name: Production compose validation
         run: docker compose --env-file deploy/.env.example -f docker-compose.ws09.yml config --quiet
+
+      - name: Staging compose validation
+        run: docker compose --env-file deploy/.env.staging.example -f docker-compose.ws09-staging.yml config --quiet
 
       - name: Nginx local template syntax
         run: |
@@ -57,6 +68,19 @@ jobs:
             -v "$PWD/infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" \
             -v "$PWD/infra/nginx/mime.types:/etc/nginx/oldkoweb-mime.types:ro" \
             -v "$PWD/infra/nginx/templates/local.conf.template:/etc/nginx/templates/default.conf.template:ro" \
+            nginx:stable-alpine nginx -t
+
+      - name: Nginx staging template syntax
+        run: |
+          docker run --rm \
+            --add-host gateway-auth:127.0.0.1 \
+            --add-host gateway-game:127.0.0.1 \
+            -e STAGING_HOST=localhost \
+            -e GATEWAY_INTERNAL_PORT=8080 \
+            -e 'NGINX_ENVSUBST_FILTER=^(STAGING_HOST|GATEWAY_INTERNAL_PORT)$' \
+            -v "$PWD/infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" \
+            -v "$PWD/infra/nginx/mime.types:/etc/nginx/oldkoweb-mime.types:ro" \
+            -v "$PWD/infra/nginx/templates/staging.conf.template:/etc/nginx/templates/default.conf.template:ro" \
             nginx:stable-alpine nginx -t
 
       - name: Nginx production template syntax
