@@ -7,4 +7,5 @@ module.exports = {
   ...require('./src/zone-registry'),
   ...require('./src/world-session-service'),
   ...require('./src/mock-world-repository'),
+  ...require('./src/smd-height-resolver'),
 };
