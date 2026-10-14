@@ -91,3 +91,49 @@ jobs:
             ${{ runner.temp }}/ws50-summary.txt
             ${{ runner.temp }}/ws50-branch-check.txt
           if-no-files-found: error
+
+  staging-candidate-rehearsal:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[staging-candidate]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout WS50
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch frozen provider refs read-only
+        run: git fetch origin '+refs/heads/*:refs/remotes/origin/*' --prune
+
+      - name: Run exact disposable staging candidate rehearsal
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          rm -rf "$RUNNER_TEMP/ws50-staging-output"
+          python3 tools/ws50_integration/staging_candidate.py "$RUNNER_TEMP/ws50-staging-output" \
+            | tee "$RUNNER_TEMP/ws50-staging.log"
+
+      - name: Publish staging result
+        if: always()
+        run: |
+          echo '## WS50 staging candidate rehearsal' >> "$GITHUB_STEP_SUMMARY"
+          for f in frozen-refs.txt candidate-tree-sha.txt result.txt staging-contract.json session-world-container.log; do
+            p="$RUNNER_TEMP/ws50-staging-output/$f"
+            if test -f "$p"; then
+              echo '' >> "$GITHUB_STEP_SUMMARY"
+              echo "### $f" >> "$GITHUB_STEP_SUMMARY"
+              echo '```text' >> "$GITHUB_STEP_SUMMARY"
+              cat "$p" >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+
+      - name: Upload staging rehearsal evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ws50-staging-candidate
+          path: |
+            ${{ runner.temp }}/ws50-staging-output/**
+            ${{ runner.temp }}/ws50-staging.log
+          if-no-files-found: error
