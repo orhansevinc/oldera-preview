@@ -1,194 +1,178 @@
-WS14
+# WS14 — KO 1298 World Session / Multi-Zone Protocol
 
-# KO 1298 World Session Protocol
+Status: **MULTI-ZONE LIFECYCLE READY; production entry remains fail-closed per zone data**
 
-This module owns only the server-side transition from an already validated character selection into the Moradon world session. It deliberately does not implement transport, authentication, combat, movement, inventory operations, NPC AI, persistence migrations, admin or website behavior.
+Implementation commit: `40c748d72b3f5ccf13bbb5aace7abcae05fd25be`
+Implementation CI: GitHub Actions run `38521440351`, job `115711809894` — **SUCCESS**.
+Canonical Moradon E2E remains WS10 run `38505039290` / run #26 — **PASS**.
 
-## Evidence policy
+## Scope
 
-No packet shape in this module is inferred from modern KO behavior. Protocol bytes are pinned to the Open-KO 1.298 source tree at commit `7d6cf81093e142c928c2ac9510512b2b182178b5`, whose client declares `CURRENT_VERSION = 1298` in `src/Client/WarFare/GameDef.h`.
+WS14 owns authoritative world-session lifecycle only: selected-character world entry, zone membership, region subscription, zone-transition transaction boundaries, reconnect placement, world-ready gating, and integration ports for movement/NPC/mob/PvP/progression domains.
 
-Primary references:
+WS14 does **not** implement movement algorithms, combat, NPC AI, mob AI, inventory, or client behavior.
 
-- 1298 client version and client world handshake:
-  - `https://github.com/Open-KO/KnightOnline/blob/7d6cf81093e142c928c2ac9510512b2b182178b5/src/Client/WarFare/GameDef.h`
-  - `https://github.com/Open-KO/KnightOnline/blob/7d6cf81093e142c928c2ac9510512b2b182178b5/src/Client/WarFare/GameProcMain.cpp`
-- Shared opcode/sub-opcode definitions:
-  - `https://github.com/Open-KO/KnightOnline/blob/7d6cf81093e142c928c2ac9510512b2b182178b5/src/shared/packets.h`
-  - `https://github.com/Open-KO/KnightOnline/blob/7d6cf81093e142c928c2ac9510512b2b182178b5/src/shared/globals.h`
-- 1298 world server behavior (`SelChar`, `SendMyInfo`, `GetUserInfo`, `GameStart`, `ZoneChange`):
-  - `https://github.com/Open-KO/KnightOnline/blob/7d6cf81093e142c928c2ac9510512b2b182178b5/src/Server/Ebenezer/User.cpp`
-- 1298 surrounding user/NPC region bootstrap:
-  - `https://github.com/Open-KO/KnightOnline/blob/7d6cf81093e142c928c2ac9510512b2b182178b5/src/Server/Ebenezer/EbenezerApp.cpp`
-  - `https://github.com/Open-KO/KnightOnline/blob/7d6cf81093e142c928c2ac9510512b2b182178b5/src/Server/Ebenezer/Npc.cpp`
-- `SetString1` definition (one-byte length prefix):
-  - `https://github.com/Open-KO/KnightOnline/blob/7d6cf81093e142c928c2ac9510512b2b182178b5/src/Server/shared-server/utilities.cpp`
-- Moradon zone/spawn evidence:
-  - `https://github.com/Open-KO/OpenKO-db/blob/bec619466938d278339c30e5b1a4bff3c9413bab/ManualSetup/6_InsertData_ZONE_INFO.sql`
-  - row: zone `21`, map `moradon_0826.smd`, InitX `31200`, InitZ `40200`, InitY `0` -> world `312.0 / 402.0 / 0.0`.
+## Data boundary
 
-Older source trees that identify themselves as a different protocol version are not accepted as standalone 1298 evidence.
+`data/zones.1298.json` separates three concepts that must not be conflated:
 
-## Ownership boundary with WS03
+1. verified 1298 **zone identity** (`zoneId`, source-backed name/type);
+2. verified **world data** (`mapRef`, spawn) when a pinned source exists;
+3. **production-entry readiness**, which additionally requires representable coordinates, verified zone-ability data, and external entry rules.
 
-WS03 owns authentication/session prerequisites and validates that the incoming character selection belongs to the authenticated account. WS14 does not read credentials and does not decide whether an account may select a character.
+`ZoneRegistry.requireKnown(zoneId)` rejects unknown IDs. `ZoneRegistry.requireProductionReady(zoneId)` rejects known-but-incomplete zones. No guessed coordinates or rule values are accepted.
 
-Integration boundary:
+The current catalog contains 16 WS31-verified zone IDs. Moradon 21 is the only built-in definition marked `PRODUCTION_READY`. Other source-backed IDs remain `RULES_PENDING`, `IDENTITY_ONLY`, or `DATA_CONFLICT` until their missing contracts are pinned.
 
-1. WS03 validates the selection request and binds `accountId`, `characterId`, and the game-server `socketId`.
-2. WS03 calls `WorldSessionService.beginSelectedCharacter(...)`.
-3. WS14 loads the world snapshot from its repository interface, chooses Moradon placement, and returns the `WIZ_SEL_CHAR` success response containing world placement.
-4. The caller sends returned `clientPackets` on the already-existing transport.
-5. Subsequent client world packets (`WIZ_GAMESTART`, `WIZ_REQ_USERIN`, `WIZ_REQ_NPCIN`, `WIZ_ZONE_CHANGE`) are routed to `handleClientPacket()`.
-6. Packets in `broadcastPackets` are broadcast by the owning server/region transport; WS14 itself opens no socket.
+## ZoneDefinition / ZoneRuntime
 
-WS14 does not modify or import WS03 implementation code.
+`ZoneDefinition` is immutable data: zone ID, name/type, optional nation constraint, map reference, spawn, zone-ability flags, entry status, and explicit unknowns.
 
-## Selected-character initialization
+`ZoneRuntime` owns only deterministic membership for one definition. Membership insertion/removal is not a substitute for NPC/mob/movement logic.
 
-For the WS14 milestone, selected characters are placed into:
+`ZoneRegistry` owns definitions and one runtime per definition. A caller may inject a stricter registry or additional verified definitions for integration/test composition.
 
-- zone: `21` (Moradon)
-- X: `312.0`
-- Z: `402.0`
-- Y: `0.0`
+## Initial world entry
 
-`WIZ_SEL_CHAR (0x04)` success response layout:
+Legacy `beginSelectedCharacter()` remains a compatibility entry point and still selects Moradon 21 at `(312, 402, 0)`.
 
-| Field | Type |
-| --- | --- |
-| opcode | u8 = `0x04` |
-| result | u8 = `1` |
-| zone | u8 |
-| X × 10 | u16 LE |
-| Z × 10 | u16 LE |
-| Y × 10 | i16 LE |
-| old victory nation | u8 |
+Generic `beginWorldEntry({ accountId, characterId, socketId, zoneId, position, reason })` performs:
 
-For the default Moradon position and victory `0`, the packet is:
+1. account/character ownership lookup;
+2. fail-closed zone definition lookup;
+3. protocol coordinate representability validation;
+4. nation constraint check;
+5. optional `zonePolicy.canEnter(...)` decision;
+6. exact 1298 `WIZ_SEL_CHAR` success packet;
+7. normal two-phase `WIZ_GAMESTART` bootstrap;
+8. region subscription and nearby snapshot;
+9. movement registration adapter;
+10. runtime membership insertion only when `WORLD_READY` is reached.
 
-`04 01 15 30 0c b4 0f 00 00 00`
+Movement and combat capability is `false` until `WORLD_READY`.
 
-## 1298 GAMESTART handshake
+## Zone transition state machine
 
-The 1298 client does not send the older character-name form. It sends a phase byte:
+Every accepted transition has a monotonic audit trail containing the required states:
 
-1. client -> server: `0D 01` (`WIZ_GAMESTART`, loading)
-2. server -> client:
-   - `WIZ_MYINFO (0x0E)`
-   - `WIZ_ZONEABILITY (0x5E)` for Moradon
-   - `WIZ_REGIONCHANGE (0x15)` nearby user IDs
-   - `WIZ_NPC_REGION (0x1C)` nearby NPC IDs
-   - `0D` server GAMESTART acknowledgement
-3. client may request missing entity details with `0x16` / `0x1D` while loading.
-4. client -> server: `0D 02` (loaded)
-5. server marks the session `WORLD_READY` and emits the player `WIZ_USER_INOUT` with `USER_REGENE = 3` for region broadcast.
+`REQUESTED -> AUTHORIZED -> LEAVING_SOURCE -> TELEPORT -> LOADING -> LOADED -> WORLD_READY`
 
-The server does not mark the player world-ready after phase 1.
+Compatibility aliases keep the former canonical tests valid:
 
-## MYINFO (0x0E)
+- `ZONE_CHANGE_WAIT_LOADING` => `TELEPORT`
+- `ZONE_CHANGE_WAIT_LOADED` => `LOADED`
 
-The serializer follows 1.298 `CUser::SendMyInfo(0)`.
+### REQUESTED / AUTHORIZED
 
-Important 1298-specific details enforced by tests:
+A second request while `session.transition` exists is rejected with `zone change already in progress`.
 
-- character ID uses `SetString1`: `u8 length + bytes`.
-- monthly loyalty is a separate `u32` after loyalty.
-- clan block includes alliance ID, flag, `SetString1` name, grade, ranking, mark version and cape.
-- no-clan cape is `-1` (`i16`).
-- gold is a 32-bit value.
-- knights rank and personal rank are emitted before the 9 skill bytes.
-- exactly `SLOT_MAX + HAVE_MAX = 42` item records are serialized.
-- every 1298 MYINFO item record is 11 bytes:
-  - item ID `u32`
-  - duration `u16`
-  - count `u16`
-  - flag `u8`
-  - remaining rental time `u16`
-- trailing account/premium fields are preserved: account status, premium type, premium time, chicken flag, manner point.
+Authorization is fail-closed: target definition must be production-ready, coordinates must fit the 1298 wire format, nation constraints must pass, and an installed `zonePolicy.canEnter` (WS24 adapter) may deny entry.
 
-The repository is responsible for supplying already-derived initial stats (`maxHp`, `totalHit`, resistances, etc.). WS14 serializes those values but does not implement stat/combat formulas.
+### LEAVING_SOURCE
 
-### Moradon zone ability
+Before the client is told to load the target:
 
-`SendMyInfo()` in the 1298 source is followed by zone-ability state. For Moradon:
+1. old region entity IDs are captured in `clientEntityCleanup`;
+2. `lifecycle.onClientRegionReset(...)` is called;
+3. source region subscription is removed;
+4. source `ZoneRuntime` membership is removed;
+5. `lifecycle.onSourceLeave(...)` is called.
 
-- `WIZ_ZONEABILITY = 0x5E`
-- sub-opcode `ZONE_ABILITY_UPDATE = 1`
-- cross-nation trade = true
-- ability type = neutral (`0`)
-- cross-nation chat = true
-- base tariff = `10`
+`zoneBroadcasts` contains the source-zone `USER_OUT` packet for composition/broadcast. WS14 does not invent client-side entity packets beyond protocol evidence.
 
-Default packet: `5e 01 01 00 01 0a 00`.
+### TELEPORT
 
-## Surrounding entity initialization
+The target remains pending; the authoritative session `zoneId/x/z/y` is still the source state.
 
-1298 bootstraps surrounding entities in two steps rather than immediately sending every detail record.
+For a true cross-zone transition, the verified target zone-ability packet is emitted before the exact 1298 `WIZ_ZONE_CHANGE/TELEPORT` packet. Same-zone Moradon compatibility emits only the historical teleport packet.
 
-### User IDs
+### LOADING
 
-Server first sends:
+Only after exact client `[WIZ_ZONE_CHANGE, LOADING]` is accepted does WS14:
 
-`WIZ_REGIONCHANGE (0x15) + count(u16) + socketId(u16)[]`
+1. set authoritative target position;
+2. add target runtime membership;
+3. call `lifecycle.onTargetEnter(...)`;
+4. subscribe to target region;
+5. call the WS15-compatible `movementPort.teleport(sessionId, { zoneId, position, headingRaw, reason })` baseline reset;
+6. obtain nearby users;
+7. obtain nearby NPCs;
+8. obtain mobs from `mobPort.getNearby(...)`;
+9. optionally obtain mob wire packets from `bootstrapPort.buildMobBootstrap(...)`;
+10. emit region user IDs, region NPC IDs, optional mob bootstrap packets, then `WIZ_ZONE_CHANGE/LOADED` acknowledgement.
 
-The client requests unknown users with:
+The declared bootstrap stage order is always `USERS -> NPCS -> MOBS`.
 
-`WIZ_REQ_USERIN (0x16) + count(u16) + socketId(u16)[]`
+### LOADED / WORLD_READY
 
-The server replies with `0x16 + count`, then for each user:
+Only exact client `[WIZ_ZONE_CHANGE, LOADED]` moves the session to `WORLD_READY`. Target runtime membership is refreshed with the final snapshot and the normal `USER_REGENE` broadcast is returned.
 
-- socket ID `u16`
-- 1298 `GetUserInfo()` body
-- character/clan names are `SetString1`
-- abnormal type is a `u32`
-- 8 visible equipment slots are each `itemId(u32) + duration(u16) + flag(u8)`
+Only now are `capabilities.movement` and `capabilities.combat` true.
 
-### NPC IDs
+## Rollback
 
-Server first sends:
+Any synchronous lifecycle failure during request preparation, or target-load failure after client `LOADING`, invokes rollback:
 
-`WIZ_NPC_REGION (0x1C) + count(u16) + nid(u16)[]`
+1. unsubscribe target region when installed;
+2. remove target membership when added;
+3. reset WS15 movement baseline back to source if target teleport reset already occurred;
+4. restore source zone/position and old nearby snapshots;
+5. restore source membership/subscription when they existed;
+6. return to `WORLD_READY`;
+7. record `ROLLED_BACK` audit event.
 
-The client requests unknown NPCs with `WIZ_REQ_NPCIN (0x1D)`. The response body follows 1298 `CNpc::GetNpcInfo()`, including the gate-open DWORD, two client placeholder shorts (`sIDK0/sIDK1`) and direction byte.
+If the target teleport packet was already exposed to the caller, `error.rollbackOutcome.clientPackets` contains a source teleport recovery packet. If rollback itself fails, the session is marked `TRANSITION_FAILED` instead of pretending recovery succeeded.
 
-No NPC AI is implemented; WS14 only serializes repository-provided static world snapshots.
+## Disconnect during transition
 
-## 1298 zone change handshake
+`disconnect(socketId)` removes the socket from every source/target runtime touched by an active transition, removes the active region subscription, calls the WS15 disconnect adapter, emits lifecycle cleanup, stores the final audit trail, and deletes the world session. It never commits a pending target merely because the socket disconnected.
 
-Sub-opcodes are source-defined:
+## Region / stale entity contract
 
-- `ZONE_CHANGE_LOADING = 1`
-- `ZONE_CHANGE_LOADED = 2`
-- `ZONE_CHANGE_TELEPORT = 3`
+The `regionPort` contract is deliberately transport/domain-neutral:
 
-Server-initiated teleport packet:
+- `subscribe({ socketId, zoneId, position, reason })`
+- `unsubscribe({ socketId, zoneId, reason })`
 
-`27 03 <zone:u8> <subzone:u8> <x:u16> <z:u16> <y:i16> <victory:u8>`
+`clientEntityCleanup` identifies stale user/NPC/mob IDs from the source region and sets `clearAll: true`. The client/packet integration layer must ensure those old-zone entities cannot remain visible after transition. WS14 itself does not fabricate unknown despawn wire shapes.
 
-Moradon default:
+## Reconnect restore
 
-`27 03 15 00 30 0c b4 0f 00 00 00`
+`restoreAuthoritativeSession({ accountId, characterId, socketId })` requires repository port `getAuthoritativeWorldState(accountId, characterId)` and then reuses generic world entry. There is no Moradon fallback: missing/unknown/not-production-ready restored zones fail closed.
 
-Then:
+## Respawn / warp / gate / teleport
 
-1. client -> server: `27 01`
-2. server refreshes nearby IDs and sends `0x15`, `0x1C`, then `27 02`
-3. client may resolve entity details with `0x16` / `0x1D`
-4. client -> server: `27 02`
-5. server returns to `WORLD_READY` and broadcasts `USER_REGENE`.
+Transition intent is explicit and preserved as one of:
 
-## Explicit non-goals
+- `WARP`
+- `GATE`
+- `TELEPORT`
+- `RESPAWN`
 
-This workstream intentionally does not own:
+`planWorldReposition(...)` is the WS27/final-composition seam. It returns `IN_ZONE_REPOSITION` when target zone equals source, otherwise `ZONE_TRANSITION`. It does not conflate a same-zone respawn with `WIZ_MOVE`, nor does it invent a respawn packet. Cross-zone reposition can be executed through `requestZoneChange(...)` with the original reason.
 
-- movement (`WIZ_MOVE`)
-- combat/attack
-- inventory mutations or item movement
-- NPC AI/pathfinding
-- database migrations
-- WebSocket/TCP gateway behavior
-- client/WASM changes
-- authentication/registration/admin/site behavior
+## Integration ports
 
-Unsupported product opcodes are rejected rather than silently handled.
+All lifecycle-critical control ports are synchronous so source/target membership cannot race an unresolved promise:
+
+- `zonePolicy.canEnter(...)` — WS24 rule decision;
+- `movementPort.registerSession(...)` — WS15 initial baseline;
+- `movementPort.teleport(sessionId, request)` — WS15 teleport baseline reset;
+- `movementPort.disconnect(sessionId)` — WS15 cleanup;
+- `regionPort.subscribe/unsubscribe(...)` — region lifecycle;
+- `lifecycle.onClientRegionReset/onSourceLeave/onTargetEnter/onWorldReady/onTransitionRollback/onDisconnect` — composition hooks;
+- `mobPort.getNearby(...)` — WS25 snapshot hook (may return a Promise because it is read-only bootstrap data);
+- `bootstrapPort.buildMobBootstrap(...)` — packet integration hook for mobs (may return a Promise);
+- repository `getSurroundingUsers/getSurroundingNpcs` — existing world snapshot ports;
+- repository `getAuthoritativeWorldState` — reconnect port.
+
+## Moradon protocol regression
+
+The canonical 1298 Moradon bytes remain unchanged:
+
+- select success: `04 01 15 30 0c b4 0f 00 00 00`
+- same-zone transition teleport: `27 03 15 00 30 0c b4 0f 00 00 00`
+- zone loaded response (empty surroundings): `15 00 00`, `1c 00 00`, `27 02`
+- Moradon zone ability: exact legacy serializer remains in use.
+
+WS10 run #26 continues to be the canonical genuine C++/Emscripten/WASM/WebGL2 Moradon proof; WS14 changes are server lifecycle additions, not a replacement client/render path.

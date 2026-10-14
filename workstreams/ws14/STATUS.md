@@ -1,118 +1,75 @@
 WS14
 
-# Status
+# STATUS — Generic KO 1298 Multi-Zone World Session
 
-- Workstream: `WS14`
-- Branch: `ws14-world-session`
-- State: `TAMAMLANDI`
-- Scope: server-side KO 1298 selected-character -> Moradon world-session initialization
-- Implementation: complete within WS14 ownership
-- Moradon critical-path readiness: `INTEGRATION-READY` at the WS14 boundary
-- Implementation commit: `0f12a49eb72cb5e8f776193c0cce7feb7866e1cf`
-- Closing evidence commit: `8f013cbeab397e03dcd1a816d7d8b93c511d3ad2`
-- Closing evidence relation: the STATUS-closing commit is a direct descendant of the closing evidence commit; no missing/non-ancestor SHA is used.
+DURUM: **MULTI-ZONE READY (infrastructure); per-zone entry remains fail-closed until verified data/rules are complete**
 
-## Revalidation result
+Branch: `ws14-world-session`
+Implementation commit: `40c748d72b3f5ccf13bbb5aace7abcae05fd25be`
+Implementation CI: Actions run `38521440351`, job `115711809894` — **SUCCESS**
 
-Existing implementation was re-read against the current WS14 branch and the current central control/dependency evidence. No WS14 product-code defect requiring a scope expansion was found.
+## Completed
 
-Complete WS14 test suite was explicitly re-run on the implementation HEAD:
+- Moradon-specific assumptions catalogued.
+- Immutable `ZoneDefinition` + deterministic `ZoneRuntime` + `ZoneRegistry` added.
+- 16 WS31-verified zone IDs are data-driven in `services/ko1298-world/data/zones.1298.json`.
+- Unknown and incomplete zones fail closed; no guessed Karus/El Morad coordinates/rules were introduced.
+- Moradon zone 21 spawn/packet behavior remains exact regression behavior.
+- Transition audit state machine now records:
+  `REQUESTED -> AUTHORIZED -> LEAVING_SOURCE -> TELEPORT -> LOADING -> LOADED -> WORLD_READY`.
+- Concurrent transition request is deterministically rejected.
+- Source membership removal and target membership insertion are ordered and transactional.
+- Disconnect mid-transition cleans all touched runtime memberships.
+- Target loading failure restores source membership, region subscription, position, and WS15 movement baseline.
+- WS15 `registerSession/teleport/disconnect` adapter boundary added.
+- Region subscribe/unsubscribe lifecycle added.
+- Nearby bootstrap ordering fixed as USERS -> NPCS -> MOBS with WS25 packet/bootstrap port.
+- Stale old-zone entity cleanup descriptor + source-zone USER_OUT broadcast contract added.
+- movement/combat capability remains disabled until WORLD_READY.
+- repository-authoritative reconnect restore added; no Moradon fallback.
+- WS27-facing `planWorldReposition` added and preserves WARP/GATE/TELEPORT/RESPAWN intent.
+- per-session ordered transition audit trail added.
 
-```text
-Workflow: WS14 world session
-Run: 38475926954
-Re-run job: 115578914128
-Command: node --test tests/ko1298-world/*.test.js
-Result: 14 tests / 14 pass / 0 fail
-Commit tested: 0f12a49eb72cb5e8f776193c0cce7feb7866e1cf
-```
+## Moradon regression
 
-The test coverage reconfirms:
+Preserved exact bytes include:
 
-- WS14 rejects combat/movement/inventory opcodes outside its ownership;
-- obsolete pre-1298 character-name GAMESTART shape is rejected;
-- Moradon is zone 21 with verified 312/402/0 spawn;
-- `WIZ_SEL_CHAR` success layout matches the 1298 client parser;
-- 1298 GAMESTART is the verified two-phase `[0x0D,0x01]` -> server `[0x0D]` -> `[0x0D,0x02]` flow;
-- zone-change phase serialization/state transitions are exact;
-- MYINFO, zone ability, region user/NPC bootstrap and detail records are covered;
-- `WORLD_READY` is reached only after GAMESTART phase 2;
-- repository account/character ownership boundary is enforced.
+- select `040115300cb40f000000`
+- same-zone teleport `27031500300cb40f000000`
+- empty-target loading response `150000`, `1c0000`, `2702`
 
-## Exact WS03 contract
+The pre-existing 14 tests were not replaced or relaxed. Canonical genuine browser proof remains WS10 run #26 (`38505039290`) with `MORADON E2E: PASS`.
 
-After WS03 authenticates the game session, validates `WIZ_SEL_CHAR`, proves that the selected character belongs to the account, establishes a stable uint16 `socketId`, and applies duplicate-session policy, it must call:
+## Verified zones
 
-```js
-const started = await world.beginSelectedCharacter({
-  accountId: authenticated.accountId,
-  characterId: selectedCharacterId,
-  socketId: connection.socketId,
-});
+WS31 identities in catalog: `1, 2, 11, 12, 21, 30, 31, 32, 33, 48, 55, 101, 102, 103, 111, 201`.
 
-for (const packet of started.clientPackets) {
-  connection.send(packet);
-}
-```
+Built-in production entry currently enabled only for **21 Moradon**, because it has aligned spawn/map/protocol ability evidence required by WS14.
 
-WS14 owns the successful `WIZ_SEL_CHAR (0x04)` world-placement packet returned by this call. WS03 must not construct a competing success packet after the handoff.
+## Explicit unknown / blocked data
 
-Subsequent WS14-owned world-session opcodes are routed with:
+- zone 1 Karus: map/spawn source-backed, but final production entry/ability/rule composition not pinned in WS14;
+- zone 2 El Morad: pinned DB `InitX` converts to `16300.0`, outside 1298 `u16` tenths coordinate representation; marked `DATA_CONFLICT`, not corrected by guess;
+- zones 11/12 and other mapped zones: identity/map/spawn can be source-backed but runtime entry/ability rules remain pending;
+- zone 31 Bifrost: no matching pinned OpenKO-db row in the WS14 source snapshot;
+- zone 55: WS31 identity says Caitharos Arena while pinned OpenKO-db row says Forgotten Temple; marked `DATA_CONFLICT`;
+- battle/invasion zones require WS24 runtime state and therefore remain fail-closed in the built-in registry.
 
-```js
-const outcome = await world.handleClientPacket(connection.socketId, payload);
-```
+## Test evidence
 
-Only `0x0D`, `0x16`, `0x1D`, and `0x27` belong to this WS14 dispatcher surface. Exact argument/return/repository details are pinned in `workstreams/ws14/INTEGRATION_PATCH.md` and `workstreams/ws14/DEPENDENCY_SNAPSHOT.md`.
+Workflow: `.github/workflows/ws14-world.yml`
 
-## Delivered
+Implementation run: `38521440351`
+Job: `115711809894`
+Conclusion: **SUCCESS**
 
-- `services/ko1298-world/WORLD_SESSION_PROTOCOL.md`
-- protocol-evidenced packet serializers/parsers
-- two-phase 1298 GAMESTART state machine
-- Moradon world initialization (zone 21, 312/402/0)
-- 1298 MYINFO and Moradon zone-ability serialization
-- surrounding user/NPC ID bootstrap and detail replies
-- 1298 zone-change TELEPORT/LOADING/LOADED state machine
-- world-ready state and USER_REGENE broadcast output
-- mock repository and production repository port contract
-- tests under `tests/ko1298-world/**`
-- CI workflow `.github/workflows/ws14-world.yml`
-- integration handoff `workstreams/ws14/INTEGRATION_PATCH.md`
-- dependency evidence `workstreams/ws14/DEPENDENCY_SNAPSHOT.md`
+Test composition:
 
-## Dependencies / integration conditions
+- previous canonical WS14 suite: 14 tests;
+- added multi-zone suite: 18 tests;
+- total: 32 tests;
+- synthetic load: 120 sessions, deterministic Moradon -> synthetic B -> Moradon, no runtime membership leak.
 
-- WS03 `ws03-ko1298-session@3a087ab1d98969ef531ac6e3f682f4a463222f5e`: still needs successful character list/create/select and the post-select call into the exact WS14 contract above.
-- WS45 `ws45-session-ownership@4a66338743553c2781c68ca84b866ff4e999c14e`: complete; duplicate-session/ownership policy should run before the WS14 handoff.
-- WS07 `ws07-database@6e2585312702346dd98851bf97c9c008c51205a3`: production repository adapter remains external; STATUS evidence was still absent when checked.
-- WS15/WS16/WS36 are downstream composition consumers; their code is not absorbed into WS14.
-- WS05 remains a later, unproven client/render gate and is not modified here.
+## Boundary
 
-These are integration/composition prerequisites, not unresolved WS14 implementation defects.
-
-## WS50 objection resolution
-
-WS50 classified the prior WS14 closure as `missing commit` because its STATUS evidence did not identify a SHA that could be verified as a branch ancestor. This control session fixes that evidence chain: `8f013cbeab397e03dcd1a816d7d8b93c511d3ad2` is a concrete commit on `ws14-world-session` containing the refreshed dependency evidence and exact integration contract, and this STATUS update is committed directly on top of that branch history.
-
-WS50 reported no actual Git merge conflict for WS14 and no WS14 test failure. The specific missing-commit/evidence objection is therefore resolved by this closure.
-
-## WS39 / WS40 note
-
-The existing WS39 ISSUE-02/03/04 snapshot predates the late WS14 provider surface and treated WS14 as missing. WS40 explicitly requires compatibility to be refreshed against frozen integration SHAs. That refresh belongs to WS39/integration control; it is not a reason to duplicate or alter WS15/WS16/WS03 code here.
-
-## Explicitly not implemented / modified
-
-Combat, movement, inventory mutations, NPC AI/interaction ownership, gateway transport, DB migrations, client changes, WS03 changes, WS05 changes, admin/site changes, main merge and force push.
-
-## Verification basis
-
-Primary packet evidence remains pinned to Open-KO/KnightOnline commit `7d6cf81093e142c928c2ac9510512b2b182178b5`, whose client source declares `CURRENT_VERSION = 1298`. Moradon zone/spawn data remains pinned to Open-KO/OpenKO-db commit `bec619466938d278339c30e5b1a4bff3c9413bab`.
-
-The earlier legacy 1097-style GAMESTART assumption remains removed and regression-tested.
-
-## Closure
-
-WS14 is integration-ready for the Moradon critical path at its owned server-side world-session boundary. The next critical-path work is external composition: WS03 character-select handoff, production repository wiring, and later WS05 real-client Moradon render validation.
-
-BU SOHBETE ARTIK GEREK VAR MI?: HAYIR
+No combat implementation, movement algorithm, NPC AI, mob AI, inventory logic, DB migration, or client change was added.

@@ -1,120 +1,156 @@
-WS14
+# WS14 — Integration Patch / Downstream Contract
 
-# Integration Patch Guide
+Implementation commit: `40c748d72b3f5ccf13bbb5aace7abcae05fd25be`
+CI evidence: run `38521440351`, job `115711809894` — SUCCESS.
 
-No WS03 file is modified by this branch. This document is the handoff contract for the future integration commit on the control/integration line.
+## Stable compatibility entry
 
-## Dependency direction
-
-WS03 -> WS14 is allowed at the orchestration boundary; WS14 must not depend on WS03 internals.
-
-WS03 responsibilities before the handoff:
-
-- authenticated game session exists;
-- character selection request is protocol-valid;
-- selected `characterId` belongs to authenticated `accountId`;
-- the connection has a stable game-server `socketId` that fits uint16;
-- duplicate/disallowed selection decisions are rejected before calling WS14.
-
-WS14 responsibilities after validation:
-
-- resolve world snapshot via `getCharacterForWorld(accountId, characterId)`;
-- initialize Moradon zone/spawn;
-- create the `WIZ_SEL_CHAR` success response containing world placement;
-- run the 1298 GAMESTART two-phase state machine;
-- serialize MYINFO/zone ability;
-- initialize nearby user/NPC ID lists and detail replies;
-- run the 1298 zone-change handshake;
-- expose `WORLD_READY` only at the source-verified completion points.
-
-## Exact WS03 -> WS14 contract after validated character selection
-
-This is the authoritative call boundary for the Moradon critical path. WS03 calls it **after validating** `WIZ_SEL_CHAR`, but **before sending a competing success/world-placement response**:
+WS03 may keep its existing selected-character call:
 
 ```js
-const {
-  WorldSessionService,
-} = require('../ko1298-world');
-
-const started = await world.beginSelectedCharacter({
-  accountId: authenticated.accountId,
-  characterId: selectedCharacterId,
-  socketId: connection.socketId,
-});
-
-for (const packet of started.clientPackets) {
-  connection.send(packet);
-}
+await world.beginSelectedCharacter({ accountId, characterId, socketId });
 ```
 
-Required inputs:
+That call intentionally preserves the canonical Moradon 21 selection/bootstrap path used by WS10.
 
-```text
-accountId   string, non-empty, authenticated account identity
-characterId string, non-empty, already proven to belong to accountId
-socketId    integer 0..65535, stable game-server socket/session id
-```
+## Generic entry
 
-Repository contract used by `WorldSessionService`:
+For a verified production-ready target:
 
 ```js
-getCharacterForWorld(accountId, characterId) -> Promise<Character|null>
-getSurroundingUsers({ zoneId, x, z, excludeSocketId }) -> Promise<User[]>
-getSurroundingNpcs({ zoneId, x, z }) -> Promise<Npc[]>
-```
-
-Successful `beginSelectedCharacter()` returns:
-
-```text
-state: WAIT_GAMESTART_LOADING
-clientPackets: includes WS14-authored WIZ_SEL_CHAR (0x04) success/world-placement packet
-broadcastPackets: []
-snapshot: authoritative accountId/characterId/socketId/zoneId/x/z/y/state
-```
-
-For world-session opcodes only, WS03/the integration dispatcher then calls:
-
-```js
-const outcome = await world.handleClientPacket(connection.socketId, payload);
-for (const packet of outcome.clientPackets) connection.send(packet);
-for (const packet of outcome.broadcastPackets) {
-  regionBroadcaster.send(outcome.snapshot.zoneId, packet);
-}
-```
-
-Do not duplicate `WIZ_SEL_CHAR` success construction in WS03 after this call. WS14 owns the world-placement response produced by this handoff.
-
-## Suggested orchestration construction
-
-```js
-const {
-  WorldSessionService,
-} = require('../ko1298-world');
-
-const world = new WorldSessionService({
-  repository: productionWorldRepository,
+await world.beginWorldEntry({
+  accountId,
+  characterId,
+  socketId,
+  zoneId,
+  position, // optional only when ZoneDefinition.spawn is verified
+  reason: 'INITIAL' | 'RECONNECT',
 });
 ```
 
-`productionWorldRepository` is an integration dependency. WS14 intentionally ships `MockWorldRepository` and a repository contract, not a database migration or persistence implementation.
+Unknown or incomplete zones throw; callers must not catch that and substitute guessed coordinates.
 
-## Routing ownership
+## Transition request
 
-The integration router should hand only these world-session opcodes to WS14:
+```js
+const out = world.requestZoneChange({
+  socketId,
+  targetZoneId,
+  position, // optional only when target definition has verified spawn
+  reason: 'WARP' | 'GATE' | 'TELEPORT' | 'RESPAWN',
+  subZone: 0,
+});
+```
 
-- `0x0D` GAMESTART
-- `0x16` request user details
-- `0x1D` request NPC details
-- `0x27` zone-change phase
+`out.clientPackets` goes to the moving client. `out.zoneBroadcasts` is source-zone broadcast work. `out.clientEntityCleanup` describes stale source entities that the composition layer must clear.
 
-Movement, attack, item movement and other gameplay packets must continue to their owning components. WS14 tests intentionally reject them.
+Continue routing exact client `WIZ_ZONE_CHANGE` phase packets back through:
 
-## Important 1298 integration note
+```js
+await world.handleClientPacket(socketId, packet);
+```
 
-Do not adapt a legacy GAMESTART request shaped as `[0x0D][nameLength][characterName]` to WS14. The verified 1298 client sends `[0x0D][0x01]`, receives server `[0x0D]`, and then sends `[0x0D][0x02]`.
+Do not enable movement/combat until:
 
-Similarly, do not treat `WIZ_ZONE_CHANGE` as an opcode-only acknowledgement. 1298 uses explicit LOADING/LOADED phase bytes.
+```js
+world.getCapabilities(socketId)
+// { movement: true, combat: true } only in WORLD_READY with no active transition
+```
 
-## Current integration condition
+## WS15 adapter
 
-At revalidation time, `ws03-ko1298-session@3a087ab1d98969ef531ac6e3f682f4a463222f5e` still reports successful character list/create/select and post-select WS14 handoff as missing. Therefore WS14 remains self-contained and fully tested; actual WS03 wiring belongs to WS03/integration control and is not implemented by this branch.
+Pass the existing movement service through:
+
+```js
+new WorldSessionService({
+  repository,
+  movementPort: {
+    registerSession: (input) => movement.registerSession(input),
+    teleport: (sessionId, request) => movement.teleport(sessionId, request),
+    disconnect: (sessionId) => movement.disconnect(sessionId),
+  },
+});
+```
+
+The transition teleport callback occurs only after client target `LOADING` is accepted. WS14 never converts a warp/gate/respawn into `WIZ_MOVE`.
+
+## WS24 adapter
+
+```js
+zonePolicy: {
+  canEnter({ character, targetZone, reason }) {
+    const decision = zoneRules.CanEnterZone(character.nation, targetZone.zoneId, runtimeState);
+    return { allowed: Boolean(decision), reason: decision ? undefined : 'WS24_DENIED' };
+  },
+}
+```
+
+The adapter is synchronous at this lifecycle boundary. Unknown zones are already denied by WS14 before WS24 is called.
+
+## WS16 / region adapter
+
+Use `regionPort.subscribe/unsubscribe` for authoritative session-region registration. Consume lifecycle hooks:
+
+- `onClientRegionReset` before leaving source;
+- `onSourceLeave` after source membership removal;
+- `onTargetEnter` after target membership insertion;
+- `onWorldReady` after final client `LOADED`.
+
+Nearby NPC wire detail remains supplied by the existing WS14 repository/serializer contract; WS14 does not implement NPC AI.
+
+## WS25 mob adapter
+
+Provide read/bootstrap hooks only:
+
+```js
+mobPort: {
+  getNearby: ({ zoneId, x, z }) => mobWorld.getNearby({ zoneId, x, z }),
+},
+bootstrapPort: {
+  buildMobBootstrap: ({ session, mobs }) => packetAdapter.buildMobBootstrap(session, mobs),
+},
+```
+
+WS14 fixes ordering (`USERS -> NPCS -> MOBS`) but does not own mob AI or invent mob packet formats.
+
+## WS27 reposition adapter
+
+After WS27 resolves a respawn destination, call:
+
+```js
+const plan = world.planWorldReposition({
+  socketId,
+  targetZoneId: destination.zoneId,
+  position: destination.position,
+  reason: 'RESPAWN',
+});
+```
+
+If `plan.kind === 'ZONE_TRANSITION'`, use `requestZoneChange` with the same reason. If `IN_ZONE_REPOSITION`, final composition must use its verified same-zone respawn/reposition packet path and the WS15 teleport baseline port; do not fake it as a zone transition or movement packet.
+
+## Reconnect adapter
+
+Repository must expose:
+
+```js
+getAuthoritativeWorldState(accountId, characterId)
+// -> { accountId?, characterId?, zoneId, x, z, y }
+```
+
+Then:
+
+```js
+await world.restoreAuthoritativeSession({ accountId, characterId, socketId });
+```
+
+No authoritative state or a non-production-ready zone is an error; there is no implicit Moradon fallback.
+
+## Disconnect
+
+Always route socket close through:
+
+```js
+world.disconnect(socketId, reason);
+```
+
+This cleans all touched source/target memberships and active region/movement state even if the socket disconnects mid-transition.
