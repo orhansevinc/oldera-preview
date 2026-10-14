@@ -1,5 +1,5 @@
 import { AppError, badRequest, conflict, forbidden, locked, unauthorized } from './errors.js';
-import { normalizeEmail, normalizeUsername, requireToken, validatePassword } from './validation.js';
+import { isGameCompatiblePassword, normalizeEmail, normalizeUsername, requireToken, validatePassword } from './validation.js';
 import { digestToken, newId, newOpaqueToken, ScryptPasswordHasher } from './security.js';
 import { SecurityGate } from './rate-limit.js';
 
@@ -29,6 +29,10 @@ function publicAccount(account) {
   };
 }
 
+function exactPresentedPassword(value) {
+  return typeof value === 'string' && value.length > 0 && Buffer.byteLength(value, 'utf8') <= 512 ? value : null;
+}
+
 export class AccountService {
   constructor({ repository, delivery, audit, hasher = new ScryptPasswordHasher(), securityGate = new SecurityGate(), clock = () => Date.now() }) {
     this.repository = repository;
@@ -51,7 +55,7 @@ export class AccountService {
     const now = this.clock();
     const { username, canonical } = normalizeUsername(input.username);
     const email = normalizeEmail(input.email);
-    validatePassword(input.password, username);
+    validatePassword(input.password);
     await this.securityGate.assertRate(`register:ip:${context.ip}`, { limit: 5, windowMs: 60 * 60_000 }, now);
 
     if (await this.repository.findByUsernameCanonical(canonical)) throw conflict('USERNAME_TAKEN', 'Username is already in use');
@@ -76,13 +80,16 @@ export class AccountService {
   }
 
   async accessCheck(input, context) {
-    const { account } = await this.#authenticate({ identifier: input.username, password: input.password }, context);
+    const { account, credentialUpgradeRequired } = await this.#authenticate({ identifier: input.username, password: input.password }, context);
+    if (credentialUpgradeRequired) {
+      throw forbidden('CREDENTIAL_UPGRADE_REQUIRED', 'Password must be changed to the KO1298-compatible credential policy before game login');
+    }
     return { accountId: account.id, username: account.username, access: 'allowed', passwordVersion: account.passwordVersion };
   }
 
   async login(input, context) {
     const now = this.clock();
-    const { account } = await this.#authenticate(input, context);
+    const { account, credentialUpgradeRequired } = await this.#authenticate(input, context);
     const token = newOpaqueToken();
     const digest = digestToken(token);
     const expiresAt = now + SESSION_TTL_MS;
@@ -92,8 +99,8 @@ export class AccountService {
       revokedAt: null, lastSeenAt: now
     });
     await this.repository.updateAccount(account.id, { lastLoginAt: now, updatedAt: now });
-    this.audit.emit({ event: 'web_session_created', accountId: account.id, requestId: context.requestId, ip: context.ip });
-    return { token, expiresAt, user: publicAccount({ ...account, lastLoginAt: now }) };
+    this.audit.emit({ event: 'web_session_created', accountId: account.id, requestId: context.requestId, ip: context.ip, credentialUpgradeRequired });
+    return { token, expiresAt, user: publicAccount({ ...account, lastLoginAt: now }), credentialUpgradeRequired };
   }
 
   async currentUser(token, context) {
@@ -137,11 +144,12 @@ export class AccountService {
 
   async changePassword(input, context) {
     const now = this.clock();
-    const { canonical, username } = normalizeUsername(input.username);
+    const { canonical } = normalizeUsername(input.username);
     await this.securityGate.assertCredentialAllowed(context.ip, canonical, now);
-    validatePassword(input.newPassword, username);
+    validatePassword(input.newPassword);
+    const currentPassword = exactPresentedPassword(input.currentPassword);
     const account = await this.repository.findByUsernameCanonical(canonical);
-    if (!account || !(await this.hasher.verify(input.currentPassword ?? '', account.passwordHash))) {
+    if (!currentPassword || !account || !(await this.hasher.verify(currentPassword, account.passwordHash))) {
       await this.securityGate.recordCredentialFailure(context.ip, canonical, now);
       this.audit.emit({ event: 'password_change_failed', usernameCanonical: canonical, requestId: context.requestId, ip: context.ip });
       throw unauthorized();
@@ -161,8 +169,10 @@ export class AccountService {
     if (account) {
       const token = newOpaqueToken();
       await this.repository.createActionToken({ id: newId(), kind: 'password_reset', accountId: account.id, digest: digestToken(token), expiresAt: now + RESET_TTL_MS, consumedAt: null, createdAt: now });
-      try { await this.delivery.sendPasswordReset({ accountId: account.id, email: account.email, token, expiresAt: now + RESET_TTL_MS }); }
-      catch (error) { this.audit.emit({ event: 'delivery_failed', kind: 'password_reset', accountId: account.id, requestId: context.requestId, errorClass: error?.name || 'Error' }); }
+      try {
+        const accepted = await this.delivery.sendPasswordReset({ accountId: account.id, email: account.email, token, expiresAt: now + RESET_TTL_MS });
+        if (accepted?.accepted) this.audit.emit({ event: 'delivery_provider_accepted', kind: 'password_reset', accountId: account.id, requestId: context.requestId, provider: accepted.provider, providerMessageId: accepted.providerMessageId });
+      } catch (error) { this.audit.emit({ event: 'delivery_failed', kind: 'password_reset', accountId: account.id, requestId: context.requestId, errorClass: error?.name || 'Error' }); }
       this.audit.emit({ event: 'password_reset_requested', accountId: account.id, requestId: context.requestId, ip: context.ip });
     } else this.audit.emit({ event: 'password_reset_requested_unknown', requestId: context.requestId, ip: context.ip });
     return { accepted: true };
@@ -171,11 +181,11 @@ export class AccountService {
   async confirmPasswordReset(input, context) {
     const now = this.clock();
     await this.securityGate.assertRate(`reset-confirm:ip:${context.ip}`, { limit: 10, windowMs: 15 * 60_000 }, now);
+    validatePassword(input.newPassword);
     const record = await this.repository.consumeActionToken('password_reset', digestToken(requireToken(input.token)), now);
     if (!record) throw new AppError(400, 'INVALID_OR_EXPIRED_TOKEN', 'Token is invalid or expired');
     const target = await this.#findById(record.accountId);
     if (!target) throw new AppError(400, 'INVALID_OR_EXPIRED_TOKEN', 'Token is invalid or expired');
-    validatePassword(input.newPassword, target.username);
     const passwordHash = await this.hasher.hash(input.newPassword);
     await this.repository.updateAccount(target.id, { passwordHash, passwordVersion: target.passwordVersion + 1, updatedAt: now });
     this.audit.emit({ event: 'password_reset_completed', accountId: target.id, requestId: context.requestId, ip: context.ip });
@@ -205,7 +215,8 @@ export class AccountService {
   async #authenticate(input, context) {
     const now = this.clock();
     const rawIdentifier = input?.identifier ?? input?.username;
-    if (typeof rawIdentifier !== 'string' || !rawIdentifier.trim()) throw unauthorized();
+    const presentedPassword = exactPresentedPassword(input?.password);
+    if (typeof rawIdentifier !== 'string' || !rawIdentifier.trim() || !presentedPassword) throw unauthorized();
     let account; let credentialKey;
     if (rawIdentifier.includes('@')) {
       const email = normalizeEmail(rawIdentifier); credentialKey = `email:${email}`; account = await this.repository.findByEmail(email);
@@ -213,7 +224,7 @@ export class AccountService {
       const { canonical } = normalizeUsername(rawIdentifier); credentialKey = `username:${canonical}`; account = await this.repository.findByUsernameCanonical(canonical);
     }
     await this.securityGate.assertCredentialAllowed(context.ip, credentialKey, now);
-    const valid = account && await this.hasher.verify(input.password ?? '', account.passwordHash);
+    const valid = account && await this.hasher.verify(presentedPassword, account.passwordHash);
     if (!valid) {
       await this.securityGate.recordCredentialFailure(context.ip, credentialKey, now);
       this.audit.emit({ event: 'access_check_failed', credentialKey, requestId: context.requestId, ip: context.ip });
@@ -226,15 +237,18 @@ export class AccountService {
       throw locked('ACCOUNT_BANNED', 'Account access is suspended', ban);
     }
     if (!account.verifiedAt) throw forbidden('ACCOUNT_UNVERIFIED', 'Account verification is required');
-    this.audit.emit({ event: 'access_check_succeeded', accountId: account.id, requestId: context.requestId, ip: context.ip });
-    return { account };
+    const credentialUpgradeRequired = !isGameCompatiblePassword(presentedPassword);
+    this.audit.emit({ event: 'access_check_succeeded', accountId: account.id, requestId: context.requestId, ip: context.ip, credentialUpgradeRequired });
+    return { account, credentialUpgradeRequired };
   }
 
   async #issueVerification(account, context, now) {
     const token = newOpaqueToken();
     await this.repository.createActionToken({ id: newId(), kind: 'account_verification', accountId: account.id, digest: digestToken(token), expiresAt: now + VERIFY_TTL_MS, consumedAt: null, createdAt: now });
-    try { await this.delivery.sendVerification({ accountId: account.id, email: account.email, token, expiresAt: now + VERIFY_TTL_MS }); }
-    catch (error) { this.audit.emit({ event: 'delivery_failed', kind: 'account_verification', accountId: account.id, requestId: context.requestId, errorClass: error?.name || 'Error' }); }
+    try {
+      const accepted = await this.delivery.sendVerification({ accountId: account.id, email: account.email, token, expiresAt: now + VERIFY_TTL_MS });
+      if (accepted?.accepted) this.audit.emit({ event: 'delivery_provider_accepted', kind: 'account_verification', accountId: account.id, requestId: context.requestId, provider: accepted.provider, providerMessageId: accepted.providerMessageId });
+    } catch (error) { this.audit.emit({ event: 'delivery_failed', kind: 'account_verification', accountId: account.id, requestId: context.requestId, errorClass: error?.name || 'Error' }); }
     this.audit.emit({ event: 'verification_requested', accountId: account.id, requestId: context.requestId, ip: context.ip });
   }
 
