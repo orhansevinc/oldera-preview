@@ -268,7 +268,7 @@ test('verified Moradon loader preserves 10 templates, 20 source rows and 135 det
   const countA = worldA.spawnGroups.reduce((n, g) => n + g.spawns.length, 0);
   assert.equal(moradonVerified.monsters.length, 10);
   assert.equal(moradonVerified.spawnRows.length, 20);
-  assert.equal(worldA.templates.size, 10);
+  assert.equal(worldA.templates.length, 10);
   assert.equal(worldA.spawnGroups.length, 20);
   assert.equal(countA, 135);
   assert.equal(worldA.dataClass, 'real');
