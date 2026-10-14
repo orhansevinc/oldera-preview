@@ -4,6 +4,8 @@ const { GAME } = require('./protocol');
 const { SESSION_STATES, OWNER } = require('./contracts');
 const { SessionError, ERROR_CATEGORY } = require('./errors');
 const { validateNpcRequestPacket, clientPacketsFrom, malformedPacket } = require('./session-helpers');
+const { parseAttackPacket, parseMagicProcessPacket } = require('./combat-protocol');
+
 function install(GameSession) {
   GameSession.prototype._handleWorldPacket = async function(packet) {
     if (packet[0] === GAME.REQUEST_NPC_IN) {
@@ -69,6 +71,74 @@ function install(GameSession) {
       this.logger('downstream_rejected', this._packetMeta(packet, { owner: OWNER.WS16, downstreamCode: error?.code || 'ERROR' }));
       return [];
     }
+  };
+
+  GameSession.prototype._nextCombatRequestMeta = function(opcode, context = {}) {
+    this.combatIngressSequence += 1;
+    const receiveSequence = Number.isSafeInteger(context.receiveSequence) && context.receiveSequence >= 0
+      ? context.receiveSequence
+      : null;
+    const dedupeSequence = receiveSequence ?? this.combatIngressSequence;
+    return Object.freeze({
+      ingressSequence: this.combatIngressSequence,
+      receiveSequence,
+      requestKey: `${this.sessionId}:${opcode.toString(16).padStart(2, '0')}:${dedupeSequence}`,
+    });
+  };
+
+  GameSession.prototype._handleCombatPacket = async function(packet, context = {}) {
+    const actor = this.actorContext();
+    const metadata = this._nextCombatRequestMeta(packet[0], context);
+    let operation;
+
+    if (packet[0] === GAME.ATTACK) {
+      const decoded = parseAttackPacket(packet, GAME.ATTACK);
+      operation = Object.freeze({
+        kind: 'NORMAL_ATTACK',
+        sourceEntityId: actor.entityId,
+        sourceCharacterId: actor.characterId,
+        targetRuntimeId: decoded.targetRuntimeId,
+        requestKey: metadata.requestKey,
+        requestMetadata: metadata,
+        clientObservation: decoded.clientObservation,
+      });
+    } else if (packet[0] === GAME.MAGIC_PROCESS) {
+      const decoded = parseMagicProcessPacket(packet, GAME.MAGIC_PROCESS);
+      operation = Object.freeze({
+        kind: 'MAGIC_PROCESS',
+        command: decoded.command,
+        commandName: decoded.commandName,
+        skillId: decoded.skillId,
+        sourceEntityId: actor.entityId,
+        sourceCharacterId: actor.characterId,
+        clientClaimedSourceId: decoded.clientSourceId,
+        targetRuntimeId: decoded.targetRuntimeId,
+        data: decoded.data,
+        requestKey: metadata.requestKey,
+        requestMetadata: metadata,
+      });
+    } else {
+      throw malformedPacket(new Error('unsupported combat opcode'), packet[0], packet.length, 'game');
+    }
+
+    // The authenticated session identity is authoritative. Client-provided source/damage/range/timing/result
+    // fields are never promoted to authority here; downstream WS19/provider ports own those decisions.
+    const outcome = await this.trustedDomainCall('combat', operation);
+    this._emitCombatSemanticEvent(operation, outcome);
+
+    // WS11 currently proves exact fixed layouts in protocol-lab tooling but does not expose a runtime JS
+    // encoder surface owned by WS11 for WS03 to consume. Do not duplicate/guess S2C packets here.
+    return [];
+  };
+
+  GameSession.prototype._emitCombatSemanticEvent = function(operation, outcome) {
+    this.onCombatEvent(Object.freeze({
+      owner: OWNER.WS19,
+      type: operation.kind === 'NORMAL_ATTACK' ? 'NORMAL_ATTACK_RESULT' : 'MAGIC_PROCESS_RESULT',
+      actor: this.actorContext(),
+      operation,
+      outcome,
+    }));
   };
 
   GameSession.prototype._applyWorldOutcome = async function(outcome) {
@@ -171,7 +241,6 @@ function install(GameSession) {
       });
     }
   };
-
 }
 
 module.exports = { install };

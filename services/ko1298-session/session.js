@@ -23,6 +23,7 @@ const WORLD_OPCODES = new Set([
 ]);
 const MOVEMENT_OPCODES = new Set([GAME.MOVE, GAME.ROTATE]);
 const NPC_OPCODES = new Set([GAME.NPC_EVENT, GAME.TARGET_HP]);
+const COMBAT_OPCODES = new Set([GAME.ATTACK, GAME.MAGIC_PROCESS]);
 const DOMAIN_EVENT_SOURCES = new Set(['WS25', 'WS26', 'WS27']);
 
 class AuthSession {
@@ -75,6 +76,7 @@ class GameSession {
     npcRoutesRequestNpcIn = false,
     onWorldBroadcast = () => {},
     onGameplayBroadcast = () => {},
+    onCombatEvent = () => {},
     onStateChange = () => {},
     logger = () => {},
   } = {}) {
@@ -99,6 +101,7 @@ class GameSession {
     this.npcRoutesRequestNpcIn = Boolean(npcRoutesRequestNpcIn);
     this.onWorldBroadcast = typeof onWorldBroadcast === 'function' ? onWorldBroadcast : () => {};
     this.onGameplayBroadcast = typeof onGameplayBroadcast === 'function' ? onGameplayBroadcast : () => {};
+    this.onCombatEvent = typeof onCombatEvent === 'function' ? onCombatEvent : () => {};
     this.onStateChange = typeof onStateChange === 'function' ? onStateChange : () => {};
     this.logger = typeof logger === 'function' ? logger : () => {};
     this.state = {
@@ -113,6 +116,7 @@ class GameSession {
       headingRaw: 0,
     };
     this.movementRegistered = false;
+    this.combatIngressSequence = 0;
     this._disconnectPromise = null;
   }
 
@@ -136,7 +140,7 @@ class GameSession {
     });
   }
 
-  async handle(payload) {
+  async handle(payload, context = {}) {
     const packet = Buffer.from(payload || []);
     if (packet.length === 0) return [];
     const opcode = packet[0];
@@ -154,6 +158,7 @@ class GameSession {
       if (WORLD_OPCODES.has(opcode)) return await this._handleWorldPacket(packet);
       if (MOVEMENT_OPCODES.has(opcode)) return await this._handleMovementPacket(packet);
       if (NPC_OPCODES.has(opcode)) return await this._handleNpcPacket(packet);
+      if (COMBAT_OPCODES.has(opcode)) return await this._handleCombatPacket(packet, context);
 
       switch (opcode) {
         case GAME.VERSION_CHECK:
@@ -245,11 +250,10 @@ class GameSession {
     this._disconnectPromise = this._disconnectOnce({ reason, useGrace });
     return this._disconnectPromise;
   }
-
 }
 
 require('./session-auth').install(GameSession);
 require('./session-gameplay').install(GameSession);
 require('./session-lifecycle').install(GameSession);
 
-module.exports = { AuthSession, GameSession, WORLD_OPCODES, MOVEMENT_OPCODES, NPC_OPCODES, DOMAIN_EVENT_SOURCES };
+module.exports = { AuthSession, GameSession, WORLD_OPCODES, MOVEMENT_OPCODES, NPC_OPCODES, COMBAT_OPCODES, DOMAIN_EVENT_SOURCES };

@@ -65,14 +65,16 @@ test('canonical state transition table reaches WORLD_READY with one identity rec
   ]);
 });
 
-test('verified opcode matrix binds WS15/WS16 and leaves WS17/19/22 unguessed', () => {
+test('verified opcode matrix binds WS15/WS16/WS19 and leaves WS17/22 unguessed', () => {
   assert.equal(OPCODE_CONTRACTS.get(0x06).owner, 'WS15');
   assert.equal(OPCODE_CONTRACTS.get(0x09).owner, 'WS15');
+  assert.equal(OPCODE_CONTRACTS.get(0x08).owner, 'WS19');
+  assert.equal(OPCODE_CONTRACTS.get(0x31).owner, 'WS19');
   assert.equal(OPCODE_CONTRACTS.get(0x20).owner, 'WS16');
   assert.equal(OPCODE_CONTRACTS.get(0x22).owner, 'WS16');
   assert.equal(OPCODE_CONTRACTS.get(0x1d).owner, 'WS14/WS16-CONFLICT');
-  assert.match(UNBOUND_DOMAIN_CONTRACTS.WS17, /no client opcode/i);
-  assert.match(UNBOUND_DOMAIN_CONTRACTS.WS19, /no client opcode/i);
+  assert.match(UNBOUND_DOMAIN_CONTRACTS.WS17, /no additional client opcode/i);
+  assert.equal(UNBOUND_DOMAIN_CONTRACTS.WS19, undefined);
   assert.match(UNBOUND_DOMAIN_CONTRACTS.WS22, /no client opcode/i);
 });
 

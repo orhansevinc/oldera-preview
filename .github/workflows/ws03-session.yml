@@ -26,75 +26,93 @@ jobs:
         with: {fetch-depth: 1}
       - uses: actions/setup-node@v4
         with: {node-version: '20'}
-      - name: Resolve exact downstream provider heads
+
+      - name: Load immutable task-pinned provider set
         shell: bash
         run: |
           set -euo pipefail
-          git fetch --no-tags origin \
-            +refs/heads/ws14-world-session:refs/remotes/origin/ws14-world-session \
-            +refs/heads/ws15-movement-sync:refs/remotes/origin/ws15-movement-sync \
-            +refs/heads/ws16-npc-world:refs/remotes/origin/ws16-npc-world \
-            +refs/heads/ws45-session-ownership:refs/remotes/origin/ws45-session-ownership
-
-          WS14_SHA="$(git rev-parse refs/remotes/origin/ws14-world-session)"
-          WS15_SHA="$(git rev-parse refs/remotes/origin/ws15-movement-sync)"
-          WS16_SHA="$(git rev-parse refs/remotes/origin/ws16-npc-world)"
-          WS45_SHA="$(git rev-parse refs/remotes/origin/ws45-session-ownership)"
-          export WS14_SHA WS15_SHA WS16_SHA WS45_SHA
-
           mkdir -p artifacts/ws03
           node <<'NODE'
           const fs = require('node:fs');
-          const baseline = JSON.parse(fs.readFileSync('workstreams/ws03/DEPENDENCY_MANIFEST.json', 'utf8'));
+          const manifest = JSON.parse(fs.readFileSync('workstreams/ws03/DEPENDENCY_MANIFEST.json', 'utf8'));
+          const expected = {
+            WS11: '944b6ff9b6329af29f1048a74aa6e14fca141639',
+            WS15: 'ce9bed13b8d45c32ff0592595aa3a0d1e7b3964d',
+            WS17: 'fbfc13f9c123ebeb6dd38c32fc95ef26d917a777',
+            WS19: '28eb4f38753ffbc54c60abbd2a32832301284c06',
+            WS25: '13c9bafe287b250d56b52f19e97a02e7ef18e6e5',
+          };
+          if (manifest.strategy !== 'task-pinned-provider-shas-no-silent-upgrade') {
+            throw new Error(`unexpected dependency strategy ${manifest.strategy}`);
+          }
+          for (const [id, sha] of Object.entries(expected)) {
+            if (manifest.providers?.[id]?.pinnedSha !== sha) {
+              throw new Error(`${id} pin changed during WS03 combat task: expected ${sha}, got ${manifest.providers?.[id]?.pinnedSha}`);
+            }
+          }
+          const providers = {};
+          for (const [id, row] of Object.entries(manifest.providers)) {
+            if (!/^[0-9a-f]{40}$/.test(row.pinnedSha || '')) throw new Error(`${id} missing exact pinned SHA`);
+            providers[id] = { branch: row.branch, servicePath: row.servicePath, sha: row.pinnedSha };
+          }
           const resolved = {
-            schemaVersion: 1,
+            schemaVersion: 2,
             workstream: 'WS03',
-            strategy: baseline.strategy,
+            strategy: manifest.strategy,
             run: {
               repository: process.env.GITHUB_REPOSITORY,
               runId: process.env.GITHUB_RUN_ID,
               runNumber: process.env.GITHUB_RUN_NUMBER,
               ws03Sha: process.env.GITHUB_SHA,
             },
-            providers: {
-              WS14: { branch: baseline.providers.WS14.branch, sha: process.env.WS14_SHA },
-              WS15: { branch: baseline.providers.WS15.branch, sha: process.env.WS15_SHA },
-              WS16: { branch: baseline.providers.WS16.branch, sha: process.env.WS16_SHA },
-              WS45: { branch: baseline.providers.WS45.branch, sha: process.env.WS45_SHA },
-            },
+            providers,
           };
-          for (const [id, provider] of Object.entries(resolved.providers)) {
-            const previous = baseline.providers[id].lastTestedSha;
-            if (previous !== provider.sha) {
-              console.log(`::notice title=${id} dependency advanced::${previous} -> ${provider.sha}; testing live resolved HEAD and recording the exact SHA`);
-            }
-          }
           fs.writeFileSync('artifacts/ws03/resolved-providers.json', `${JSON.stringify(resolved, null, 2)}\n`);
+          fs.appendFileSync(process.env.GITHUB_ENV, Object.entries(providers).map(([id, row]) => `${id}_SHA=${row.sha}`).join('\n') + '\n');
           NODE
-
           cat artifacts/ws03/resolved-providers.json
-          echo "WS14_SHA=$WS14_SHA" >> "$GITHUB_ENV"
-          echo "WS15_SHA=$WS15_SHA" >> "$GITHUB_ENV"
-          echo "WS16_SHA=$WS16_SHA" >> "$GITHUB_ENV"
-          echo "WS45_SHA=$WS45_SHA" >> "$GITHUB_ENV"
 
-      - name: Materialize exact resolved provider services read-only
+      - name: Fetch provider objects without resolving newer heads
         shell: bash
         run: |
           set -euo pipefail
+          git fetch --no-tags --depth=1000 origin \
+            +refs/heads/ws11-protocol-lab:refs/remotes/origin/ws11-protocol-lab \
+            +refs/heads/ws14-world-session:refs/remotes/origin/ws14-world-session \
+            +refs/heads/ws15-movement-sync:refs/remotes/origin/ws15-movement-sync \
+            +refs/heads/ws16-npc-world:refs/remotes/origin/ws16-npc-world \
+            +refs/heads/ws17-item-inventory:refs/remotes/origin/ws17-item-inventory \
+            +refs/heads/ws19-combat-core:refs/remotes/origin/ws19-combat-core \
+            +refs/heads/ws25-mob-ai:refs/remotes/origin/ws25-mob-ai \
+            +refs/heads/ws45-session-ownership:refs/remotes/origin/ws45-session-ownership
+          for sha in "$WS11_SHA" "$WS14_SHA" "$WS15_SHA" "$WS16_SHA" "$WS17_SHA" "$WS19_SHA" "$WS25_SHA" "$WS45_SHA"; do
+            git cat-file -e "$sha^{commit}"
+          done
+
+      - name: Materialize exact pinned provider services read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git archive "$WS11_SHA" protocol-lab/gameplay-authority.json | tar -x
           git archive "$WS14_SHA" services/ko1298-world | tar -x
           git archive "$WS15_SHA" services/ko1298-movement | tar -x
           git archive "$WS16_SHA" services/ko1298-npc | tar -x
+          git archive "$WS17_SHA" services/ko1298-items | tar -x
+          git archive "$WS19_SHA" services/ko1298-combat | tar -x
+          git archive "$WS25_SHA" services/ko1298-mobs | tar -x
           git archive "$WS45_SHA" services/session-ownership | tar -x
-          chmod -R a-w services/ko1298-world services/ko1298-movement services/ko1298-npc services/session-ownership
+          chmod -R a-w protocol-lab/gameplay-authority.json \
+            services/ko1298-world services/ko1298-movement services/ko1298-npc \
+            services/ko1298-items services/ko1298-combat services/ko1298-mobs services/session-ownership
 
       - name: Real downstream contract composition
-        run: node --test tests/ko1298-session/composed-contracts.contract.js
+        run: node --test tests/ko1298-session/*.contract.js
 
-      - name: Upload resolved dependency report
+      - name: Upload immutable dependency report
         if: ${{ always() && hashFiles('artifacts/ws03/resolved-providers.json') != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: ws03-resolved-providers-${{ github.run_number }}
           path: artifacts/ws03/resolved-providers.json
           if-no-files-found: error
+          retention-days: 14

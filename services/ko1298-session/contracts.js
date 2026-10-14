@@ -43,6 +43,7 @@ const OPCODE_CONTRACTS = new Map([
   [GAME.SEL_CHAR, contract(GAME.SEL_CHAR, 'WIZ_SEL_CHAR', OWNER.WS03, [SESSION_STATES.AUTHENTICATED])],
   [GAME.SEL_NATION, contract(GAME.SEL_NATION, 'WIZ_SEL_NATION', OWNER.WS03, [SESSION_STATES.AUTHENTICATED])],
   [GAME.MOVE, contract(GAME.MOVE, 'WIZ_MOVE', OWNER.WS15, [SESSION_STATES.WORLD_READY], '9-byte payload after opcode')],
+  [GAME.ATTACK, contract(GAME.ATTACK, 'WIZ_ATTACK', OWNER.WS19, [SESSION_STATES.WORLD_READY], 'WS11 VERIFIED C2S normal attack; client interval/distance are observation-only')],
   [GAME.ROTATE, contract(GAME.ROTATE, 'WIZ_ROTATE', OWNER.WS15, [SESSION_STATES.WORLD_READY], '2-byte payload after opcode')],
   [GAME.ALLCHAR_INFO_REQ, contract(GAME.ALLCHAR_INFO_REQ, 'WIZ_ALLCHAR_INFO_REQ', OWNER.WS03, [SESSION_STATES.AUTHENTICATED])],
   [GAME.GAMESTART, contract(GAME.GAMESTART, 'WIZ_GAMESTART', OWNER.WS14, [SESSION_STATES.WORLD_LOADING, SESSION_STATES.WORLD_READY])],
@@ -52,11 +53,11 @@ const OPCODE_CONTRACTS = new Map([
   [GAME.TARGET_HP, contract(GAME.TARGET_HP, 'WIZ_TARGET_HP', OWNER.WS16, [SESSION_STATES.WORLD_READY])],
   [GAME.ZONE_CHANGE, contract(GAME.ZONE_CHANGE, 'WIZ_ZONE_CHANGE', OWNER.WS14, [SESSION_STATES.WORLD_LOADING, SESSION_STATES.WORLD_READY])],
   [GAME.VERSION_CHECK, contract(GAME.VERSION_CHECK, 'WIZ_VERSION_CHECK', OWNER.WS03, [SESSION_STATES.CONNECTED])],
+  [GAME.MAGIC_PROCESS, contract(GAME.MAGIC_PROCESS, 'WIZ_MAGIC_PROCESS', OWNER.WS19, [SESSION_STATES.WORLD_READY], 'WS11 VERIFIED C2S generic_full commands 1..6; source identity is session-authoritative')],
 ]);
 
 const UNBOUND_DOMAIN_CONTRACTS = Object.freeze({
-  WS17: 'Inventory/item adapter boundary is ready, but no client opcode is bound until a verified 1298 packet contract is supplied.',
-  WS19: 'Combat/skill actor-context boundary is ready, but no client opcode is bound until a verified 1298 packet contract is supplied.',
+  WS17: 'Inventory/item adapter boundary is ready, but no additional client opcode is bound until a verified 1298 packet contract is supplied.',
   WS22: 'Economy/trade actor-context boundary is ready, but no client opcode is bound until a verified 1298 packet contract is supplied.',
   WS25: 'Mob results are outbound domain events; WS03 does not invent mob client opcodes.',
   WS26: 'Loot results are outbound domain events; WS03 does not invent loot client opcodes.',
