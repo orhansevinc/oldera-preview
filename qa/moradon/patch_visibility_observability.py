@@ -66,8 +66,8 @@ s = replace_once_in(
     s,
     'bool CGameProcMain::MsgRecv_NPCInRequested(Packet& pkt)',
     'bool CGameProcMain::MsgRecv_NPCIn(Packet& pkt)',
-    '\tint iNPCCountReceived = pkt.read<int16_t>();\n',
-    '\tint iNPCCountReceived = pkt.read<int16_t>();\n#ifndef _WIN32\n\tspdlog::info("WS10_VISIBILITY DETAIL_BATCH_PARSE count={}", iNPCCountReceived);\n#endif\n',
+    '\tint iNPCCount = pkt.read<int16_t>();\n',
+    '\tint iNPCCount = pkt.read<int16_t>();\n#ifndef _WIN32\n\tspdlog::info("WS10_VISIBILITY DETAIL_BATCH_PARSE count={}", iNPCCount);\n#endif\n',
 )
 s = replace_once_in(
     s,
