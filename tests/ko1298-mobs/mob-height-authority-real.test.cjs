@@ -50,7 +50,7 @@ authorityTest('all 135 deterministic Moradon mob slots materialize through exact
   const mobs = service.initialize(0);
   assert.equal(moradonVerified.monsters.length, 10);
   assert.equal(moradonVerified.spawnRows.length, 20);
-  assert.equal(world.templates.size, 10);
+  assert.equal(world.templates.length, 10);
   assert.equal(world.spawnGroups.length, 20);
   assert.equal(mobs.length, 135);
   assert.equal(resolutions.length, 135);
@@ -80,7 +80,7 @@ authorityTest('all 135 deterministic Moradon mob slots materialize through exact
     ws14Provider: process.env.WS25_WS14_PROVIDER_SHA ?? null,
     ws31Provider: process.env.WS25_WS31_PROVIDER_SHA ?? null,
     terrainAsset: ws14.MORADON_HEIGHT_AUTHORITY.gitBlobSha1,
-    templates: world.templates.size,
+    templates: world.templates.length,
     verifiedSpawnRows: world.spawnGroups.length,
     deterministicSlots: mobs.length,
     resolvedSlots: resolutions.length,
