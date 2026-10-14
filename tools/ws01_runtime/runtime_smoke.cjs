@@ -18,7 +18,7 @@ if (!chrome) {
     ]
   });
 
-  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   const lines = [];
   const pageErrors = [];
   const requestFailures = [];
@@ -61,6 +61,45 @@ if (!chrome) {
     throw new Error(`timeout waiting for runtime log: ${needle}`);
   };
 
+  const assertGeometry = async (width, height) => {
+    await page.setViewportSize({ width, height });
+    await page.waitForFunction(
+      ([w, h]) => {
+        const canvas = document.getElementById('canvas');
+        if (!canvas || canvas.width !== w || canvas.height !== h) return false;
+        const rect = canvas.getBoundingClientRect();
+        return Math.abs(rect.left) < 1
+          && Math.abs(rect.top) < 1
+          && Math.abs(rect.width - w) < 1
+          && Math.abs(rect.height - h) < 1;
+      },
+      [width, height],
+      { timeout: 15000 }
+    );
+    const geometry = await page.evaluate(() => {
+      const canvas = document.getElementById('canvas');
+      const rect = canvas.getBoundingClientRect();
+      const diag = window.__OLDKO_DISPLAY_DIAGNOSTICS__;
+      const mapped = diag.mapPointer(rect.left + rect.width * 0.75, rect.top + rect.height * 0.25);
+      return {
+        backingWidth: canvas.width,
+        backingHeight: canvas.height,
+        cssWidth: rect.width,
+        cssHeight: rect.height,
+        pointerX: mapped.x,
+        pointerY: mapped.y,
+        inside: mapped.inside
+      };
+    });
+    if (geometry.backingWidth !== width || geometry.backingHeight !== height) {
+      throw new Error(`backing store mismatch ${JSON.stringify(geometry)} expected=${width}x${height}`);
+    }
+    if (Math.abs(geometry.pointerX - width * 0.75) > 1 || Math.abs(geometry.pointerY - height * 0.25) > 1 || !geometry.inside) {
+      throw new Error(`pointer mapping mismatch ${JSON.stringify(geometry)} expected=${width}x${height}`);
+    }
+    emit(`[display] ${width}x${height} native backing + CSS 1:1 + pointer aligned`);
+  };
+
   let failure = null;
   try {
     await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -74,6 +113,14 @@ if (!chrome) {
     await waitForLog('WebGL 2.0');
     await waitForLog('render backend: OpenGL');
     await waitForLog('login scene: CGameProcedure brought up');
+    await waitForLog('browser display initial: 1280x720');
+
+    for (const [width, height] of [[1280,720],[1366,768],[1600,900],[1920,1080]]) {
+      await assertGeometry(width, height);
+      if (width !== 1280 || height !== 720) {
+        await waitForLog(`browser display sync: logical ${width}x${height}`);
+      }
+    }
 
     const state = await page.evaluate(() => window.__OLDKO_BOOTSTRAP__);
     emit(`[state] ${JSON.stringify(state)}`);
@@ -107,6 +154,7 @@ if (!chrome) {
       if (pattern.test(merged)) throw new Error(`fatal runtime pattern matched: ${pattern}`);
     }
 
+    emit('DISPLAY_MATRIX_OK 1280x720 1366x768 1600x900 1920x1080 native backing + pointer alignment');
     emit('RUNTIME_OK WASM + data preload + WebGL2/OpenGL + real login bootstrap');
   } catch (err) {
     failure = err;

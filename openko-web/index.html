@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
   <title>OldKOWeb — OldKO 1298</title>
   <style>
-    *{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#000}
-    body{display:grid;place-items:center}
-    #stage{position:relative;width:1024px;height:768px;transform-origin:center center}
-    #canvas{display:block;width:1024px;height:768px;background:#000;outline:none}
+    *{box-sizing:border-box}
+    html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#000}
+    #stage{position:fixed;inset:0;overflow:hidden;background:#000}
+    #canvas{position:absolute;display:block;background:#000;outline:none;max-width:none;max-height:none;margin:0;transform:none}
     #status{position:fixed;left:10px;top:8px;z-index:10;margin:0;color:#b8ffb8;font:12px/1.35 Consolas,monospace;white-space:pre-wrap;pointer-events:none;text-shadow:0 1px 2px #000;max-width:min(900px,95vw)}
   </style>
 </head>
@@ -18,8 +18,7 @@
   <script>
   (() => {
     'use strict';
-    const W=1024,H=768;
-    const stage=document.getElementById('stage');
+    const CLASSIC_W=1024,CLASSIC_H=768;
     const canvas=document.getElementById('canvas');
     const status=document.getElementById('status');
     const lines=[];
@@ -28,7 +27,8 @@
       runtimeReady:false,
       runDependencies:null,
       fatal:null,
-      transportConfigSource:null
+      transportConfigSource:null,
+      display:null
     };
 
     const log=(kind,text)=>{
@@ -42,14 +42,57 @@
       state.fatal=String(reason||'bilinmeyen runtime hatası');
       log('FATAL',state.fatal);
     };
-    const fit=()=>{
-      stage.style.transform=`scale(${Math.min(innerWidth/W,innerHeight/H)})`;
+    const viewport=()=>{
+      const vv=window.visualViewport;
+      if(vv&&vv.width>0&&vv.height>0){
+        return {left:Number(vv.offsetLeft)||0,top:Number(vv.offsetTop)||0,width:vv.width,height:vv.height,source:'visualViewport'};
+      }
+      return {left:0,top:0,width:innerWidth,height:innerHeight,source:'window'};
+    };
+    const fitNativeCanvas=()=>{
+      const backingW=Number(canvas.width)||CLASSIC_W;
+      const backingH=Number(canvas.height)||CLASSIC_H;
+      const vp=viewport();
+      if(!(vp.width>0&&vp.height>0&&backingW>0&&backingH>0)) return;
+      const scale=Math.min(vp.width/backingW,vp.height/backingH);
+      const cssW=backingW*scale,cssH=backingH*scale;
+      const left=vp.left+(vp.width-cssW)/2,top=vp.top+(vp.height-cssH)/2;
+      canvas.style.left=left+'px';
+      canvas.style.top=top+'px';
+      canvas.style.width=cssW+'px';
+      canvas.style.height=cssH+'px';
+      state.display={
+        backingWidth:backingW,backingHeight:backingH,
+        cssWidth:cssW,cssHeight:cssH,left,top,
+        viewportWidth:vp.width,viewportHeight:vp.height,
+        viewportSource:vp.source,
+        devicePixelRatio:Number(devicePixelRatio)||1
+      };
+    };
+    const mapPointer=(clientX,clientY)=>{
+      const rect=canvas.getBoundingClientRect();
+      const u=(clientX-rect.left)/rect.width;
+      const v=(clientY-rect.top)/rect.height;
+      return {x:u*canvas.width,y:v*canvas.height,normalizedX:u,normalizedY:v,inside:u>=0&&u<=1&&v>=0&&v<=1};
+    };
+    window.__OLDKO_DISPLAY_DIAGNOSTICS__={
+      snapshot:()=>({...(state.display||{}),fullscreen:!!document.fullscreenElement}),
+      mapPointer
     };
 
-    addEventListener('resize',fit);
+    addEventListener('resize',fitNativeCanvas,{passive:true});
+    addEventListener('orientationchange',fitNativeCanvas,{passive:true});
+    document.addEventListener('fullscreenchange',fitNativeCanvas);
+    if(window.visualViewport){
+      visualViewport.addEventListener('resize',fitNativeCanvas,{passive:true});
+      visualViewport.addEventListener('scroll',fitNativeCanvas,{passive:true});
+    }
+    if(typeof MutationObserver==='function'){
+      new MutationObserver(fitNativeCanvas).observe(canvas,{attributes:true,attributeFilter:['width','height']});
+    }
     addEventListener('error',event=>fail(event.message||event.error||'window error'));
     addEventListener('unhandledrejection',event=>fail(event.reason||'unhandled promise rejection'));
-    fit();
+    fitNativeCanvas();
 
     const probe=document.createElement('canvas');
     const probeGL=probe.getContext('webgl2');
@@ -69,10 +112,6 @@
       catch(_){return path;}
     };
 
-    // Temporary public-staging compatibility bridge for the canonical WS10
-    // artifact, whose C++ browser transport still emits ws://host:port URLs.
-    // Rewrite only the two known KO 1298 transport ports to the same-origin
-    // HTTPS/WSS edge before Emscripten's websocket.js is loaded.
     if(location.protocol==='https:' && typeof window.WebSocket==='function'){
       const NativeWebSocket=window.WebSocket;
       const mapWebSocketUrl=(input)=>{
@@ -108,11 +147,19 @@
     if(!state.transportConfigSource) state.transportConfigSource=externalTransport?'external':'same-origin-default';
     log('NET',`transport config: ${state.transportConfigSource}; auth=/auth game=/game`);
 
+    const oldkoDisplay=window.__OLDKO_DISPLAY_CONFIG__||{
+      mode:'viewport',
+      fallbackWidth:CLASSIC_W,
+      fallbackHeight:CLASSIC_H
+    };
+    log('DISPLAY',`native display config: ${oldkoDisplay.mode||'viewport'}; classic fallback=${CLASSIC_W}x${CLASSIC_H}`);
+
     window.Module={
       canvas,
       arguments:['--renderer','gl','--data','/data'],
       locateFile:(path)=>resolveRuntimeFile(path),
       oldkoTransport,
+      oldkoDisplay,
       print:(...args)=>log('OUT',args.join(' ')),
       printErr:(...args)=>log('ERR',args.join(' ')),
       monitorRunDependencies:(left)=>{
@@ -122,6 +169,7 @@
       onRuntimeInitialized:()=>{
         state.runtimeReady=true;
         state.runDependencies=0;
+        fitNativeCanvas();
         log('RUNTIME','WASM_RUNTIME_READY; KnightOnLine.data preload tamamlandı.');
         canvas.focus();
       },

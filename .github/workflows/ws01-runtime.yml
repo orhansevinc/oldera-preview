@@ -71,13 +71,16 @@ jobs:
           echo "Data files: $(find ko-assets/Data -type f | wc -l)"
           echo "UI_US files: $(find ko-assets/UI_US -type f | wc -l)"
 
-      - name: Verify public WebSocket transport mapping contract
+      - name: Verify browser transport and native display config contracts
         shell: bash
         run: |
           set -euo pipefail
           node --test tools/ws01_runtime/transport_config.test.cjs 2>&1 | tee ws01-transport-tests.log
           grep -q '# pass 9' ws01-transport-tests.log
           grep -q '# fail 0' ws01-transport-tests.log
+          node --test tools/ws01_runtime/display_config.test.cjs 2>&1 | tee ws01-display-tests.log
+          grep -q '# pass 8' ws01-display-tests.log
+          grep -q '# fail 0' ws01-display-tests.log
 
       - name: Verify currently committed browser package
         shell: bash
@@ -88,7 +91,7 @@ jobs:
             --index openko-web/index.html \
             --manifest ws01-committed-package.json
 
-      - name: Apply existing real-browser patches and verify WebGL2/preload/transport anchors
+      - name: Apply real-browser patches and verify WebGL2 transport/display anchors
         shell: bash
         run: |
           set -euo pipefail
@@ -100,8 +103,19 @@ jobs:
           python3 tools/ws01_runtime/prepare_browser_source.py
           grep -F 'OldKOWebResolveWebSocketUrl' openko/src/Client/WarFare/APISocket.cpp
           grep -F 'browser_transport_pre.js' openko/src/Client/WarFare/CMakeLists.txt
+          grep -F 'browser_display_pre.js' openko/src/Client/WarFare/CMakeLists.txt
+          grep -F 'OldKOWebGetBrowserDisplaySize' openko/src/Client/WarFare/WarFareMainSDL.cpp
+          grep -F 'SyncWindowGeometry' openko/src/Client/WarFare/RHIDeviceGL.cpp
           if grep -F 'const std::string url = "ws://" + szIP' openko/src/Client/WarFare/APISocket.cpp; then
             echo 'RUNTIME_SOURCE_FAIL: hardcoded ws:// host/port URL remains'
+            exit 1
+          fi
+          if grep -F 'CN3Base::s_Options.iViewWidth    = 1024;' openko/src/Client/WarFare/WarFareMainSDL.cpp; then
+            echo 'RUNTIME_SOURCE_FAIL: fixed 1024 browser width override remains'
+            exit 1
+          fi
+          if grep -F 'CN3Base::s_Options.iViewHeight   = 768;' openko/src/Client/WarFare/WarFareMainSDL.cpp; then
+            echo 'RUNTIME_SOURCE_FAIL: fixed 768 browser height override remains'
             exit 1
           fi
 
@@ -163,7 +177,7 @@ jobs:
             --index "$OUT/index.html" \
             --manifest ws01-rebuilt-package.json
 
-      - name: Real Chromium runtime bootstrap smoke
+      - name: Real Chromium native-widescreen runtime smoke
         shell: bash
         run: |
           set -euo pipefail
@@ -182,6 +196,7 @@ jobs:
           WS01_LOG='ws01-runtime-browser-driver.log' \
             timeout 90s node tools/ws01_runtime/runtime_smoke.cjs 2>&1 | tee ws01-runtime-browser.log
 
+          grep -q 'DISPLAY_MATRIX_OK 1280x720 1366x768 1600x900 1920x1080 native backing + pointer alignment' ws01-runtime-browser.log
           grep -q 'RUNTIME_OK WASM + data preload + WebGL2/OpenGL + real login bootstrap' ws01-runtime-browser.log
           ! grep -q 'render backend: Null' ws01-runtime-browser.log
           ! grep -Eq '\[pageerror\]|GL_INVALID_(ENUM|VALUE|OPERATION)|WebGL: INVALID_|WebGL: too many errors' ws01-runtime-browser.log
@@ -200,6 +215,7 @@ jobs:
             configure-web.log
             build-web.log
             ws01-transport-tests.log
+            ws01-display-tests.log
             ws01-committed-package.json
             ws01-rebuilt-package.json
             ws01-http.log
