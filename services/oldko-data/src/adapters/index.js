@@ -1,4 +1,5 @@
 export { PgWs03SessionRepository, PgAccountSessionRepository } from './ws03-auth-session.js';
+export { PgWs08AdminRepository, WS08_REQUIRED_METHODS } from './ws08-admin.js';
 export { PgWs14WorldRepository } from './ws14-world.js';
 export { PgWs17ItemRepository, WS17_STORAGE_CAPACITY } from './ws17-inventory.js';
 export { PgEconomyTransactionManager, PgCoinRepository, PgTradeRepository } from './ws22-economy.js';
