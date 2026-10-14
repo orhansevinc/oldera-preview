@@ -117,6 +117,7 @@ class GameSession {
     };
     this.movementRegistered = false;
     this.combatIngressSequence = 0;
+    this.combatDeathSignals = new Set();
     this._disconnectPromise = null;
   }
 
@@ -231,6 +232,20 @@ class GameSession {
       });
     }
     if (this.state.phase !== SESSION_STATES.WORLD_READY) return [];
+
+    if (source === 'WS25' && event?.sourceAttack && Number.isInteger(event.runtimeId) && event.targetId !== undefined) {
+      try {
+        return await this._handleMobAttackIntent(event);
+      } catch (error) {
+        this.logger('downstream_error', { owner: OWNER.WS19, code: error?.code || 'ERROR', state: this.state.phase });
+        return [];
+      }
+    }
+
+    if (source === 'WS25' && event?.type === 'IN' && event?.reason === 'respawn' && Number.isInteger(event.runtimeId)) {
+      this.combatDeathSignals.delete(event.runtimeId);
+    }
+
     if (!this.domainEventAdapter || typeof this.domainEventAdapter.encode !== 'function') {
       this.logger('domain_event_unencoded', { source, state: this.state.phase });
       return [];

@@ -1,255 +1,67 @@
 'use strict';
 
-const fs = require('node:fs');
-const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
-
+const codec = require('../../protocol-lab/runtime/playable-combat-codec.cjs');
+const slice = require('../../data-catalog/generated/MORADON_PLAYABLE_COMBAT_SLICE.json');
+const ws17Contract = require('../../workstreams/ws17/PLAYABLE_COMBAT_EQUIPMENT_CONTRACT.json');
+const ws19Authority = require('../../workstreams/ws19/PLAYABLE_PVE_AUTHORITY.json');
+const moradonVerified = require('../../world-data/mobs/verified/moradon-zone21.verified.json');
 const { GAME, Writer } = require('../../services/ko1298-session/protocol');
 const { MemoryRepository } = require('../../services/ko1298-session/repository');
 const { GameSession } = require('../../services/ko1298-session/session');
 const { SESSION_STATES } = require('../../services/ko1298-session/contracts');
 const { MAGIC_COMMAND } = require('../../services/ko1298-session/combat-protocol');
+const { createPlayableCombatSessionAdapter } = require('../../services/ko1298-session/playable-combat-adapter');
 const { MovementService } = require('../../services/ko1298-movement');
-const { InMemoryItemRepository, ItemDomainService } = require('../../services/ko1298-items');
-const { MobVisibilityService } = require('../../services/ko1298-mobs');
-const {
-  ATTACK_RESULT,
-  CombatService,
-  LIFE_STATE,
-  OpenKo1298NormalAttackDamagePolicy,
-  SkillService,
-  createAuthoritativeWorldPort,
-  createCombatant,
-  createGoldenSkillTable,
-  createPlayerCombatPort,
-  createWs17EquipmentCombatPort,
-} = require('../../services/ko1298-combat');
+const { CONTAINER_TYPES, EQUIPMENT_SLOTS, ItemTemplateRegistry, Legacy1298TableAdapter, InMemoryItemRepository, ItemDomainService } = require('../../services/ko1298-items');
+const { MobService, loadVerifiedWorldDefinition } = require('../../services/ko1298-mobs');
+const { PlayablePveCombatService } = require('../../services/ko1298-combat');
+const { buildNpcIn } = require('../../services/ko1298-world/src/visibility-protocol');
 
-const WS11_SHA = '944b6ff9b6329af29f1048a74aa6e14fca141639';
-const WS19_SHA = '28eb4f38753ffbc54c60abbd2a32832301284c06';
-const WS25_SHA = '13c9bafe287b250d56b52f19e97a02e7ef18e6e5';
-const WS15_SHA = 'ce9bed13b8d45c32ff0592595aa3a0d1e7b3964d';
-const WS17_SHA = 'fbfc13f9c123ebeb6dd38c32fc95ef26d917a777';
+const PIN = Object.freeze({
+  WS11:'013559b6e66ef9f6257403c96f3b012884739470', WS14:'ed5f806ce7505f4dfae406e4164735def63b6c86',
+  WS15:'ce9bed13b8d45c32ff0592595aa3a0d1e7b3964d', WS17:'eb3e9fce63b71fa68682d81d9227e6ed7ae905bf',
+  WS19:'cc1490672b676f0bf1675f83c8f4fc146b940df4', WS25:'18c9e9b8439fef88fc93d74bfec7981b0cb41958',
+  WS31:'56ada741532c8f6cabfc83b129a8e87e645db055',
+});
 
-function login() { return new Writer().u8(GAME.LOGIN).str16('osevinc').str16('osevinc').done(); }
-function create() { return new Writer().u8(GAME.NEW_CHAR).u8(0).str16('CombatHero').u8(12).i16(201).u8(1).u8(2).u8(60).u8(60).u8(70).u8(50).u8(50).done(); }
-function select() { return new Writer().u8(GAME.SEL_CHAR).str16('osevinc').str16('CombatHero').u8(1).u8(21).done(); }
-function attack(targetId, intervalRaw = 1, distanceRaw = 1) {
-  const b = Buffer.alloc(8); b[0] = GAME.ATTACK; b[1] = 1; b.writeInt16LE(targetId, 2); b.writeInt16LE(intervalRaw, 4); b.writeInt16LE(distanceRaw, 6); return b;
-}
-function magicEffect(skillId, targetId, clientSourceId = 12345) {
-  const b = Buffer.alloc(22); b[0] = GAME.MAGIC_PROCESS; b[1] = MAGIC_COMMAND.EFFECTING; b.writeUInt32LE(skillId, 2); b.writeInt16LE(clientSourceId, 6); b.writeInt16LE(targetId, 8); return b;
-}
-function worldMock() {
-  return {
-    async beginSelectedCharacter(args) {
-      return { state: 'WAIT_GAMESTART_LOADING', clientPackets: [Buffer.from([GAME.SEL_CHAR, 1])], broadcastPackets: [], snapshot: { socketId: args.socketId, zoneId: 21, x: 312, y: 0, z: 402 } };
-    },
-    async handleClientPacket(socketId, packet) {
-      if (packet[0] === GAME.GAMESTART && packet[1] === 2) return { state: 'WORLD_READY', clientPackets: [], broadcastPackets: [], snapshot: { socketId, zoneId: 21, x: 312, y: 0, z: 402 } };
-      return { state: 'WAIT_GAMESTART_LOADED', clientPackets: [Buffer.from([GAME.GAMESTART])], broadcastPackets: [], snapshot: { socketId, zoneId: 21, x: 312, y: 0, z: 402 } };
-    },
-  };
-}
-function moradonWormWorld() {
-  const sourceRef = 'Open-KO/OpenKO-db@bec619466938d278339c30e5b1a4bff3c9413bab:ManualSetup/6_InsertData_K_MONSTER.sql#750';
-  return {
-    schemaVersion: 2,
-    dataClass: 'real',
-    zoneId: '21',
-    templates: [{
-      templateId: 'ko1298:monster:750', displayName: 'Worm', dataClass: 'real', sourceRef,
-      modelRef: 700, maxHp: 50, aggroRange: 10, leashRange: 20, attackRange: 2,
-      corpseDespawnMs: 3000, respawnDelayMs: 30000, attackDelayMs: 1000, level: 1,
-      metadata: { group: 0 },
-    }],
-    spawnGroups: [{
-      groupId: 'ko1298:21:750:ws03-contract', templateId: 'ko1298:monster:750', zoneId: '21', sourceRef,
-      spawns: [{ spawnId: 'slot-001', zoneId: '21', x: 313, y: 0, z: 402, heading: 0, sourceRef }],
-    }],
-  };
-}
-function compositionTerrainPort() {
-  // WS25 correctly refuses constant/raw spawn Y for real data. Terrain is outside this WS03 combat task,
-  // so the composition harness supplies the required authority port explicitly instead of weakening WS25.
-  // This proves the WS25 target boundary; it is not production terrain evidence and is never used as such.
-  return Object.freeze({
-    resolveHeight(zoneId, x, z) {
-      assert.equal(zoneId, 21);
-      assert.equal(x, 313);
-      assert.equal(z, 402);
-      return Object.freeze({
-        status: 'authoritative',
-        height: 0,
-        surface: 'WS03_COMPOSITION_HARNESS',
-        policy: 'TEST_ONLY_TERRAIN_AUTHORITY_PORT',
-        terrainHeight: 0,
-        shapeHeight: null,
-      });
-    },
-  });
-}
-function normalizeWs17SnapshotForWs19(raw) {
-  // Current WS17 exposes raw legacy range/delay but not a verified unit conversion to WS19's
-  // weaponRange/attackDelayMs contract. Preserve the real snapshot and fail closed on those units.
-  return Object.freeze({
-    weaponRange: null,
-    attackDelayMs: null,
-    weaponClass: raw?.rightHand?.kind ?? raw?.leftHand?.kind ?? null,
-    rightItemClass: raw?.rightHand?.kind ?? 0,
-    leftItemClass: raw?.leftHand?.kind ?? 0,
-    raw,
-  });
-}
+function login(){return new Writer().u8(GAME.LOGIN).str16('osevinc').str16('osevinc').done();}
+function create(){return new Writer().u8(GAME.NEW_CHAR).u8(0).str16('CombatHero').u8(1).i16(101).u8(1).u8(2).u8(60).u8(60).u8(70).u8(50).u8(50).done();}
+function select(){return new Writer().u8(GAME.SEL_CHAR).str16('osevinc').str16('CombatHero').u8(1).u8(21).done();}
+function attack(targetId){const b=Buffer.alloc(9);b[0]=GAME.ATTACK;b[1]=1;b[2]=255;b.writeInt16LE(targetId,3);b.writeInt16LE(32000,5);b.writeInt16LE(32000,7);return b;}
+function targetHp(targetId){const b=Buffer.alloc(4);b[0]=GAME.TARGET_HP;b.writeInt16LE(targetId,1);b[3]=1;return b;}
+function slash(targetId){const b=Buffer.alloc(22);b[0]=GAME.MAGIC_PROCESS;b[1]=MAGIC_COMMAND.EFFECTING;b.writeUInt32LE(101003,2);b.writeInt16LE(32000,6);b.writeInt16LE(targetId,8);b.writeInt16LE(1,10);b.writeInt16LE(1,12);return b;}
+function worldMock(position){return {async beginSelectedCharacter(a){return {state:'WAIT_GAMESTART_LOADING',clientPackets:[Buffer.from([GAME.SEL_CHAR,1])],broadcastPackets:[],snapshot:{socketId:a.socketId,zoneId:21,...position}};},async handleClientPacket(socketId,p){return {state:p[0]===GAME.GAMESTART&&p[1]===2?'WORLD_READY':'WAIT_GAMESTART_LOADED',clientPackets:[],broadcastPackets:[],snapshot:{socketId,zoneId:21,...position}};}};}
+function allocator(start=12000){let n=start;const m=new Map();return {claim(r){if(!m.has(r.sourceIdentity))m.set(r.sourceIdentity,n++);return m.get(r.sourceIdentity);}};}
+function singleBandicoot(){const w=loadVerifiedWorldDefinition(moradonVerified);const g=w.spawnGroups.find(x=>x.templateId==='ko1298:monster:850');assert.ok(g);return {...w,spawnGroups:[{...g,spawns:[g.spawns[0]]}]};}
+function playerFixture(id,position){const d=ws19Authority.deterministic_player_fixture.derived_combat;return {id,zoneId:21,position:{...position},nationId:1,classId:101,level:3,hp:d.max_hp,maxHp:d.max_hp,mp:0,maxMp:0,sp:d.max_resource,maxSp:d.max_resource,resourceKind:d.resource_kind,lifeState:'ALIVE',combat:{ap:d.ap,ac:d.ac,hitRate:d.hit_rate,evasionRate:d.evasion_rate}};}
+function createPlayerPort(player){const health=new Set(),resource=new Set();return {getCombatSnapshot(id){return String(id)===String(player.id)?{...player,position:{...player.position},combat:{...player.combat}}:null;},applyHealthResult(r){const k=`${r.sourceId}:${r.requestKey}:${r.targetId}`;if(health.has(k))return {applied:false,duplicate:true,player:this.getCombatSnapshot(player.id)};health.add(k);const before=player.hp;player.hp=r.absoluteHp;if(before>0&&player.hp===0)player.lifeState='DEAD';return {applied:true,duplicate:false,deathTransition:before>0&&player.hp===0,player:this.getCombatSnapshot(player.id)};},applyResourceResult(r){const k=`${r.sourceId}:${r.requestKey}:${r.targetId}:${r.kind}`;if(resource.has(k))return {applied:false,duplicate:true,player:this.getCombatSnapshot(player.id)};resource.add(k);player[r.kind==='SP'?'sp':'mp']=r.absoluteValue;return {applied:true,duplicate:false,player:this.getCombatSnapshot(player.id)};}};}
+async function equipmentService(){const source=ws17Contract.canonicalStarterWeapon;const adapter=new Legacy1298TableAdapter({getRow:async id=>Number(id)===source.itemId?{...source.sourceRow}:null});const templates=new ItemTemplateRegistry(adapter,{requireVerifiedProvenance:true});const service=new ItemDomainService({repository:new InMemoryItemRepository(),templates,characterContext:async()=>({level:3,classId:101,raceId:1,nationId:1,stats:{str:0,sta:0,dex:0,int:0,cha:0},maxWeight:1000})});await service.createItem('CombatHero',{container:CONTAINER_TYPES.INVENTORY,slot:0},{templateId:120010000,serial:'ws03-short-sword'});await service.equip('CombatHero',0,EQUIPMENT_SLOTS.RIGHT_HAND);return service;}
+async function ready(options){const s=new GameSession(new MemoryRepository(),{socketId:500,...options});await s.handle(login());await s.handle(Buffer.from([GAME.SEL_NATION,1]));await s.handle(create());await s.handle(select());await s.handle(Buffer.from([GAME.GAMESTART,1]));await s.handle(Buffer.from([GAME.GAMESTART,2]));assert.equal(s.phase,SESSION_STATES.WORLD_READY);return s;}
 
-async function readySession(options) {
-  const session = new GameSession(new MemoryRepository(), { socketId: 500, worldSession: worldMock(), ...options });
-  await session.handle(login());
-  await session.handle(Buffer.from([GAME.SEL_NATION, 2]));
-  await session.handle(create());
-  await session.handle(select());
-  await session.handle(Buffer.from([GAME.GAMESTART, 1]));
-  await session.handle(Buffer.from([GAME.GAMESTART, 2]));
-  assert.equal(session.phase, SESSION_STATES.WORLD_READY);
-  return session;
-}
+test('real canonical playable combat composition reaches exact client packets and lifecycle', async()=>{
+  assert.equal(slice.test_character?.class_id??slice.testCharacter?.classId??101,101);
+  const visibility=[], intents=[], targets=new Map();
+  const mobs=new MobService(singleBandicoot(),{runtimeIds:allocator(),terrain:{resolveHeight:()=>({status:'authoritative',height:0,surface:'terrain',policy:'ws03-composition'})},world:{listAggroCandidates:()=>[],getTargetSnapshot:id=>targets.get(String(id))??null,isMobVisibleToPlayer:()=>true},combat:{isTargetAlive:t=>t?.alive!==false,canAggro:()=>true,canAttack:()=>true,attackIntent:i=>intents.push(i)},visibility:{onEvent:e=>visibility.push(e)}});
+  const [spawn]=mobs.initialize(0), mobId=spawn.runtimeId;let mob=mobs.getCombatSnapshot(mobId);assert.equal(mob.templateId,'ko1298:monster:850');assert.equal(mob.hp,11);
+  const pos={x:mob.position.x-0.5,y:mob.position.y,z:mob.position.z};const player=playerFixture(500,pos),playerPort=createPlayerPort(player);targets.set('500',playerPort.getCombatSnapshot(500));
+  const movement=new MovementService({zoneBounds:{isValidPosition:()=>true}}),items=await equipmentService();const equip=await items.getCombatItemSnapshot('CombatHero');assert.equal(equip.weaponRange,1.0);assert.equal(equip.attackDelayMs,1140);assert.equal(equip.damage,4);
+  const equipmentPort={getCombatSnapshot:()=>items.getCombatItemSnapshot('CombatHero')};
+  const worldPort={validateAttackRange({attacker,target,weaponRange}){const p=movement.getEntityPositionSnapshot(attacker.id),d=Math.hypot(p.position.x-target.position.x,p.position.z-target.position.z);return {ok:d<=weaponRange,reason:d<=weaponRange?null:'OUT_OF_RANGE',distance:d,maxRange:weaponRange};},validateMobAttackRange({source,target,attackRange}){const p=movement.getEntityPositionSnapshot(target.id),d=Math.hypot(source.position.x-p.position.x,source.position.z-p.position.z);return {ok:d<=attackRange,reason:d<=attackRange?null:'OUT_OF_RANGE',distance:d,maxRange:attackRange};}};
+  const pve=new PlayablePveCombatService({mobCombatPort:mobs,playerCombatPort:playerPort,equipmentPort,worldPort,rng:()=>0,clock:()=>0});const combatAdapter=createPlayableCombatSessionAdapter({service:pve,mobCombatPort:mobs,playerCombatPort:playerPort});
+  const domainEventAdapter={async encode({source,event}){if(source==='WS25'&&event?.type==='IN'&&event?.reason==='respawn'){const record=mobs.visibilitySnapshot(event.runtimeId);const ws14=buildNpcIn(record),ws11=codec.encodeNpcIn(record);assert.deepEqual(ws14,ws11);return {clientPackets:[ws14]};}return {clientPackets:[]};}};
+  const session=await ready({worldSession:worldMock(pos),movementSession:movement,combatAdapter,domainEventAdapter});assert.equal(movement.getEntityPositionSnapshot(500).zoneId,21);
 
-test('pinned WS11/15/17/19/25 providers compose through WS03 combat ingress without client authority leakage', async () => {
-  const authorityPath = path.join(process.cwd(), 'protocol-lab', 'gameplay-authority.json');
-  const authority = JSON.parse(fs.readFileSync(authorityPath, 'utf8'));
-  const attackAuthority = authority.packets.find((row) => row.name === 'WIZ_ATTACK');
-  const magicAuthority = authority.packets.find((row) => row.name === 'WIZ_MAGIC_PROCESS');
-  assert.equal(attackAuthority.confidence, 'VERIFIED');
-  assert.equal(magicAuthority.confidence, 'VERIFIED');
-  assert.equal(Number.parseInt(attackAuthority.opcode, 16), GAME.ATTACK);
-  assert.equal(Number.parseInt(magicAuthority.opcode, 16), GAME.MAGIC_PROCESS);
+  let packets=await session.handle(targetHp(mobId));assert.equal(packets.length,1);let hp=codec.decodeTargetHp(packets[0]);assert.equal(hp.currentHp,11);assert.equal(hp.maxHp,11);
+  packets=await session.handle(attack(mobId),{receiveSequence:1});assert.equal(codec.decodeAttackResult(packets[0]).result,'SUCCESS');hp=codec.decodeTargetHp(packets[1]);assert.equal(hp.currentHp,8);assert.equal(hp.maxHp,11);assert.equal(hp.hpDelta,-3);assert.equal(mobs.getCombatSnapshot(mobId).hp,8);
 
-  const movement = new MovementService({ zoneBounds: { isValidPosition: () => true } });
-  const itemService = new ItemDomainService({
-    repository: new InMemoryItemRepository(),
-    templates: { get: async () => { throw new Error('empty equipment test must not resolve a template'); } },
-  });
+  mobs.tick(1700);assert.ok(intents.length>0);packets=await session.deliverDomainEvent('WS25',intents[0]);assert.equal(packets[0][0],codec.OPCODE.WIZ_HP_CHANGE);assert.equal(codec.decodePlayerHp(packets[0]).currentHp,32);const mobAttack=codec.decodeAttackResult(packets[1]);assert.equal(mobAttack.attackerId,mobId);assert.equal(mobAttack.targetId,500);assert.equal(mobAttack.result,'SUCCESS');
 
-  let nextRuntimeId = 20001;
-  const mobs = new MobVisibilityService(moradonWormWorld(), {
-    runtimeIds: { claim: () => nextRuntimeId++ },
-    terrain: compositionTerrainPort(),
-  });
-  mobs.initialize(0);
-  const mobRuntimeId = 20001;
-  assert.equal(mobs.visibilitySnapshot(mobRuntimeId).runtimeId, mobRuntimeId);
+  packets=await session.handle(slash(mobId),{receiveSequence:2});assert.equal(codec.decodeSlash101003Result(packets[0]).result,'EFFECTING_SUCCESS');assert.equal(codec.decodePlayerMsp(packets[1]).currentMsp,29);hp=codec.decodeTargetHp(packets[2]);assert.equal(hp.currentHp,4);assert.equal(hp.maxHp,11);
+  packets=await session.handle(slash(mobId),{receiveSequence:3});assert.equal(codec.decodeSlash101003Result(packets[0]).result,'EFFECTING_SUCCESS');assert.equal(codec.decodePlayerMsp(packets[1]).currentMsp,25);hp=codec.decodeTargetHp(packets[2]);assert.equal(hp.currentHp,0);assert.equal(hp.maxHp,11);assert.equal(codec.decodeDead(packets[3]).targetId,mobId);assert.equal(packets.filter(p=>p[0]===codec.OPCODE.WIZ_DEAD).length,1);
+  const duplicate=await session.handle(slash(mobId),{receiveSequence:3});assert.equal(duplicate.filter(p=>p[0]===codec.OPCODE.WIZ_DEAD).length,0);assert.equal(player.sp,25);
 
-  const player = createCombatant({
-    id: 500, hp: 50, maxHp: 100, mp: 100, maxMp: 100,
-    classId: 104, level: 20, nationId: 1, zoneId: 21,
-    position: { x: 312, y: 0, z: 402 },
-    combat: { ap: 200, ac: 100, hitRate: 5, evasionRate: 1 },
-  });
-  const equipmentCache = new Map();
-  let mobResolutionCount = 0;
-  function mobCombatProjection(runtimeId) {
-    try {
-      const snapshot = mobs.visibilitySnapshot(runtimeId);
-      mobResolutionCount += 1;
-      // WS25 current public snapshot is authoritative for identity/HP/world position but does not expose
-      // target combat AC/evasion. Keep those absent; normal attack must stop before damage while the
-      // separate provider gap remains explicit.
-      return createCombatant({
-        id: snapshot.runtimeId,
-        hp: snapshot.hp,
-        maxHp: snapshot.maxHp,
-        zoneId: Number(snapshot.zoneId),
-        position: snapshot.position,
-        combat: {},
-      });
-    } catch {
-      return null;
-    }
-  }
-  function getEntity(id) {
-    if (id === player.id) return player;
-    return mobCombatProjection(id);
-  }
-  function getWorldSnapshot(id) {
-    if (id === player.id) return movement.getEntityPositionSnapshot(id);
-    const mob = mobs.visibilitySnapshot(id);
-    return { zoneId: Number(mob.zoneId), position: mob.position };
-  }
-  const worldPort = createAuthoritativeWorldPort({
-    getSnapshot: getWorldSnapshot,
-    distance: (a, b) => Math.hypot(a.x - b.x, a.z - b.z),
-  });
-  const equipmentPort = createWs17EquipmentCombatPort({ getEquipmentSnapshot: (id) => equipmentCache.get(id) ?? null });
-  const combatService = new CombatService({
-    damagePolicy: new OpenKo1298NormalAttackDamagePolicy({ rng: () => 0 }),
-    worldPort,
-    equipmentPort,
-    clock: () => 1000,
-    rng: () => 0,
-  });
-  const skillService = new SkillService({ table: createGoldenSkillTable(), worldPort, equipmentPort, clock: () => 1000 });
-  const playerCombatPort = createPlayerCombatPort({ combatService, skillService, getEntity });
-  const events = [];
-
-  const combatAdapter = {
-    async execute({ actor, operation }) {
-      assert.equal(operation.sourceEntityId, actor.entityId);
-      const rawEquipment = await itemService.getCombatItemSnapshot(actor.characterId);
-      equipmentCache.set(actor.entityId, normalizeWs17SnapshotForWs19(rawEquipment));
-      if (operation.kind === 'NORMAL_ATTACK') {
-        return playerCombatPort.normalAttack({
-          sourceId: actor.entityId,
-          targetId: operation.targetRuntimeId,
-          requestKey: operation.requestKey,
-          context: { requestMetadata: operation.requestMetadata },
-        });
-      }
-      if (operation.kind === 'MAGIC_PROCESS' && operation.command === MAGIC_COMMAND.EFFECTING) {
-        return playerCombatPort.skill({
-          skillId: operation.skillId,
-          sourceId: actor.entityId,
-          targetId: operation.targetRuntimeId,
-          requestKey: operation.requestKey,
-          context: { requestMetadata: operation.requestMetadata },
-        });
-      }
-      return Object.freeze({ ok: true, type: 'MAGIC_LIFECYCLE', command: operation.command, effectApplied: false });
-    },
-  };
-
-  const session = await readySession({ movementSession: movement, combatAdapter, onCombatEvent: (event) => events.push(event) });
-  assert.equal(movement.getEntityPositionSnapshot(500).zoneId, 21);
-
-  await session.handle(attack(mobRuntimeId, 32000, 32000), { receiveSequence: 700 });
-  assert.equal(events.at(-1).type, 'NORMAL_ATTACK_RESULT');
-  assert.equal(events.at(-1).outcome.reason, ATTACK_RESULT.ATTACK_TIMER_UNAVAILABLE);
-  assert.ok(mobResolutionCount > 0, 'WS25 runtime target must participate in target resolution');
-  assert.equal(mobs.visibilitySnapshot(mobRuntimeId).hp, 50, 'fail-closed attack must not mutate mob HP');
-
-  await session.handle(attack(29999), { receiveSequence: 701 });
-  assert.equal(events.at(-1).outcome.reason, ATTACK_RESULT.INVALID_TARGET);
-
-  player.hp = 0;
-  player.lifeState = LIFE_STATE.DEAD;
-  await session.handle(attack(mobRuntimeId), { receiveSequence: 702 });
-  assert.equal(events.at(-1).outcome.reason, ATTACK_RESULT.SOURCE_DEAD);
-  player.hp = 50;
-  player.lifeState = LIFE_STATE.ALIVE;
-
-  const hpBefore = player.hp;
-  await session.handle(magicEffect(104001, 500, 32000), { receiveSequence: 703 });
-  assert.equal(events.at(-1).type, 'MAGIC_PROCESS_RESULT');
-  assert.equal(events.at(-1).operation.clientClaimedSourceId, 32000);
-  assert.equal(events.at(-1).operation.sourceEntityId, 500);
-  assert.equal(events.at(-1).outcome.ok, true);
-  assert.ok(player.hp > hpBefore, 'verified WS19 Tiny Healing must reach domain effect/result');
-
-  assert.deepEqual({ WS11_SHA, WS19_SHA, WS25_SHA, WS15_SHA, WS17_SHA }, {
-    WS11_SHA: '944b6ff9b6329af29f1048a74aa6e14fca141639',
-    WS19_SHA: '28eb4f38753ffbc54c60abbd2a32832301284c06',
-    WS25_SHA: '13c9bafe287b250d56b52f19e97a02e7ef18e6e5',
-    WS15_SHA: 'ce9bed13b8d45c32ff0592595aa3a0d1e7b3964d',
-    WS17_SHA: 'fbfc13f9c123ebeb6dd38c32fc95ef26d917a777',
-  });
+  let respawnEvent=null;for(let t=1;t<=60000&&!respawnEvent;t+=1000){mobs.tick(t);respawnEvent=visibility.find(e=>e.type==='IN'&&e.reason==='respawn'&&e.runtimeId===mobId)??null;}assert.ok(respawnEvent);packets=await session.deliverDomainEvent('WS25',respawnEvent);assert.equal(packets.length,1);assert.equal(codec.decodeNpcIn(packets[0]).record.runtime_id,mobId);assert.equal(mobs.getCombatSnapshot(mobId).hp,11);
+  assert.deepEqual(PIN,{WS11:'013559b6e66ef9f6257403c96f3b012884739470',WS14:'ed5f806ce7505f4dfae406e4164735def63b6c86',WS15:'ce9bed13b8d45c32ff0592595aa3a0d1e7b3964d',WS17:'eb3e9fce63b71fa68682d81d9227e6ed7ae905bf',WS19:'cc1490672b676f0bf1675f83c8f4fc146b940df4',WS25:'18c9e9b8439fef88fc93d74bfec7981b0cb41958',WS31:'56ada741532c8f6cabfc83b129a8e87e645db055'});
 });

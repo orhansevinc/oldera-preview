@@ -1,10 +1,10 @@
 'use strict';
 
 // Inbound-only strict KO1298 combat decoders.
-// Authority: WS11@944b6ff9b6329af29f1048a74aa6e14fca141639
-// protocol-lab/gameplay-authority.json. No outbound encoder is duplicated here.
+// Authority: WS11@013559b6e66ef9f6257403c96f3b012884739470
+// protocol-lab/PLAYABLE_COMBAT_PROTOCOL_PROFILE.json. Outbound encoding stays in the WS11 runtime codec.
 
-const ATTACK_PAYLOAD_BYTES = 8;
+const ATTACK_PAYLOAD_BYTES = 9;
 const MAGIC_PROCESS_PAYLOAD_BYTES = 22;
 
 const MAGIC_COMMAND = Object.freeze({
@@ -28,13 +28,15 @@ function parseAttackPacket(packet, opcode) {
   if (p[0] !== opcode) throw new RangeError('WIZ_ATTACK opcode mismatch');
   const attackType = p.readUInt8(1);
   if (attackType !== 1) throw new RangeError('WIZ_ATTACK C2S normal attack_type must be 1');
-  const targetRuntimeId = p.readInt16LE(2);
-  const clientIntervalRaw = p.readInt16LE(4);
-  const clientDistanceRaw = p.readInt16LE(6);
+  const clientResultHint = p.readUInt8(2);
+  const targetRuntimeId = p.readInt16LE(3);
+  const clientIntervalRaw = p.readInt16LE(5);
+  const clientDistanceRaw = p.readInt16LE(7);
   return Object.freeze({
     attackType,
     targetRuntimeId,
     clientObservation: Object.freeze({
+      resultHint: clientResultHint,
       intervalRaw: clientIntervalRaw,
       intervalSeconds: clientIntervalRaw * 0.01,
       distanceRaw: clientDistanceRaw,
