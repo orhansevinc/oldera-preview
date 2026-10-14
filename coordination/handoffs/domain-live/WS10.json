@@ -3,9 +3,16 @@
   "release_id": "oldkoweb-domain-live-20261015",
   "owner": "WS10",
   "branch": "ws10-qa-integration",
-  "source_commit": "379d7c48ae17c52842efb1d2aa473d60ab010333",
+  "source_commit": "c3f25fd365d06f331daf33c965d99c4fc21fc8b0",
   "status": "BLOCKED",
   "scope": "Final-user acceptance evidence only. No provider product code changed.",
+  "automation": {
+    "workflow": ".github/workflows/ws10-domain-live-acceptance.yml",
+    "workflow_ref": "orhansevinc/oldera-preview/.github/workflows/ws10-domain-live-acceptance.yml@ws10-qa-integration",
+    "interfaces": ["workflow_call", "workflow_dispatch", "push-on-WS10-harness-change"],
+    "ws50_reusable_job_example": "uses: orhansevinc/oldera-preview/.github/workflows/ws10-domain-live-acceptance.yml@ws10-qa-integration; with.release_id: oldkoweb-domain-live-20261015",
+    "machine_result": "artifacts/domain-live/WS10.json"
+  },
   "tested_release": {
     "ws50_manifest_path": "integration-rehearsal/domain-live/oldkoweb-domain-live-20261015.json",
     "ws50_manifest_commit": "396a765384f87fd97159204fd1eefc77702e6624",
@@ -20,17 +27,19 @@
   },
   "acceptance_run": {
     "workflow": ".github/workflows/ws10-domain-live-acceptance.yml",
-    "run_id": 38654350092,
-    "run_url": "https://github.com/orhansevinc/oldera-preview/actions/runs/38654350092",
-    "job_id": 116160456122,
-    "job_url": "https://github.com/orhansevinc/oldera-preview/actions/runs/38654350092/job/116160456122",
-    "head_sha": "379d7c48ae17c52842efb1d2aa473d60ab010333",
+    "run_id": 38654558721,
+    "run_url": "https://github.com/orhansevinc/oldera-preview/actions/runs/38654558721",
+    "job_id": 116161126271,
+    "job_url": "https://github.com/orhansevinc/oldera-preview/actions/runs/38654558721/job/116161126271",
+    "head_sha": "c3f25fd365d06f331daf33c965d99c4fc21fc8b0",
     "runner": "ubuntu-24.04",
+    "workflow_conclusion": "SUCCESS",
+    "acceptance_overall": "BLOCKED",
     "artifact": {
-      "name": "ws10-domain-live-2",
-      "artifact_id": 11936147856,
-      "url": "https://github.com/orhansevinc/oldera-preview/actions/runs/38654350092/artifacts/11936147856",
-      "digest": "sha256:73eadb9532bc3ec141c83749096c0ff06aa99efc930b2d654b66b08c2d193067",
+      "name": "ws10-domain-live-3",
+      "artifact_id": 11935968878,
+      "url": "https://github.com/orhansevinc/oldera-preview/actions/runs/38654558721/artifacts/11935968878",
+      "digest": "sha256:1c6ee2c0903e54f13dbc76c4a8f7f3f1c2f966a51e16a61f85fa75178b30aa22",
       "retention_days": 14,
       "contains": [
         "release-preflight.json",
@@ -55,7 +64,9 @@
   "gates": {
     "A_exact_release_composition": "BLOCKED",
     "A_ws50_exact_manifest_present": "PASS",
-    "A_required_owner_handoffs": "BLOCKED",
+    "A_ws10_domain_live_handoff": "PASS",
+    "A_required_other_owner_handoffs": "BLOCKED",
+    "A_ws50_owner_pins_accepted": "BLOCKED",
     "A_ws50_child_candidate": "BLOCKED",
     "A_ws50_integration_verified": "BLOCKED",
     "A_exact_ws09_deployment_receipt": "BLOCKED",
@@ -105,37 +116,42 @@
     {
       "owner": "WEBSITE",
       "code": "DOMAIN_LIVE_HANDOFF_MISSING",
-      "evidence": "coordination/handoffs/domain-live/WEBSITE.json was absent on official-site-domain-release@8370de2ebfdfd319cf8a719da79cbdef9853fd2f during run 38654350092"
+      "evidence": "coordination/handoffs/domain-live/WEBSITE.json was absent on official-site-domain-release@8370de2ebfdfd319cf8a719da79cbdef9853fd2f during run 38654558721"
     },
     {
       "owner": "WS13",
       "code": "DOMAIN_LIVE_HANDOFF_MISSING",
-      "evidence": "coordination/handoffs/domain-live/WS13.json was absent on ws13-account-api@1ef67bd7c0c98a588bce4db6c0f1305b820af008 during run 38654350092"
+      "evidence": "coordination/handoffs/domain-live/WS13.json was absent on ws13-account-api@1ef67bd7c0c98a588bce4db6c0f1305b820af008 during run 38654558721"
     },
     {
       "owner": "WS07",
       "code": "DOMAIN_LIVE_HANDOFF_MISSING",
-      "evidence": "coordination/handoffs/domain-live/WS07.json was absent on ws07-database@1ae85c96319cbab11648a91ed28300e17d4c607f during run 38654350092"
+      "evidence": "coordination/handoffs/domain-live/WS07.json was absent on ws07-database@1ae85c96319cbab11648a91ed28300e17d4c607f during run 38654558721"
     },
     {
       "owner": "WS03",
       "code": "DOMAIN_LIVE_HANDOFF_MISSING",
-      "evidence": "coordination/handoffs/domain-live/WS03.json was absent on ws03-ko1298-session@7c5f5f3584e7d3621aa5a318ad65c011bd77276f during run 38654350092"
+      "evidence": "coordination/handoffs/domain-live/WS03.json was absent on ws03-ko1298-session@7c5f5f3584e7d3621aa5a318ad65c011bd77276f during run 38654558721"
     },
     {
       "owner": "WS08",
       "code": "DOMAIN_LIVE_HANDOFF_MISSING",
-      "evidence": "coordination/handoffs/domain-live/WS08.json was absent on ws08-admin-api@a6ff6d737d6bed57306a031ea6c826d8045fcafb during run 38654350092"
+      "evidence": "coordination/handoffs/domain-live/WS08.json was absent on ws08-admin-api@6b0f6ff66ead1a4cbce2368ae2b8fc150d215572 during run 38654558721"
     },
     {
       "owner": "WS09",
       "code": "DOMAIN_LIVE_HANDOFF_AND_DEPLOYMENT_RECEIPT_MISSING",
-      "evidence": "coordination/handoffs/domain-live/WS09.json and validated deployment receipt for oldkoweb-domain-live-20261015 were absent on ws09-production-infra@11f8b17908107ae33dbf1e93b0c3a52047945ff3"
+      "evidence": "coordination/handoffs/domain-live/WS09.json and validated deployment receipt for oldkoweb-domain-live-20261015 were absent on ws09-production-infra@680501eebd3973a6352e6de170b2a31e853c7d13 during run 38654558721"
+    },
+    {
+      "owner": "WS50",
+      "code": "OWNER_PINS_NOT_ACCEPTED",
+      "evidence": "WS50 exact release manifest still has accepted_owner_pins={} and therefore does not yet accept WS10 or the other owner pins"
     },
     {
       "owner": "WS50",
       "code": "EXACT_CHILD_CANDIDATE_NOT_BUILT",
-      "evidence": "WS50 exact release manifest has accepted_owner_pins={}, child_candidate=null, INTEGRATION_VERIFIED=false and deployment_receipt=null"
+      "evidence": "WS50 exact release manifest has child_candidate=null, INTEGRATION_VERIFIED=false and deployment_receipt=null"
     },
     {
       "owner": "WS09",
@@ -149,7 +165,7 @@
       "impact": "Gate B browser, account, game, admin, restart and rollback acceptance cannot start"
     }
   ],
-  "rerun_policy": "WS50 should trigger .github/workflows/ws10-domain-live-acceptance.yml for this exact release_id only after it accepts a new candidate/receipt or WS09 makes the public HTTPS target reachable. Re-run only affected gates; do not substitute historical C5 success for public-domain acceptance.",
+  "rerun_policy": "WS50 should call this reusable workflow for this exact release_id only after it accepts a new candidate/receipt or WS09 makes the public HTTPS target reachable. Re-run only affected gates; do not substitute historical C5 success for public-domain acceptance.",
   "user_access": {
     "normal_registration": "NOT_AVAILABLE_YET: wait for Gate B HTTPS and real account-delivery acceptance; no test sink/bypass token is authorized as production proof.",
     "owner_first_setup": "NOT_VALIDATED_YET: use only a documented server-side bootstrap path supplied by WS08/WS09 after deployment; never publish Owner credentials or secrets in artifacts/browser logs."
