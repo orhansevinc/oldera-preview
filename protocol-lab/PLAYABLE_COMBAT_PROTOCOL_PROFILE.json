@@ -1,0 +1,286 @@
+{
+  "format": "oldkoweb-ko1298-playable-combat-protocol-profile-v1",
+  "milestone": "MORADON_PLAYABLE_COMBAT_SLICE",
+  "source": {
+    "client_server": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5",
+    "client_assets": "Open-KO/ko-client-assets@b4636332c7cd818b0ce171eccc973dd3d6b2e56d",
+    "canonical_ws10": "orhansevinc/oldera-preview@f0cadfb50b5d1a36d2bfe4e5bf0a68f7c3061f41/run-38505039290"
+  },
+  "providers": {
+    "WS03": "495de481726734d85cc28b3d432835799aff7e48",
+    "WS11_parent": "944b6ff9b6329af29f1048a74aa6e14fca141639",
+    "WS19": "28eb4f38753ffbc54c60abbd2a32832301284c06",
+    "WS25": "13c9bafe287b250d56b52f19e97a02e7ef18e6e5",
+    "WS31": "546d2ab62cd46a97f3385ebcddbe0c775a02c2eb"
+  },
+  "selected_active_skill": {
+    "skill_id": 101003,
+    "name": "Slash",
+    "class_id": 101,
+    "hostile": true,
+    "required_level": 3,
+    "required_skill": 1010,
+    "skill_modulator": 0,
+    "mana_cost_msp": 4,
+    "required_item_group": 0,
+    "weapon_required": true,
+    "exhaust_item": 0,
+    "cast_time": 0,
+    "recast": 31,
+    "moral": 7,
+    "moral_semantics": "ENEMY",
+    "primary_type": 1,
+    "secondary_type": 0,
+    "flying_fx": 0,
+    "target_fx": 10002,
+    "type1": {
+      "success_type": 0,
+      "success_ratio": 100,
+      "power_percent": 120,
+      "delay": 100,
+      "combo_type": 0,
+      "hits": 1,
+      "actions": [
+        128,
+        128,
+        0
+      ]
+    },
+    "why": "Lowest ambiguity hostile active skill: no CASTING stage, no FLYING/projectile stage, no duration/expiry, no consumable ammo. Server verifies level for iNeedSkill%10==0; client still requires a weapon and >=4 MSP.",
+    "rejected_for_first_slice": {
+      "102003 Archery": "Type2 projectile/FLYING plus arrow item 391010000.",
+      "103001 Flash": "Type3 magic path adds cast/effect semantics and wider damage/effect surface."
+    },
+    "client_data_owner": "WS31 catalog + pinned client TBL; icon/animation/FX are client data/resources, not new wire families."
+  },
+  "families": [
+    {
+      "family": "NORMAL_ATTACK_REQUEST",
+      "opcode": "0x08",
+      "direction": "C2S",
+      "layout": "u8 opcode, u8 attack_type=1, u8 client_result_hint=1, i16 target_id, i16 interval100, i16 distance10",
+      "authority_source": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:src/Client/WarFare/GameProcMain.cpp::MsgSend_Attack + src/Server/Ebenezer/User.cpp::Attack",
+      "status": "VERIFIED",
+      "owner": "WS11 wire / WS03 authenticated actor binding / WS19 semantics",
+      "golden_fixture": "protocol-lab/gameplay-fixtures/game_attack_normal_demo.bin",
+      "blocking_for_playable_combat": true,
+      "authority_notes": "No source ID on C2S. client_result_hint is never authoritative; actor = WS03 session."
+    },
+    {
+      "family": "NORMAL_ATTACK_RESULT",
+      "opcode": "0x08",
+      "direction": "S2C",
+      "layout": "u8 opcode, u8 attack_type, u8 result, i16 attacker_id, i16 target_id",
+      "authority_source": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:src/Server/Ebenezer/User.cpp::Attack + src/Server/Ebenezer/AISocket.cpp::RecvNpcAttack + client MsgRecv_Attack",
+      "status": "VERIFIED",
+      "owner": "WS11 wire / WS19 outcome",
+      "golden_fixture": [
+        "protocol-lab/gameplay-fixtures/game_attack_success.bin",
+        "protocol-lab/gameplay-fixtures/game_attack_fail.bin",
+        "protocol-lab/gameplay-fixtures/game_attack_dead.bin"
+      ],
+      "blocking_for_playable_combat": true,
+      "result_codes": {
+        "0": "FAIL",
+        "1": "SUCCESS",
+        "2": "SUCCESS_AND_DEAD",
+        "3": "TARGET_DEAD_OK source enum; client has no special 3 branch",
+        "4": "MAGIC_ATTACK_TARGET_DEAD source enum; client has no special 4 branch"
+      },
+      "fail_reason_note": "WIZ_ATTACK result=0 carries no exact range-failure reason; WS19 owns semantic reason, wire only carries FAIL."
+    },
+    {
+      "family": "TARGET_HP",
+      "opcode": "0x22",
+      "direction": "BOTH",
+      "layout": {
+        "C2S": "u8 opcode, i16 target_id, u8 update_immediately",
+        "S2C": "u8 opcode, i16 target_id, u8 update_immediately, u32 max_hp, u32 current_hp, i16 hp_delta"
+      },
+      "authority_source": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:GameProcMain.cpp::MsgSend_RequestTargetHP/MsgRecv_TargetHP + User.cpp::SendTargetHP + AISocket.cpp::RecvNpcAttack",
+      "status": "VERIFIED",
+      "owner": "WS11 wire / WS19 HP result / WS25 mob state",
+      "golden_fixture": [
+        "protocol-lab/gameplay-fixtures/game_target_hp_initial.bin",
+        "protocol-lab/gameplay-fixtures/game_target_hp_update.bin"
+      ],
+      "blocking_for_playable_combat": true
+    },
+    {
+      "family": "TARGET_SELECTION",
+      "opcode": null,
+      "direction": "CLIENT_LOCAL",
+      "layout": "Client stores target ID locally; server packet is not required to select. Client then emits WIZ_TARGET_HP query to populate/update the HP bar.",
+      "authority_source": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:GameProcMain target handling + MsgSend_RequestTargetHP",
+      "status": "VERIFIED",
+      "owner": "native client; WS03 only routes subsequent query",
+      "golden_fixture": "protocol-lab/gameplay-fixtures/game_target_hp_initial.bin",
+      "blocking_for_playable_combat": false
+    },
+    {
+      "family": "MOB_DEATH",
+      "opcode": "0x11",
+      "direction": "S2C",
+      "layout": "u8 opcode, i16 target_id",
+      "authority_source": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:AISocket.cpp::RecvNpcDead + GameProcMain.cpp::MsgRecv_Dead",
+      "status": "VERIFIED",
+      "owner": "WS11 wire / WS19 death outcome / WS25 mob lifecycle",
+      "golden_fixture": "protocol-lab/gameplay-fixtures/game_mob_dead.bin",
+      "blocking_for_playable_combat": true,
+      "chain": "Attack result=2 may already start dying; AI AG_DEAD -> WIZ_DEAD is exact NPC death state/animation signal. Exact RecvNpcDead has NPC_OUT call commented out."
+    },
+    {
+      "family": "MOB_RESPAWN_IN",
+      "opcode": "0x0A",
+      "direction": "S2C",
+      "layout": "WIZ_NPC_INOUT IN(1) + exact NPC_DETAIL_RECORD",
+      "authority_source": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:AISocket.cpp/CNpc::NpcInOut + WS11 VISIBILITY_PROTOCOL_PROFILE",
+      "status": "VERIFIED",
+      "owner": "WS14 lifecycle + WS16 detail + WS25 respawn event; WS11 wire",
+      "golden_fixture": "protocol-lab/visibility-fixtures/monster_in_spawn.bin",
+      "blocking_for_playable_combat": true,
+      "identity": "WS25 current policy reuses the existing signed-i16 runtime ID on respawn."
+    },
+    {
+      "family": "PLAYER_HP",
+      "opcode": "0x17",
+      "direction": "S2C",
+      "layout": "u8 opcode, i16 max_hp, i16 current_hp",
+      "authority_source": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:User.cpp::HpChange + GameProcMain.cpp::MsgRecv_MyInfo_HP",
+      "status": "VERIFIED",
+      "owner": "WS11 wire / WS19 player damage",
+      "golden_fixture": "protocol-lab/gameplay-fixtures/game_player_hp_damage.bin",
+      "blocking_for_playable_combat": true
+    },
+    {
+      "family": "MOB_ATTACK_PLAYER_RESULT",
+      "opcode": "0x08",
+      "direction": "S2C",
+      "layout": "u8 opcode, u8 attack_type, u8 result, i16 mob_id, i16 player_id",
+      "authority_source": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:AISocket.cpp::RecvNpcAttack",
+      "status": "VERIFIED",
+      "owner": "WS25 attack intent / WS19 result / WS11 wire",
+      "golden_fixture": "protocol-lab/gameplay-fixtures/game_mob_attack_player_success.bin",
+      "blocking_for_playable_combat": true,
+      "death_chain": "Direct mob attack applies HpChange(..., attack=true), sends WIZ_HP_CHANGE, then WIZ_ATTACK. On result=2 the client enters dying/death from WIZ_ATTACK; direct attack path does not require WIZ_DEAD for the player."
+    },
+    {
+      "family": "PLAYER_MSP",
+      "opcode": "0x18",
+      "direction": "S2C",
+      "layout": "u8 opcode, i16 max_msp, i16 current_msp",
+      "authority_source": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:User.cpp::MSpChange + GameProcMain.cpp::MsgRecv_MyInfo_MSP",
+      "status": "VERIFIED",
+      "owner": "WS11 wire / WS19 resource semantics",
+      "golden_fixture": "protocol-lab/gameplay-fixtures/game_msp_after_slash.bin",
+      "blocking_for_playable_combat": true
+    },
+    {
+      "family": "SLASH_MAGIC_REQUEST",
+      "opcode": "0x31",
+      "direction": "C2S",
+      "layout": "u8 opcode, u8 command=EFFECTING(3), u32 skill_id=101003, i16 source_id, i16 target_id, six i16 data=[1,1,0,0,0,0]",
+      "authority_source": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:MagicSkillMng.cpp zero-cast Type1 path + MagicProcess.cpp",
+      "status": "VERIFIED",
+      "owner": "WS11 wire / WS03 MUST bind source_id to authenticated session / WS19 skill semantics",
+      "golden_fixture": "protocol-lab/gameplay-fixtures/game_slash_effect_request.bin",
+      "blocking_for_playable_combat": true,
+      "stages": {
+        "CASTING": "NOT_EMITTED for Type1 zero-cast Slash",
+        "FLYING": "NOT_EMITTED because iFlyingFX=0",
+        "EFFECTING": "REQUIRED"
+      }
+    },
+    {
+      "family": "SLASH_MAGIC_RESULT",
+      "opcode": "0x31",
+      "direction": "S2C",
+      "layout": "same 22-byte full body; EFFECTING success/miss relayed from AI, or MAGIC_FAIL(4) for eligibility failure",
+      "authority_source": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:AIServer/MagicProcess.cpp::ExecuteType1 + Ebenezer/AISocket.cpp::RecvMagicAttackResult + Ebenezer/MagicProcess.cpp fail_return",
+      "status": "VERIFIED",
+      "owner": "WS11 wire / WS19 result/effect",
+      "golden_fixture": [
+        "protocol-lab/gameplay-fixtures/game_slash_effect_success.bin",
+        "protocol-lab/gameplay-fixtures/game_slash_effect_miss.bin",
+        "protocol-lab/gameplay-fixtures/game_slash_fail.bin"
+      ],
+      "blocking_for_playable_combat": true,
+      "effect_result": {
+        "success": "cmd=3 data=[1,1,0,0,0,0]",
+        "miss": "cmd=3 data=[1,0,0,0,0,-104], where -104=SKILLMAGIC_FAIL_ATTACKZERO",
+        "eligibility_fail": "cmd=4 full body; for EFFECTING failure no cast-stage code is required"
+      }
+    },
+    {
+      "family": "SKILL_UI_STATE",
+      "opcode": "0x0E/0x32",
+      "direction": "S2C (+0x32 C2S)",
+      "layout": "WIZ_MYINFO contains class/level and exact 9 x u8 m_bstrSkill slice; WIZ_SKILLPT_CHANGE updates a skill bucket as type u8 + value u8.",
+      "authority_source": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:User.cpp MyInfo/SkillPointChange + GameProcMain.cpp::MsgRecv_MyInfo_All/MsgRecv_SkillChange + UISkillTreeDlg.cpp",
+      "status": "PARTIAL",
+      "owner": "character state/WS03 route; WS31 client skill data",
+      "golden_fixture": null,
+      "blocking_for_playable_combat": false,
+      "why_partial": "The complete WIZ_MYINFO body is outside this milestone; only the 9-byte skill-array slice and 0x32 update body are frozen here.",
+      "slash_specific": "101003 has iNeedSkill=1010 => modulator 0, so both exact server eligibility and client basic-skill UI gate use player level >=3 rather than a specialization skill-point bucket."
+    }
+  ],
+  "client_effect_assets": {
+    "protocol": false,
+    "skill_main": "Open-KO/ko-client-assets@b4636332c7cd818b0ce171eccc973dd3d6b2e56d:Data/Skill_Magic_Main_us.tbl.csv#101003",
+    "type1": "Open-KO/ko-client-assets@b4636332c7cd818b0ce171eccc973dd3d6b2e56d:Data/Skill_Magic_1.tbl.csv#101003",
+    "animation_actions": [
+      128
+    ],
+    "target_fx": 10002,
+    "note": "Animation/icon/FX availability is a client-data/resource dependency, not an S2C effect packet."
+  },
+  "death_and_respawn": {
+    "npc_death": [
+      "WIZ_ATTACK result=2 when lethal normal attack is reported",
+      "WIZ_DEAD target_id from AI death event"
+    ],
+    "corpse": "Client retains NPC in dying/dead state after WIZ_DEAD. WIZ_CORPSE is not proven as part of the mob death chain.",
+    "out": "Do not require WIZ_NPC_INOUT OUT for death: exact RecvNpcDead has that call commented. OUT remains a visibility/despawn event, not the death signal.",
+    "respawn": "WS25 lifecycle respawn -> WIZ_NPC_INOUT IN + detail record, reusing runtime ID under current WS25 policy."
+  },
+  "consumer_owners": {
+    "WS03": "Route/gate packets by session state and bind every player-origin actor to authenticated session. For WIZ_MAGIC_PROCESS reject/overwrite mismatched source_id; for WIZ_ATTACK no source field exists.",
+    "WS19": "Authoritative range/cooldown/hit/damage/death/skill/mana semantics. Never trust client_result_hint.",
+    "WS25": "Mob runtime identity, alive/dead/respawn lifecycle and mob attack intent; no packet encoding.",
+    "WS10": "Real browser gate: target visible mob, normal attack, HP delta, death, respawn, Slash, MSP change, FX/result."
+  },
+  "unknown": [
+    {
+      "item": "WIZ_CORPSE in NPC death chain",
+      "status": "UNKNOWN/NOT_REQUIRED",
+      "reason": "Opcode exists and client handler exists, but exact NPC death path proven here uses WIZ_DEAD; no exact mob WIZ_CORPSE sender was found."
+    },
+    {
+      "item": "Wire-level reason for normal-attack result=0",
+      "status": "UNKNOWN/NOT_ENCODED",
+      "reason": "Exact WIZ_ATTACK result body has only result code; range/cooldown cause is semantic state in WS19, not a proven distinct field."
+    },
+    {
+      "item": "Complete WIZ_MYINFO layout",
+      "status": "PARTIAL/NONBLOCKING",
+      "reason": "Only class/level context and exact 9-byte skill array slice are needed for this milestone."
+    }
+  ],
+  "blockers_for_playable_combat_integration": [],
+  "acceptance": {
+    "wire_ready": true,
+    "requires_real_browser_gate": true,
+    "required_sequence": [
+      "visible/targetable monster from existing visibility authority",
+      "client-local target selection + 0x22 initial HP",
+      "0x08 normal attack request",
+      "0x08 result + 0x22 HP update",
+      "lethal 0x08 result=2 + 0x11 NPC death",
+      "WS25 respawn -> 0x0A NPC_IN/monster detail",
+      "101003 Slash -> 0x31 EFFECTING only",
+      "0x18 MSP update",
+      "0x31 success/miss/fail effect/result"
+    ]
+  }
+}
