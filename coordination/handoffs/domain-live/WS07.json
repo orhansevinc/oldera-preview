@@ -1,0 +1,291 @@
+{
+  "schema_version": "ws07-domain-live/v1",
+  "release_id": "oldkoweb-domain-live-20261015",
+  "workstream": "WS07",
+  "branch": "ws07-database",
+  "source_commit": "eaac4700c3535c449f6a2b7d20c925bc61382c35",
+  "source_tree": "f67323d70ad1a59d00ce5c04d37dca7ecbe9dd16",
+  "previous_ws07_head": "1ae85c96319cbab11648a91ed28300e17d4c607f",
+  "input_pins": {
+    "WS08": {
+      "branch": "ws08-admin-api",
+      "commit": "239cdacf0fb6bacde5017fb3b787451595a3be0d",
+      "contract_path": "services/admin-api/src/repository.js",
+      "contract_git_blob": "c57e757adb6cd1d700099ae540b7314f8313f466"
+    },
+    "WS03": {
+      "branch": "ws03-ko1298-session",
+      "commit": "7c5f5f3584e7d3621aa5a318ad65c011bd77276f",
+      "handoff_path": "workstreams/ws03/PRODUCTION_POSTGRES_COMPOSITION.json",
+      "direct_adapter_path": "services/oldko-data/src/adapters/ws03-auth-session.js",
+      "direct_adapter_git_blob": "88d55399fc621c6bec6fc6b5dcd1ba49949d6369"
+    },
+    "WS13": {
+      "branch": "ws13-account-api",
+      "commit": "1ef67bd7c0c98a588bce4db6c0f1305b820af008",
+      "handoff_path": "workstreams/ws13/PRODUCTION_ACCOUNT_SERVICE.json",
+      "handoff_git_blob": "d44f06a3ceac12d6eca87505eeeb947ebcad7391",
+      "direct_adapter_path": "services/oldko-data/src/adapters/ws13-account-api.js",
+      "direct_adapter_git_blob": "022c32abde503a6dc3af1ff9429c206a1b20ca63",
+      "service_rate_limit_migration_path": "services/account-api/sql/0001_postgres_rate_limit.sql",
+      "service_rate_limit_migration_git_blob": "895021cf57b837aaa0bdc5186d1c658c1a6b031a"
+    },
+    "WS30": {
+      "branch": "ws30-backup-recovery",
+      "commit": "4a80cf4c117af5a0c2fd6efde15655370a05a0fa",
+      "contracts": [
+        "backup/BACKUP_STRATEGY.md",
+        "backup/RESTORE_RUNBOOK.md"
+      ]
+    }
+  },
+  "authoritative_identity": {
+    "player_account_table": "oldko.accounts",
+    "character_table": "oldko.characters",
+    "rule": "Website, game and admin player views resolve the same oldko.accounts/oldko.characters rows; no admin copy player database is created.",
+    "admin_principal_rule": "Privileged admin identities are separate oldko.admin_actors principals and are never inferred from display labels such as ROOT OWNER."
+  },
+  "adapter_contract": {
+    "class": "PgWs08AdminRepository",
+    "entrypoint": "services/oldko-data/src/adapters/ws08-admin.js",
+    "entrypoint_git_blob": "221114aa464e5f6175b36e266a722b0eb771c579",
+    "export_path": "services/oldko-data/src/adapters/index.js",
+    "export_git_blob": "df6eaa2f78f61ca8eb639e3e145cbddd49528f4d",
+    "support_modules": [
+      {
+        "path": "services/oldko-data/src/adapters/ws08-admin-shared.js",
+        "git_blob": "c736f22a14aa7260b5279de8d35e3ba4eace83aa"
+      },
+      {
+        "path": "services/oldko-data/src/adapters/ws08-admin-read.js",
+        "git_blob": "1832ded43f9fd9af6e3ae65c6b1c053098a09ca6"
+      },
+      {
+        "path": "services/oldko-data/src/adapters/ws08-admin-write.js",
+        "git_blob": "945de2cb406ea691f9670d66980b828242d572e5"
+      },
+      {
+        "path": "services/oldko-data/src/adapters/ws08-admin-extra.js",
+        "git_blob": "8aac4c22ee13ee9aea8f2ac1c64915609e0af511"
+      }
+    ],
+    "required_methods": [
+      "transaction",
+      "overview",
+      "listPlayers",
+      "getCharacter",
+      "updateCharacter",
+      "updateStats",
+      "updateSkills",
+      "getInventory",
+      "getInn",
+      "getTransactions",
+      "getSanctions",
+      "searchItems",
+      "itemHistory",
+      "itemAction",
+      "findDuplicateSerials",
+      "createSanction",
+      "removeSanction",
+      "appendAudit",
+      "listAudit",
+      "enqueueCommand"
+    ],
+    "extra_persistence_methods": [
+      "upsertAdminActor",
+      "getAdminActorByUsername",
+      "createAdminSession",
+      "getAdminSessionByTokenHash",
+      "revokeAdminSession",
+      "reserveAdminOperation",
+      "completeAdminOperation",
+      "claimCommands",
+      "completeCommand"
+    ],
+    "table_mapping": {
+      "player_identity": ["oldko.accounts", "oldko.characters"],
+      "stats": ["oldko.character_stats"],
+      "skills": ["oldko.character_skills"],
+      "equipment_inventory": ["oldko.item_instances", "oldko.character_items", "oldko.inventory"],
+      "inn": ["oldko.item_instances", "oldko.inn_storage"],
+      "sanctions": ["oldko.bans", "oldko.ip_bans"],
+      "item_moderation_history": ["oldko.admin_item_flags", "oldko.item_serial_events"],
+      "audit": ["oldko.audit_log"],
+      "admin_identity_sessions": ["oldko.admin_actors", "oldko.admin_sessions"],
+      "command_outbox": ["oldko.admin_command_outbox"],
+      "durable_admin_idempotency": ["oldko.admin_operation_receipts"],
+      "runtime_online_authority": ["oldko.session_leases"]
+    },
+    "admin_stat_mapping": {
+      "str": "character_stats.str",
+      "hp": "character_stats.sta",
+      "dex": "character_stats.dex",
+      "int": "character_stats.intel",
+      "mp": "character_stats.cha"
+    },
+    "transaction_rule": "WS08 mutation + appendAudit can run in one SERIALIZABLE PgWs08AdminRepository transaction; sanction enforcement outbox inserts can participate in the same transaction.",
+    "online_rule": "No stale player online boolean is persisted. Active WS45 character leases are the default DB runtime signal, and an injected runtimeAuthority.isCharacterOnline resolver is supported.",
+    "online_mutation_rule": "Direct character/stat/skill/zone persistence rejects active characters. Online mutations must be routed through game authority/outbox; outbox rows capture expected world/progression/item versions for downstream CAS checks.",
+    "inn_compatibility_rule": "Authoritative WS17 storage remains 196 slots. WS08 current HTTP shape exposes 192 slots without deleting, renumbering or overwriting the remaining persisted slots."
+  },
+  "migration_plan": {
+    "runner": "services/oldko-data/src/scripts/migrate.js",
+    "ledger": "public._oldko_migrations",
+    "production_executor": "WS09",
+    "forward_only": true,
+    "production_demo_seed": false,
+    "old_migration_files_modified": false,
+    "order": [
+      {
+        "order": 1,
+        "owner": "WS07",
+        "path": "database/migrations/0001_init.sql",
+        "git_blob": "e172289529edd65a1bf994faee4799bbd399092d",
+        "sha256": "88f0c4c4d92f8dd5602a87707d689f9364b793274b58eb68372483a333a3ef8a"
+      },
+      {
+        "order": 2,
+        "owner": "WS07",
+        "path": "database/migrations/0002_persistence_hardening.sql",
+        "git_blob": "15ea5fce8b95209f72c386bfb2c1681c5a4498ce",
+        "sha256": "86ee8d6bbd83bf7be4134030f2967874902f13de5a4eb1c5d1c14ed04ba17314"
+      },
+      {
+        "order": 3,
+        "owner": "WS07",
+        "path": "database/migrations/0003_public_account_api.sql",
+        "git_blob": "e7a309ed03cf41c679e94e111927f1b2bbc13d63",
+        "sha256": "24c3e52086e6197d1a998cdd4604531418af92b7f6dd37f5d5a1c725939f590f"
+      },
+      {
+        "order": 4,
+        "owner": "WS07",
+        "path": "database/migrations/0004_admin_persistence.sql",
+        "git_blob": "e79da79d6ffcb7b6a9d87626b21013124bfe981a",
+        "sha256": "66ac0374b0373f7ae7b064c0254762425da1b7da3e1c2073e5ce566f4d817b45"
+      },
+      {
+        "order": 5,
+        "owner": "WS13",
+        "path": "services/account-api/sql/0001_postgres_rate_limit.sql",
+        "git_blob": "895021cf57b837aaa0bdc5186d1c658c1a6b031a",
+        "sha256": "c7319604db165e2aa75280612e1da7912966b6d78c579c362b80ea145923026c",
+        "ledger": "WS13 service-owned migration; do not insert it into the WS07 numbered migration ledger"
+      }
+    ]
+  },
+  "compatibility_receipt": {
+    "unchanged_direct_consumers": [
+      {
+        "path": "services/oldko-data/src/adapters/ws03-auth-session.js",
+        "git_blob": "88d55399fc621c6bec6fc6b5dcd1ba49949d6369"
+      },
+      {
+        "path": "services/oldko-data/src/adapters/ws13-account-api.js",
+        "git_blob": "022c32abde503a6dc3af1ff9429c206a1b20ca63"
+      }
+    ],
+    "unchanged_old_migrations": [
+      {
+        "path": "database/migrations/0001_init.sql",
+        "git_blob": "e172289529edd65a1bf994faee4799bbd399092d"
+      },
+      {
+        "path": "database/migrations/0002_persistence_hardening.sql",
+        "git_blob": "15ea5fce8b95209f72c386bfb2c1681c5a4498ce"
+      },
+      {
+        "path": "database/migrations/0003_public_account_api.sql",
+        "git_blob": "e7a309ed03cf41c679e94e111927f1b2bbc13d63"
+      }
+    ],
+    "changed_shared_export": {
+      "path": "services/oldko-data/src/adapters/index.js",
+      "before_git_blob": "9b3db01797c40ac178bdce8f63705a696bbdad5f",
+      "after_git_blob": "df6eaa2f78f61ca8eb639e3e145cbddd49528f4d",
+      "reason": "Adds PgWs08AdminRepository/WS08_REQUIRED_METHODS exports while preserving existing WS03/WS13 and other adapter exports."
+    },
+    "consumer_pin_action": "Consumers with exact WS07 commit/blob guards may update their WS07 pin to source_commit after validating this receipt. WS03 and WS13 direct adapter blobs are unchanged; the shared adapters/index.js blob changed only to expose WS08."
+  },
+  "checks": {
+    "baseline_ci": [
+      {"run_id": 38609753674, "event": "push", "result": "success"},
+      {"run_id": 38609762199, "event": "pull_request", "result": "success"}
+    ],
+    "source_ci": [
+      {
+        "run_id": 38655975826,
+        "event": "push",
+        "commit": "eaac4700c3535c449f6a2b7d20c925bc61382c35",
+        "result": "success",
+        "postgres": "16-alpine",
+        "node": "22"
+      },
+      {
+        "run_id": 38655727772,
+        "event": "pull_request",
+        "commit": "5bf54839d73040f2286282b06cb8f64dbae584d6",
+        "result": "success",
+        "note": "Same production adapter/migration code; source_commit adds checksum observability only."
+      }
+    ],
+    "integration_test_path": "services/oldko-data/test/integration/admin-adapter.integration.test.js",
+    "integration_test_git_blob": "0f8e819de465b9d237b21b1e49cbf07741a81b83",
+    "evidence": [
+      "Exact WS08 REQUIRED_METHODS contract is implemented against real PostgreSQL.",
+      "Shared oldko.accounts/oldko.characters rows are used by admin reads and mutations.",
+      "Offline character/stat/skill state remains visible after repository recreation.",
+      "Injected transaction failure rolls both state mutation and audit entry back.",
+      "Audit log and item serial event history reject update/delete and remain append-only.",
+      "Active WS45 character lease blocks direct persistent character mutation.",
+      "Durable idempotency replay returns the stored response; same key with different request conflicts.",
+      "Outbox trace replay is idempotent and concurrent workers claim distinct commands using row locking/SKIP LOCKED.",
+      "Admin actor/session persistence survives repository recreation and session revocation is durable.",
+      "Fresh migration applies 0001-0004 once and a second migration pass is a no-op/checksum verification.",
+      "Upgrade test applies 0001 alone, then upgrades through 0004, reruns migrations, and verifies the final schema.",
+      "Existing WS03 async auth/session persistence integration remains green.",
+      "Existing WS17, WS14, WS27, WS22, WS45, WS46 persistence/concurrency tests remain green.",
+      "Connection interruption test confirms interrupted work fails and the PostgreSQL pool recovers."
+    ],
+    "migration_ledger_verified": [
+      {"name": "0001_init.sql", "checksum": "88f0c4c4d92f8dd5602a87707d689f9364b793274b58eb68372483a333a3ef8a"},
+      {"name": "0002_persistence_hardening.sql", "checksum": "86ee8d6bbd83bf7be4134030f2967874902f13de5a4eb1c5d1c14ed04ba17314"},
+      {"name": "0003_public_account_api.sql", "checksum": "24c3e52086e6197d1a998cdd4604531418af92b7f6dd37f5d5a1c725939f590f"},
+      {"name": "0004_admin_persistence.sql", "checksum": "66ac0374b0373f7ae7b064c0254762425da1b7da3e1c2073e5ce566f4d817b45"}
+    ]
+  },
+  "backup_recovery": {
+    "contract_owner": "WS30",
+    "rule": "WS30 full logical database backups include additive WS07 0004 tables; restoration must preserve and verify public._oldko_migrations before service validation.",
+    "destructive_down_migration": false
+  },
+  "blockers": [
+    {
+      "owner": "WS08",
+      "id": "WIRE_WS07_REPOSITORY",
+      "detail": "WS08 currently intentionally fails closed for ADMIN_REPOSITORY=ws07. Instantiate PgWs08AdminRepository with the production PostgreSQL pool and keep WS08's REQUIRED_METHODS verifier. WS07 does not edit WS08 server/business-rule files."
+    },
+    {
+      "owner": "WS08",
+      "id": "WIRE_DURABLE_HTTP_IDEMPOTENCY",
+      "detail": "WS08's current Idempotency-Key Map is process-local. Replace/wrap it with reserveAdminOperation/completeAdminOperation so request key/hash and response survive process restart."
+    },
+    {
+      "owner": "WS08",
+      "id": "WIRE_ADMIN_ACTOR_SESSION_PERSISTENCE",
+      "detail": "If domain-live requires admin login/session survival across restart, wire oldko.admin_actors/admin_sessions through the provided facade. Browser display labels, ROOT OWNER text and frontend authority fields are never identity proof."
+    },
+    {
+      "owner": "WS08/WS03/WS45",
+      "id": "CONSUME_ADMIN_COMMAND_OUTBOX_WITH_CAS",
+      "detail": "Game-affecting online commands must be consumed by game/runtime authority and compare captured expected world/progression/item versions before application. Direct online SQL writes are intentionally rejected."
+    },
+    {
+      "owner": "WS09",
+      "id": "APPLY_PRODUCTION_MIGRATIONS",
+      "detail": "Apply the exact migration_plan order to the production PostgreSQL database. WS07 only delivers tested code/plan and does not perform the production cutover."
+    }
+  ],
+  "ws07_status": "READY",
+  "ws07_blockers": []
+}
