@@ -102,6 +102,7 @@ async function captureNativeMoradon() {
   fs.writeFileSync(path.join(out, 'moradon-native.png'), PNG.sync.write(png));
   console.log(`[ws10-driver] WS10_NATIVE_GL nonBlack=${nonBlack}/${total} ratio=${ratio.toFixed(4)}`);
   if (ratio < 0.02) throw new Error(`native Moradon framebuffer effectively black ratio=${ratio.toFixed(4)}`);
+  console.log(`[ws10-driver] WS05_MORADON_VISUAL_OK source=pre-swap-gl ratio=${ratio.toFixed(4)}`);
   return { width: png.width, height: png.height, nonBlack, total, ratio };
 }
 
@@ -182,6 +183,7 @@ try {
       'WS05_GATE event=moradon-terrain-rendered zone=21',
       'WS05_GATE event=moradon-shapes-rendered zone=21',
       'WS05_GATE event=moradon-local-player-rendered zone=21',
+      'WS05_MORADON_VISUAL_OK source=pre-swap-gl',
     ],
   };
   console.log('WS10_MORADON_E2E_PASS');
