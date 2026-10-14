@@ -19,7 +19,8 @@ try {
   const indexes = await pool.query(`SELECT indexname FROM pg_indexes WHERE schemaname='oldko'`);
   const indexNames = new Set(indexes.rows.map(row => row.indexname));
   for (const index of requiredIndexes) if (!indexNames.has(index)) throw new Error(`missing index: ${index}`);
-  const migrations = await pool.query(`SELECT name FROM public._oldko_migrations ORDER BY name`);
+  const migrations = await pool.query(`SELECT name,checksum FROM public._oldko_migrations ORDER BY name`);
   if (migrations.rows.length < 4 || migrations.rows.at(-1).name !== '0004_admin_persistence.sql') throw new Error('migration set is incomplete');
   console.log(`schema verified: ${requiredTables.length} tables, ${requiredIndexes.length} critical indexes, ${migrations.rows.length} migrations`);
+  console.log(`migration ledger: ${JSON.stringify(migrations.rows)}`);
 } finally { await pool.end(); }
