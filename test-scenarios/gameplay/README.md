@@ -4,11 +4,10 @@ This suite is a provider-aware integration harness. It does **not** reimplement 
 
 ## Evidence rules
 
-- Provider commits are pinned in `provider-manifest.json` and staged from those exact Git commits.
-- The current branch head is also recorded at runtime so branch drift is visible rather than silently consumed.
+- Provider branch baselines are recorded in `provider-manifest.json`. At run start CI fetches every provider branch, resolves its current HEAD SHA, records drift, and stages **that exact HEAD** for the run.
 - A scenario is `PASS` only when its complete claimed path can be executed by a current provider API, or when it is the already-canonical WS10 real-browser gate (scenario A).
 - A partial provider-domain proof never upgrades an incomplete product scenario to PASS. It is recorded in the transcript, then the scenario remains `BLOCKED` with the exact missing contract.
-- `FAIL` means a path that should be runnable from the pinned providers actually failed.
+- `FAIL` means a path that should be runnable from the tested provider HEADs actually failed.
 - Synthetic provider fixtures are allowed only for explicitly labeled domain/stress checks. They are never presented as verified 1298 data.
 
 ## Scenario matrix
@@ -17,7 +16,7 @@ This suite is a provider-aware integration harness. It does **not** reimplement 
 |---|---|---|
 | A | auth -> login -> nation -> create -> select -> Moradon -> world-ready | PASS, canonical WS10 run #26 + current WS03 preflight |
 | B | world-ready -> movement start -> rotate -> move -> stop | PASS, WS15 API |
-| C | region crossing -> nearby entity sync | BLOCKED: missing region membership enter/leave integration |
+| C | region crossing -> nearby entity sync | PASS, WS15 verified 48-unit region events/recipients |
 | D | NPC appears -> target -> detail -> interaction | BLOCKED: WS16 terrain-Y + dispatcher composition |
 | E | merchant open -> buy -> inventory -> sell -> coin | BLOCKED: WS16/31/17 -> WS22 composition |
 | F | mob spawn -> combat loop -> death | BLOCKED: WS25 <-> WS19 combat composition + verified mob combat data |
@@ -35,8 +34,11 @@ This suite is a provider-aware integration harness. It does **not** reimplement 
 
 ```bash
 NODE_ENV=test node --test tests/test-fixtures/*.test.mjs
-node test-scenarios/gameplay/prepare-providers.mjs /tmp/ws49-providers
+node test-scenarios/gameplay/prepare-current-providers.mjs /tmp/ws49-providers
 node test-scenarios/gameplay/run-gameplay-scenarios.mjs \
+  --provider-root /tmp/ws49-providers \
+  --output artifacts/ws49
+node test-scenarios/gameplay/reconcile-current-results.mjs \
   --provider-root /tmp/ws49-providers \
   --output artifacts/ws49
 ```

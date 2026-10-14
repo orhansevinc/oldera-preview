@@ -36,11 +36,16 @@ jobs:
         env:
           NODE_ENV: test
         run: node --test tests/test-fixtures/*.test.mjs
-      - name: Stage exact provider commits
-        run: node test-scenarios/gameplay/prepare-providers.mjs "$RUNNER_TEMP/ws49-providers"
+      - name: Stage exact provider HEADs
+        run: node test-scenarios/gameplay/prepare-current-providers.mjs "$RUNNER_TEMP/ws49-providers"
       - name: Run deterministic gameplay scenarios
         run: |
           node test-scenarios/gameplay/run-gameplay-scenarios.mjs \
+            --provider-root "$RUNNER_TEMP/ws49-providers" \
+            --output artifacts/ws49
+      - name: Reconcile current provider capabilities
+        run: |
+          node test-scenarios/gameplay/reconcile-current-results.mjs \
             --provider-root "$RUNNER_TEMP/ws49-providers" \
             --output artifacts/ws49
       - name: Publish human-readable summary
