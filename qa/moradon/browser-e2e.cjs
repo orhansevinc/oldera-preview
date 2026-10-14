@@ -83,12 +83,18 @@ function ppmToPng(buffer) {
   return png;
 }
 
-async function captureNativeMoradon() {
-  const id = 1010;
+const nativeCaptureId = 1010;
+async function armNativeMoradonCapture() {
   await page.evaluate((requestId) => {
     globalThis.WS04_CAPTURE_READY = 0;
+    globalThis.WS04_CAPTURE_INFLIGHT = 0;
     globalThis.WS04_CAPTURE_REQUEST = requestId;
-  }, id);
+  }, nativeCaptureId);
+  console.log(`[ws10-driver] armed native Moradon capture id=${nativeCaptureId} before first world render`);
+}
+
+async function collectNativeMoradonCapture() {
+  const id = nativeCaptureId;
   await wait(`WS04_GL_CAPTURE id=${id} ok=1`, 60000);
   const ready = await page.evaluate(() => globalThis.WS04_CAPTURE_READY || 0);
   if (ready !== id) throw new Error(`native GL capture not ready: ${ready}`);
@@ -146,9 +152,6 @@ try {
   await page.mouse.click(170, 325, { delay: 100 });
   await page.waitForTimeout(1200);
 
-  // The native client samples mouse button state on its own frame loop. Keep each
-  // stat-increment press alive across multiple frames so every one of the ten
-  // genuine 1298 bonus points is consumed deterministically in headless CI.
   for (let i = 0; i < 12; i++) await heldClick(925, 114, 90, 110);
 
   await page.mouse.click(510, 678, { delay: 80 });
@@ -169,12 +172,17 @@ try {
 
   await wait('WS05_GATE event=moradon-zone-begin zone=21', 60000);
   await wait('WS05_GATE event=moradon-assets-loaded zone=21', 60000);
+
+  // Arm while JS is definitely running, before C++ enters the sustained main-scene
+  // render loop. The native pre-swap hook will service this request at the first
+  // genuine Moradon Present(), even if the browser event loop is starved later.
+  await armNativeMoradonCapture();
+
   await wait('WS05_GATE event=moradon-terrain-rendered zone=21', 60000);
   await wait('WS05_GATE event=moradon-shapes-rendered zone=21', 60000);
   await wait('WS05_GATE event=moradon-local-player-rendered zone=21', 60000);
-  await page.waitForTimeout(1500);
 
-  const nativeFrame = await captureNativeMoradon();
+  const nativeFrame = await collectNativeMoradonCapture();
   const fatal = lines.filter((line) => /\[pageerror\]|GL_INVALID_(ENUM|VALUE|OPERATION)|WebGL: INVALID_|WebGL: too many errors|render backend: Null/i.test(line));
   if (fatal.length) throw new Error(`fatal renderer/browser evidence: ${fatal.slice(0, 5).join(' | ')}`);
 
