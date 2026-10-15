@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/p2-00-provider-diagnostics.yml'
       - 'services/**'
+      - 'workstreams/**'
       - 'tests/ko-gateway/**'
       - 'tests/ko1298-session/**'
       - 'tests/ko1298-combat/**'
