@@ -1,166 +1,188 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "workstream": "WS08",
   "release_id": "oldkoweb-domain-live-20261015",
-  "source_commit": "97771268f37735e6ebaad9ed48a6927438f65f59",
-  "status_commit": "8274a5b12747c4dac4782745e40205bbd4abec4f",
+  "source_commit": "944f704f55eb5e9656b8f77d9a2f5f87d136e270",
+  "status": "PRODUCTION_PERSISTENCE_READY_EXTERNAL_RUNTIME_BLOCKED",
   "input_pins": {
-    "WS08_task_start": "239cdacf0fb6bacde5017fb3b787451595a3be0d",
-    "WS07": "1ae85c96319cbab11648a91ed28300e17d4c607f",
-    "WS03": "7c5f5f3584e7d3621aa5a318ad65c011bd77276f",
-    "WS28": "c1ef0f6e84456cb38edd2f3ce2b11ca5ff7de99a",
-    "WS35": "5327d50906d02c829add08cf1ca73fbe978526dc",
-    "WS45": "4a66338743553c2781c68ca84b866ff4e999c14e",
-    "WS48": "d3ec3873d4e7d6c254897e591addd0c220508914"
+    "WS08_task_start": "1e3316727b079fbb03cbd9b09b257c1a0eb64f71",
+    "WS07_handoff_source_commit": "eaac4700c3535c449f6a2b7d20c925bc61382c35",
+    "WS07_migration": "database/migrations/0004_admin_persistence.sql",
+    "WS07_repository_class": "PgWs08AdminRepository",
+    "WS07_repository_entrypoint": "services/oldko-data/src/adapters/ws08-admin.js",
+    "WS28_previous_domain_live_pin": "c1ef0f6e84456cb38edd2f3ce2b11ca5ff7de99a"
+  },
+  "ws07_consumption": {
+    "pinned_once": true,
+    "latest_upgrade_during_task": false,
+    "source_integrated_into_ws08": true,
+    "merge_commit": "c7051c8ef75f625154449b79a12ff18ff0b6b389",
+    "migration_chain": ["0001_init.sql", "0002_persistence_hardening.sql", "0003_public_account_api.sql", "0004_admin_persistence.sql"],
+    "native_repository": "PgWs08AdminRepository",
+    "native_adapter": "services/oldko-data/src/adapters/ws08-admin.js",
+    "ws08_compatibility_factory": "services/admin-api/src/ws07-admin-repository-module.js#createAdminRepository({env})",
+    "production_default_repository_module": "services/admin-api/src/ws07-admin-repository-module.js",
+    "ADMIN_REPOSITORY_MODULE": "optional explicit override; any override must satisfy the exact production contract",
+    "memory_repository_production_allowed": false,
+    "silent_fallback_allowed": false
   },
   "implementation": {
     "production_app": "services/admin-api/src/production-app.js",
     "persistent_auth": "services/admin-api/src/persistent-auth.js",
     "production_contract": "services/admin-api/src/production-contract.js",
+    "ws07_compatibility_repository": "services/admin-api/src/ws07-admin-repository-module.js",
     "ws28_executor": "services/admin-api/src/ws28-command-executor.js",
     "server_composition": "services/admin-api/src/server.js",
-    "frontend_modified": false,
-    "memory_repository_production_allowed": false,
-    "silent_fallback_allowed": false
+    "postgres_e2e": "tests/admin-api/postgres-production-e2e.test.js",
+    "runtime_contract_test": "tests/admin-api/runtime-authority-contract.test.js",
+    "ws28_truthfulness_test": "tests/admin-api/ws28-command-semantics.test.js",
+    "frontend_modified": false
   },
-  "adapter_contracts": {
-    "repository_module_env": "ADMIN_REPOSITORY_MODULE",
-    "repository_factory": "createAdminRepository({env})",
-    "repository_methods": [
-      "transaction", "overview", "listPlayers", "getCharacter", "updateCharacter", "updateStats", "updateSkills",
-      "getInventory", "getInn", "getTransactions", "getSanctions", "searchItems", "itemHistory", "itemAction",
-      "findDuplicateSerials", "createSanction", "removeSanction", "appendAudit", "listAudit",
-      "createAdminSession", "getAdminSession", "revokeAdminSession", "runIdempotent",
-      "enqueueCommand", "updateCommand", "getCommand"
+  "repository_contract": {
+    "required_methods_count": 26,
+    "required_methods_parity": "PASS",
+    "required_methods": [
+      "transaction",
+      "overview",
+      "listPlayers",
+      "getCharacter",
+      "updateCharacter",
+      "updateStats",
+      "updateSkills",
+      "getInventory",
+      "getInn",
+      "getTransactions",
+      "getSanctions",
+      "searchItems",
+      "itemHistory",
+      "itemAction",
+      "findDuplicateSerials",
+      "createSanction",
+      "removeSanction",
+      "appendAudit",
+      "listAudit",
+      "createAdminSession",
+      "getAdminSession",
+      "revokeAdminSession",
+      "runIdempotent",
+      "enqueueCommand",
+      "updateCommand",
+      "getCommand"
     ],
-    "runtime_module_env": "ADMIN_RUNTIME_AUTHORITY_MODULE",
-    "runtime_factory": "createAdminRuntimeAuthority({env})",
-    "runtime_methods": ["listOnlineCharacters", "getCharacterState", "mutateOnlineCharacter"],
-    "command_module_env": "ADMIN_COMMAND_BUS_MODULE",
-    "command_factory": "createAdminCommandBus({env})",
-    "command_interface": ["execute"]
+    "compatibility_only_methods": [
+      "getAdminSession -> getAdminSessionByTokenHash",
+      "runIdempotent -> reserveAdminOperation/completeAdminOperation",
+      "updateCommand/getCommand -> oldko.admin_command_outbox status boundary",
+      "expectedVersion CAS -> WS07 world/progression version columns"
+    ]
   },
-  "auth_contract": {
-    "identity_source": "ADMIN_USERS_JSON server configuration",
-    "root_owner_binding": "exact immutable admin id equals ADMIN_ROOT_OWNER_ID",
-    "owner_from_username_or_first_record": false,
-    "owner_from_browser_label": false,
-    "sessions": "opaque cookie plus durable server-side revocable session",
-    "csrf": "X-CSRF-Token plus session-bound CSRF cookie/hash",
-    "origin": "unsafe requests and login require ADMIN_ALLOWED_ORIGINS match",
-    "logout_revokes_server_session": true
+  "persistence_contract": {
+    "admin_login": "PASS against explicit ADMIN_USERS_JSON identities persisted/upserted as oldko.admin_actors",
+    "durable_session": "PASS: opaque browser token, persistent token hash, revocable UUID session",
+    "restart_session": "PASS: app A login -> app B same DB accepts same valid session",
+    "logout_revocation_restart": "PASS: app B logout -> app C same DB rejects session",
+    "overview": "PASS real PostgreSQL",
+    "player_search": "PASS real PostgreSQL",
+    "character_read": "PASS real PostgreSQL",
+    "offline_mutation": "PASS real PostgreSQL",
+    "cas": "PASS stale expectedVersion -> HTTP 409 VERSION_CONFLICT",
+    "durable_idempotency": "PASS replay survives persistent receipt boundary and does not duplicate mutation/audit",
+    "audit": "PASS durable append/read",
+    "command_outbox": "PASS durable oldko.admin_command_outbox",
+    "command_status_get": "PASS GET /api/admin/commands/:id reads authoritative stored record",
+    "restart_persistence": "PASS",
+    "production_persistence_ready": true
+  },
+  "auth_security_contract": {
+    "root_owner_binding": "only exact immutable ADMIN_ROOT_OWNER_ID receives OWNER",
+    "forged_owner_role_stripped": true,
+    "csrf": "X-CSRF-Token plus deterministic session-bound HMAC CSRF cookie",
+    "origin": "login and unsafe requests require ADMIN_ALLOWED_ORIGINS match",
+    "idempotency_key": "required for protected mutation paths",
+    "expected_version": "required for CAS-protected character/stat/skill/item mutation",
+    "session_revocation": "server-side and durable",
+    "audit_reason": "required 5-500 characters"
+  },
+  "runtime_authority_contract": {
+    "module_env": "ADMIN_RUNTIME_AUTHORITY_MODULE",
+    "factory": "createAdminRuntimeAuthority({env})",
+    "required_methods": ["listOnlineCharacters", "getCharacterState", "mutateOnlineCharacter"],
+    "exact_interface_fixture_tested": true,
+    "incomplete_adapter_refused": true,
+    "real_adapter_in_ws08": false,
+    "blocker": "ADMIN_RUNTIME_AUTHORITY_ADAPTER_MISSING"
+  },
+  "command_contract": {
+    "module_env": "ADMIN_COMMAND_BUS_MODULE",
+    "factory": "createAdminCommandBus({env})",
+    "states": ["PENDING", "SUCCEEDED", "FAILED", "UNSUPPORTED"],
+    "success_requires_real_downstream_apply": true,
+    "success_proof": "status=ok AND forwarded!=false AND (applied=true OR data.applied=true)",
+    "forwarded_false": "PENDING/HTTP 202, never SUCCESS",
+    "ambiguous_ok_without_apply": "FAILED",
+    "unsupported": "UNSUPPORTED/HTTP 422",
+    "stored_status_authority": "oldko.admin_command_outbox via repository.getCommand",
+    "ws28_executor_semantics_preserved": true,
+    "real_downstream_composition_in_ws08": false
   },
   "api_contract": {
     "base": "/api/admin",
     "production_additions": ["GET /capabilities", "GET /commands/:id"],
     "mutation_requirements": ["reason", "Idempotency-Key", "X-CSRF-Token", "allowed Origin"],
-    "versioned_mutations": ["character", "stats", "skills", "item moderation"],
     "expected_version_error": {"http": 428, "code": "EXPECTED_VERSION_REQUIRED"},
     "cas_conflict": {"http": 409, "code": "VERSION_CONFLICT"},
-    "online_character_rule": "route through WS03/WS45 runtime/domain authority; no direct offline repository mutation",
-    "online_source": "authoritative runtime adapter only"
+    "online_character_rule": "online mutation belongs to WS03/WS45 runtime authority; WS08 does not copy game-domain logic",
+    "official_frontend_contract": "/api/admin unchanged",
+    "frontend_modified": false
   },
-  "command_contract": {
-    "states": ["PENDING", "SUCCEEDED", "FAILED", "UNSUPPORTED"],
-    "success_requires_downstream_apply": true,
-    "legacy_202_forwarded_false_is_success": false,
-    "supported": {
-      "CUTOFF": "player.kick",
-      "SUMMONUSER": "player.summon",
-      "FORBIDUSER": "account.ban",
-      "FORBIDCONNECT": "account.ban",
-      "FORBIDCHAT": "chat.mute",
-      "PERMITCHAT": "chat.unmute",
-      "NOTICE": "notice.zone",
-      "NOTICEALL": "notice.global",
-      "COUNT": "server.player-count"
-    },
-    "unsupported": [
-      "INVISIBLE", "CLEAN", "RAINING", "SNOWING", "TIME", "ARREST", "VIEW", "UNVIEW",
-      "ATTACKDISABLE", "ATTACKENABLE", "PROGRAMLISTCHECK"
-    ],
-    "arbitrary_shell_exposed": false,
-    "server_restart_shutdown_exposed": false
-  },
-  "supported_capabilities": {
-    "reads": ["overview", "player search", "authoritative online list", "character", "inventory", "inn", "transactions", "sanctions", "item search/history/duplicates", "audit"],
-    "secured_mutations": ["offline character", "offline stats", "offline skills", "item moderation", "sanctions"],
-    "online_mutation_boundary": true,
-    "durable_session_boundary": true,
-    "durable_idempotency_boundary": true,
-    "durable_command_outbox_boundary": true,
-    "ws28_result_propagation": true
-  },
-  "frontend_owner_contract": {
-    "login_response": ["user", "csrfToken", "capabilities"],
-    "session_response": ["user", "csrfToken", "capabilities"],
-    "unsafe_header": "X-CSRF-Token",
-    "retry_header": "Idempotency-Key",
-    "mutation_field": "expectedVersion",
-    "command_success_ui_only_when": "game.status == SUCCEEDED",
-    "command_status_endpoint": "GET /api/admin/commands/:id",
-    "capability_endpoint": "GET /api/admin/capabilities",
-    "details": "workstreams/ws08/PRODUCTION_INTEGRATION_CONTRACT.md"
-  },
-  "ws09_required_config": [
-    "ADMIN_USERS_JSON",
-    "ADMIN_ROOT_OWNER_ID",
-    "ADMIN_SESSION_SECRET",
-    "ADMIN_ALLOWED_ORIGINS",
-    "ADMIN_REPOSITORY_MODULE",
-    "ADMIN_RUNTIME_AUTHORITY_MODULE",
-    "ADMIN_COMMAND_BUS_MODULE",
-    "DATABASE_URL"
-  ],
   "checks": {
     "workflow": "WS08 Admin API",
-    "run_id": 38654675678,
-    "run_head": "97771268f37735e6ebaad9ed48a6927438f65f59",
+    "run_id": 38667613738,
+    "run_head": "944f704f55eb5e9656b8f77d9a2f5f87d136e270",
     "conclusion": "success",
-    "existing_tests_preserved": true,
-    "production_fixture_tests": [
-      "verified owner id and forged OWNER stripping",
-      "authoritative runtime online filtering",
-      "Origin/CSRF enforcement",
-      "CAS plus durable-idempotency contract plus audit",
-      "online mutation routed to runtime authority",
-      "WS28 SUCCEEDED versus UNSUPPORTED",
-      "WS28 downstream failure -> FAILED/503",
-      "server-side logout revocation"
-    ],
-    "real_postgres_admin_e2e": "BLOCKED_EXTERNAL_ADAPTER"
+    "postgres_service": "postgres:16-alpine",
+    "migrations_0001_to_0004": "PASS",
+    "pinned_ws07_adapter_integration": "PASS",
+    "ws08_http_postgres_restart_e2e": "PASS",
+    "security_regressions": "PASS",
+    "runtime_interface_contract": "PASS",
+    "forwarded_false_regression": "PASS"
   },
-  "blockers": [
+  "closed_blockers": [
     {
-      "owner": "WS07",
+      "owner": "WS07/WS08",
       "code": "WS07_ADMIN_ADAPTER_MISSING",
-      "detail": "Current WS07 has no WS08/admin adapter and no shipped durable admin-session plus admin-command-outbox/status adapter. Production intentionally fails closed until createAdminRepository implements the handed-off contract."
-    },
-    {
-      "owner": "WS03/WS45/WS50",
-      "code": "ADMIN_RUNTIME_AUTHORITY_ADAPTER_MISSING",
-      "detail": "Need createAdminRuntimeAuthority over authoritative game/session ownership for online state and online character mutation delegation."
-    },
-    {
-      "owner": "WS28/WS50",
-      "code": "WS28_DOWNSTREAM_COMPOSITION_REQUIRED",
-      "detail": "Need production game/moderation/notices/observability adapters behind the existing WS28 command bus. Missing handlers must remain FAILED/UNSUPPORTED."
+      "status": "CLOSED",
+      "evidence": "Pinned WS07 source eaac4700c3535c449f6a2b7d20c925bc61382c35 is consumed by WS08; migrations, adapter integration, real HTTP PostgreSQL persistence, restart session/revocation, durable receipt and command status tests are green."
     },
     {
       "owner": "official-site-domain-release",
       "code": "ADMIN_V10_FRONTEND_WIRING_REQUIRED",
-      "detail": "Accepted frontend must send CSRF/idempotency/version fields and render command capability/status/error semantics from this handoff."
+      "status": "NOT_A_WS08_BLOCKER",
+      "evidence": "Accepted frontend already consumes /api/admin; this task did not modify frontend files."
+    }
+  ],
+  "remaining_blockers": [
+    {
+      "owner": "WS03/WS45/WS50",
+      "code": "ADMIN_RUNTIME_AUTHORITY_ADAPTER_MISSING",
+      "detail": "Provide production createAdminRuntimeAuthority({env}) over authoritative online game/session ownership. WS08 has only the exact interface fixture/contract test and intentionally does not copy game-domain logic."
+    },
+    {
+      "owner": "WS28/WS50",
+      "code": "WS28_DOWNSTREAM_COMPOSITION_REQUIRED",
+      "detail": "Provide production createAdminCommandBus({env}) backed by real game/moderation/notices handlers. WS08 persists PENDING/FAILED/UNSUPPORTED truthfully and marks SUCCEEDED only with real apply evidence."
     },
     {
       "owner": "WS09",
       "code": "PRODUCTION_CONFIG_AND_DEPLOY_REQUIRED",
-      "detail": "Provision listed admin identity/secrets/module composition and deploy admin.oldkoweb.com."
+      "detail": "Deploy admin service with DATABASE_URL, ADMIN_USERS_JSON, ADMIN_ROOT_OWNER_ID, ADMIN_SESSION_SECRET, ADMIN_ALLOWED_ORIGINS, ADMIN_RUNTIME_AUTHORITY_MODULE and ADMIN_COMMAND_BUS_MODULE. ADMIN_REPOSITORY_MODULE is no longer required because the pinned WS07 adapter bridge is bundled by default."
     },
     {
       "owner": "WS10",
       "code": "LIVE_DOMAIN_VERIFICATION_REQUIRED",
-      "detail": "Verify auth, reads, controlled isolated-account mutation, audit, idempotent replay, command failure propagation and restart persistence on admin.oldkoweb.com after dependencies land."
+      "detail": "After runtime/downstream/deploy composition lands, verify admin.oldkoweb.com login, reads, controlled mutation, audit, command truthfulness and restart persistence."
     }
   ],
-  "claim": "WS08 backend production security and integration boundaries are implemented. Full live admin functionality is not claimed until the listed external adapters/config/frontend/deploy blockers are resolved."
+  "claim": "WS08 production PostgreSQL persistence is ready and WS07_ADMIN_ADAPTER_MISSING is closed. Full live admin authority is not claimed until the real runtime authority adapter, real WS28 downstream composition, deployment configuration and live-domain verification land."
 }
