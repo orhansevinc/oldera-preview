@@ -160,7 +160,7 @@ function sourceConsistency(npc) {
     return { ok: false, blocker: `GATE_ROUTE_TYPE_MISMATCH_EXPECTED_28_GOT_${npc.npcType}` };
   }
   if ((npc.role === 'merchant' || npc.sellingGroup > 0)
-      && ![VERIFIED_NPC_TYPES.MERCHANT, VERIFIED_NPC_TYPES.TINKER].includes(npc.npcType)) {
+      && ![VERIFIED_NPC_TYPES.MERCHANT, VERIFIED_NPC_TYPES.TINKER, VERIFIED_NPC_TYPES.SELITH].includes(npc.npcType)) {
     return { ok: false, blocker: `MERCHANT_ROLE_TYPE_MISMATCH_GOT_${npc.npcType}` };
   }
   return { ok: true, blocker: null };
@@ -172,10 +172,11 @@ function classifyNpcBinding(npc) {
   if (npc.npcType === VERIFIED_NPC_TYPES.MERCHANT) return { service: 'merchant', status: npc.sellingGroup > 0 ? 'wired' : 'blocked', blocker: npc.sellingGroup > 0 ? null : 'SELLING_GROUP_MISSING' };
   if (npc.npcType === VERIFIED_NPC_TYPES.TINKER) return { service: 'repair+merchant', status: npc.sellingGroup > 0 ? 'wired' : 'blocked', blocker: npc.sellingGroup > 0 ? null : 'SELLING_GROUP_MISSING' };
   if (npc.npcType === VERIFIED_NPC_TYPES.WAREHOUSE) return { service: 'inn/storage', status: 'wired-open', blocker: 'P2-08_STORAGE_TRANSACTIONS' };
+  if (npc.npcType === VERIFIED_NPC_TYPES.SELITH) return { service: 'special-store', status: 'blocked-source', blocker: 'SELITH_SPECIAL_STORE_HANDLER_UNVERIFIED' };
+  if (npc.interactionRoute === 'quest' || npc.role === 'quest') return { service: 'quest/event', status: 'blocked-source', blocker: 'ZONE21_EVT_RUNTIME_AND_P2-11_TRANSACTION' };
   if (npc.npcType === VERIFIED_NPC_TYPES.ANVIL || npc.npcType === VERIFIED_NPC_TYPES.BLACKSMITH) return { service: 'upgrade/anvil', status: 'blocked', blocker: 'P2-08_UPGRADE_TRANSACTION_AND_P2-10_UI' };
   if (npc.npcType === VERIFIED_NPC_TYPES.TELEPORT_GATE) return { service: 'gate/teleport', status: 'blocked', blocker: 'P2-04_WORLD_TRANSITION' };
   if ([73, 74, 75, 76].includes(npc.npcType)) return { service: 'skill/master', status: 'blocked', blocker: 'P2-07_SKILL_MASTER_AUTHORITY' };
-  if (npc.interactionRoute === 'quest' || npc.role === 'quest') return { service: 'quest/event', status: 'blocked-source', blocker: 'ZONE21_EVT_RUNTIME_AND_P2-11_TRANSACTION' };
   if (npc.sellingGroup > 0) return { service: 'merchant', status: 'wired', blocker: null };
   return { service: npc.role || 'static', status: 'non-interactive', blocker: null };
 }
