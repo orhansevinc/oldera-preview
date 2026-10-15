@@ -14,15 +14,29 @@ const charName=process.env.WS05_CHAR_NAME||'Ws05Hero';
 const bandicootIds=new Set(String(process.env.WS05_BANDICOOT_IDS||'').split(',').map(Number).filter(Number.isInteger));
 const npcIds=new Set(String(process.env.WS05_NPC_IDS||'').split(',').map(Number).filter(Number.isInteger));
 if(!bandicootIds.size) throw new Error('WS05_BANDICOOT_IDS required');
+if(!npcIds.size) throw new Error('WS05_NPC_IDS required');
 fs.mkdirSync(out,{recursive:true});
 
 const lines=[],network=[],inputs=[];let crashed=false,closed=false;
 const sleep=(ms)=>new Promise((r)=>setTimeout(r,ms));
-const has=(needle)=>lines.some((l)=>l.includes(needle));
 const wait=async(needle,timeout=30000)=>{const end=Date.now()+timeout;while(Date.now()<end){const f=lines.find((l)=>l.includes(needle));if(f)return f;if(crashed||closed)throw new Error(`browser unavailable waiting for ${needle}`);await sleep(75);}throw new Error(`timeout waiting for ${needle}`);};
 const visibleLine=(id)=>lines.find((l)=>l.includes(`WS10_VISIBILITY_V2 HUMAN_VISIBLE id=${id} `));
 const waitAnyVisible=async(ids,timeout)=>{const end=Date.now()+timeout;while(Date.now()<end){for(const id of ids){const line=visibleLine(id);if(line)return{id,line};}if(crashed||closed)throw new Error('browser unavailable');await sleep(100);}return null;};
 function parseVisible(line){const o={};for(const k of ['id','changed','area','x','y','w','h','depth']){const m=line.match(new RegExp(`${k}=(-?[0-9.]+)`));if(m)o[k]=Number(m[1]);}return o;}
+function lineForEntity(marker,id){return lines.find((l)=>l.includes(`${marker} id=${id} `))||'';}
+function requireNativeEntityProof(id,label){
+  const entityCreate=lineForEntity('WS10_VISIBILITY ENTITY_CREATE',id);
+  const modelReady=lineForEntity('WS10_VISIBILITY MODEL_READY',id);
+  const bounds=lines.filter((l)=>l.includes(`WS10_VISIBILITY_V2 BOUNDS id=${id} `)).at(-1)||'';
+  const drawSubmit=lineForEntity('WS10_VISIBILITY_V2 DRAW_SUBMIT',id);
+  const pixelDelta=lineForEntity('WS10_VISIBILITY_V2 PIXEL_DELTA',id);
+  if(!entityCreate)throw new Error(`${label} missing native ENTITY_CREATE id=${id}`);
+  if(!modelReady.includes('source=authority'))throw new Error(`${label} MODEL_READY not source=authority: ${modelReady}`);
+  if(!bounds.includes('transform=valid')||!bounds.includes('front=1')||!bounds.includes('frustum=1')||!bounds.includes('screen=1'))throw new Error(`${label} bounds/camera/frustum invalid: ${bounds}`);
+  if(!drawSubmit)throw new Error(`${label} missing native DRAW_SUBMIT id=${id}`);
+  if(!pixelDelta)throw new Error(`${label} missing native framebuffer PIXEL_DELTA id=${id}`);
+  return{entityCreate,modelReady,bounds,drawSubmit,pixelDelta};
+}
 function ppmToPng(buffer){let nl=0,start=-1;for(let i=0;i<Math.min(buffer.length,256);i++){if(buffer[i]===10&&++nl===3){start=i+1;break;}}if(start<0)throw new Error('invalid native PPM header');const h=buffer.subarray(0,start).toString('ascii').trim().split(/\s+/),width=Number(h[1]),height=Number(h[2]),rgb=buffer.subarray(start);if(h[0]!=='P6'||h[3]!=='255'||rgb.length!==width*height*3)throw new Error('invalid PPM');const png=new PNG({width,height});for(let s=0,d=0;s<rgb.length;s+=3,d+=4){png.data[d]=rgb[s];png.data[d+1]=rgb[s+1];png.data[d+2]=rgb[s+2];png.data[d+3]=255;}return png;}
 
 (async()=>{
@@ -54,7 +68,10 @@ function ppmToPng(buffer){let nl=0,start=-1;for(let i=0;i<Math.min(buffer.length
    await wait('WS04_CHAR_CREATE_SENT opcode=0x02',15000);await wait('WS04_CHAR_CREATE_RESPONSE code=0',30000);await wait('scene change: character-create -> character-select',30000);await wait('WS04_CHAR_LIST parsed result=1 slots=3 occupied=1',30000);await page.locator('#canvas').focus();await input.hold('Enter',100,{phase:'character-select'});await wait('WS04_CHAR_SELECT_RESPONSE success=1',30000);
    await wait('WS05_GATE event=moradon-terrain-rendered zone=21',300000);await wait('WS05_GATE event=moradon-shapes-rendered zone=21',300000);await wait('WS05_GATE event=moradon-local-player-rendered zone=21',300000);
    const npc=await waitAnyVisible(npcIds,90000);
-   if(npc)console.log(`[ws05-driver] WS05_NPC_HUMAN_VISIBLE id=${npc.id}`);
+   if(!npc)throw new Error(`no genuine NPC became human-visible at source-backed Moradon spawn: ${[...npcIds].join(',')}`);
+   const npcVisible=parseVisible(npc.line);if(npcVisible.w<24||npcVisible.h<24||npcVisible.changed<12)throw new Error(`NPC visibility below human-selectable threshold ${JSON.stringify(npcVisible)}`);
+   const npcProof=requireNativeEntityProof(npc.id,'NPC');
+   console.log(`[ws05-driver] WS05_NPC_HUMAN_VISIBLE id=${npc.id} w=${npcVisible.w} h=${npcVisible.h} changed=${npcVisible.changed}`);
    await page.locator('#canvas').focus();
    // Source-backed path: WS14 starts at (312,0,402), direction=0. CPlayerBase turns at 270 deg/s.
    // A ~0.5s left turn points roughly southwest toward the nearest genuine Bandicoot spawn rectangle.
@@ -69,13 +86,12 @@ function ppmToPng(buffer){let nl=0,start=-1;for(let i=0;i<Math.min(buffer.length
    const v=parseVisible(mob.line);if(v.w<24||v.h<24||v.changed<12)throw new Error(`Bandicoot visibility below human-selectable threshold ${JSON.stringify(v)}`);
    const load=await wait('WS05_BANDICOOT_ASSET_LOAD pid=800',30000);
    for(const token of ['load_ok=1','joint=1','animation=1','part_count=4','parts=4','skins=4','textures=4'])if(!load.includes(token))throw new Error(`Bandicoot asset load missing ${token}: ${load}`);
-   const bounds=lines.filter((l)=>l.includes(`WS10_VISIBILITY_V2 BOUNDS id=${mob.id} `)).at(-1)||'';
-   if(!bounds.includes('transform=valid')||!bounds.includes('front=1')||!bounds.includes('frustum=1')||!bounds.includes('screen=1'))throw new Error(`Bandicoot bounds/camera/frustum invalid: ${bounds}`);
+   const mobProof=requireNativeEntityProof(mob.id,'Bandicoot');
    const frame=await captureNative(5050);
    const fatal=lines.filter((l)=>/\[pageerror\]|\[pagecrash\]|GL_INVALID_(ENUM|VALUE|OPERATION)|WebGL: INVALID_|WebGL: too many errors|render backend: Null/i.test(l));if(fatal.length)throw new Error(`fatal renderer evidence ${fatal.slice(0,3).join(' | ')}`);
-   result={status:'PASS',bandicoot:{id:mob.id,visible:v,bounds,assetLoad:load},npc:npc?{id:npc.id,visible:parseVisible(npc.line)}:null,frame,inputCount:inputs.length,acceptance:'native-entity-specific-pixel-proof-human-selectable'};
+   result={status:'PASS',bandicoot:{id:mob.id,visible:v,bounds:mobProof.bounds,assetLoad:load,entityCreate:mobProof.entityCreate,modelReady:mobProof.modelReady,drawSubmit:mobProof.drawSubmit,pixelDelta:mobProof.pixelDelta},npc:{id:npc.id,visible:npcVisible,bounds:npcProof.bounds,entityCreate:npcProof.entityCreate,modelReady:npcProof.modelReady,drawSubmit:npcProof.drawSubmit,pixelDelta:npcProof.pixelDelta},frame,inputCount:inputs.length,acceptance:'native-entity-specific-pixel-proof-human-selectable'};
    console.log(`[ws05-driver] WS05_BANDICOOT_HUMAN_VISIBLE id=${mob.id} w=${v.w} h=${v.h} changed=${v.changed}`);
-   console.log(`[ws05-driver] WS05_HUMAN_VISIBLE_BROWSER_PASS bandicoot=${mob.id} screenshot=${frame.file}`);
+   console.log(`[ws05-driver] WS05_HUMAN_VISIBLE_BROWSER_PASS bandicoot=${mob.id} npc=${npc.id} screenshot=${frame.file}`);
  }catch(e){result={status:'FAIL',error:e.message};console.error(`[ws05-driver] failure: ${e.stack||e.message}`);process.exitCode=1;}
  finally{fs.writeFileSync(path.join(out,'browser-console.log'),lines.join('\n')+'\n');fs.writeFileSync(path.join(out,'network.json'),JSON.stringify(network,null,2)+'\n');fs.writeFileSync(path.join(out,'real-input.json'),JSON.stringify(inputs,null,2)+'\n');fs.writeFileSync(path.join(out,'browser-result.json'),JSON.stringify(result,null,2)+'\n');if(!closed)await page.screenshot({path:path.join(out,'final-compositor.png')}).catch(()=>{});await browser.close();}
 })().catch((e)=>{console.error(e.stack||e.message);process.exitCode=1;});
