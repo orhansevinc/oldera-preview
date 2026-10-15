@@ -1,0 +1,427 @@
+name: P2-00 integrated Phase 2 release
+
+on:
+  push:
+    branches: [phase2/00-integration]
+    paths:
+      - '.github/workflows/p2-00-final-release.yml'
+      - 'client-src/**'
+      - 'tools/p2-00/**'
+      - 'tools/p2_03_patch_openko_render.py'
+      - 'services/**'
+      - 'database/**'
+      - 'world-data/**'
+      - 'protocol-lab/**'
+      - 'deploy/domain-live/**'
+      - 'hosting/p2-00/**'
+      - 'hosting/p2-12/**'
+      - 'qa/phase2/**'
+      - 'coordination/phase2/**'
+      - 'phase2-runtime-bridge.js'
+      - 'play-*.js'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  OPENKO_SHA: 97eb0ea20207afc0c360bfed6915113572711be3
+  KO_ASSETS_SHA: 2055ee6ed77f1b5cfef23832dd5bc31909e14a66
+  WS05_SHA: 0537c481383a69c534799b43810f35e7279c5578
+  WS10_SHA: 163f2ebf81e750bf746fdaa277695329a0682e22
+  EMSCRIPTEN_VERSION: 3.1.50
+  RELEASE_TAG: oldkoweb-phase2-20261015
+  RELEASE_ID: oldkoweb-phase2-20261015
+
+jobs:
+  build-test-package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    outputs:
+      source_sha: ${{ steps.meta.outputs.source_sha }}
+      runtime_tag: ${{ steps.meta.outputs.runtime_tag }}
+      edge_tag: ${{ steps.meta.outputs.edge_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install build and browser dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake python3 git zip jq curl
+          npm init -y >/dev/null 2>&1 || true
+          npm install --no-save --no-audit --no-fund playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Stage exact legacy providers used by accepted browser baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .providers artifacts/phase2-qa
+          git fetch --no-tags origin "$WS05_SHA" "$WS10_SHA"
+          test "$(git rev-parse "$WS05_SHA^{commit}")" = "$WS05_SHA"
+          test "$(git rev-parse "$WS10_SHA^{commit}")" = "$WS10_SHA"
+          git worktree add --detach .providers/ws05 "$WS05_SHA"
+          git worktree add --detach .providers/ws10 "$WS10_SHA"
+
+      - name: Checkout exact OpenKO engine
+        uses: actions/checkout@v4
+        with:
+          repository: luisfelipe18/old-school-openko
+          ref: 97eb0ea20207afc0c360bfed6915113572711be3
+          path: openko
+          submodules: false
+          fetch-depth: 1
+
+      - name: Checkout exact KO1298 assets
+        uses: actions/checkout@v4
+        with:
+          repository: ko4life-net/ko-assets
+          ref: 2055ee6ed77f1b5cfef23832dd5bc31909e14a66
+          path: ko-assets
+          fetch-depth: 1
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            Data
+            UI_US
+            Snd/Intro_Sound.mp3
+            Server.ini
+            Chr
+            DTex
+            Item
+            Misc
+            Object
+            Zones
+            fx
+
+      - name: Verify source and asset identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C openko rev-parse HEAD)" = "$OPENKO_SHA"
+          test "$(git -C ko-assets rev-parse HEAD)" = "$KO_ASSETS_SHA"
+          printf 'integration=%s\nopenko=%s\nko-assets=%s\nws05=%s\nws10=%s\n' \
+            "$GITHUB_SHA" "$OPENKO_SHA" "$KO_ASSETS_SHA" "$WS05_SHA" "$WS10_SHA" \
+            | tee artifacts/phase2-qa/source-identities.txt
+
+      - name: Setup exact Emscripten toolchain
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.50
+          actions-cache-folder: emsdk-cache-3.1.50
+
+      - name: Build genuine integrated C++/WASM client
+        shell: bash
+        env:
+          WS05_ROOT: .providers/ws05
+          WS10_ROOT: .providers/ws10
+        run: bash tools/p2-00/build-client.sh
+
+      - name: Generate immutable runtime manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib
+          root=pathlib.Path('real1298')
+          roles={'js':'KnightOnLine.js','wasm':'KnightOnLine.wasm','data':'KnightOnLine.data'}
+          files=[]; material=[]
+          mime={'js':'text/javascript','wasm':'application/wasm','data':'application/octet-stream'}
+          for role,name in roles.items():
+              p=root/name; b=p.read_bytes(); h=hashlib.sha256(b).hexdigest(); material.append(f'{role}:{h}:{len(b)}')
+              files.append({'role':role,'name':name,'url':f'/real1298/{name}','bytes':len(b),'sha256':h,'mime':mime[role],'startup':True})
+          digest=hashlib.sha256('\n'.join(material).encode()).hexdigest()
+          content=digest[:20]
+          doc={'schema':'oldkoweb/runtime-manifest/v1','release_id':os.environ['RELEASE_ID'],'content_version':content,
+               'source':{'source_commit':os.environ['GITHUB_SHA'],'artifact_id':f"workflow-run-{os.environ['GITHUB_RUN_ID']}",'artifact_digest':'sha256:'+digest},
+               'files':files,'cache_policy':{'runtime':'immutable-by-sha256-query','manifest':'no-store','auth_game_api':'bypass'}}
+          (root/'runtime-manifest.json').write_text(json.dumps(doc,indent=2)+'\n')
+          print(json.dumps(doc,indent=2))
+          PY
+          python3 tools/p2-02/Verify-LoadingContracts.py
+
+      - name: Fetch exact Moradon server map authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p runtime
+          curl --fail --location --silent --show-error \
+            'https://raw.githubusercontent.com/Open-KO/KnightOnline/7d6cf81093e142c928c2ac9510512b2b182178b5/assets/Server/MAP/moradon_0826.smd' \
+            -o runtime/moradon_0826.smd
+          python3 - <<'PY'
+          import hashlib,pathlib
+          p=pathlib.Path('runtime/moradon_0826.smd'); b=p.read_bytes()
+          assert len(b)==786000,len(b)
+          blob=hashlib.sha1(f'blob {len(b)}\0'.encode()+b).hexdigest()
+          assert blob=='cf47772b8e42a8bad71032419f47978c8bbd6142',blob
+          print('MORADON_SMD_IDENTITY PASS',blob,len(b))
+          PY
+
+      - name: Run merged provider contract tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix services/oldko-data install --omit=dev --ignore-scripts
+          npm --prefix services/account-api install --omit=dev --ignore-scripts
+          npm --prefix services/ko-gateway install --omit=dev --ignore-scripts
+          node --test tests/ko-gateway/*.test.js
+          node --test tests/ko1298-session/*.test.js
+          if compgen -G 'tests/ko1298-combat/*.test.js' >/dev/null; then node --test tests/ko1298-combat/*.test.js; fi
+          if compgen -G 'tests/ko1298-progression/*.test.js' >/dev/null; then node --test tests/ko1298-progression/*.test.js; fi
+          if compgen -G 'tests/ko1298-social/*.test.js' >/dev/null; then node --test tests/ko1298-social/*.test.js; fi
+          if compgen -G 'tests/ko1298-items*/*.test.*' >/dev/null; then node --test tests/ko1298-items*/*.test.*; fi
+          python3 -m unittest tests/client/test_p2_10_contracts.py
+          python3 qa/phase2/selftest.mjs 2>/dev/null || node qa/phase2/selftest.mjs
+
+      - name: Build immutable runtime and edge images
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          short="${GITHUB_SHA:0:12}"
+          runtime_tag="oldkoweb/runtime:p2-${short}"
+          edge_tag="oldkoweb/edge:p2-${short}"
+          docker build -t "$runtime_tag" -f deploy/domain-live/runtime.Dockerfile .
+          docker build -t "$edge_tag" -f deploy/domain-live/edge.Dockerfile .
+          echo "source_sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          echo "runtime_tag=$runtime_tag" >> "$GITHUB_OUTPUT"
+          echo "edge_tag=$edge_tag" >> "$GITHUB_OUTPUT"
+          docker image inspect "$runtime_tag" --format '{{.Id}}' > artifacts/phase2-qa/runtime-image-id.txt
+          docker image inspect "$edge_tag" --format '{{.Id}}' > artifacts/phase2-qa/edge-image-id.txt
+
+      - name: Local one-stack PostgreSQL/runtime/edge smoke
+        shell: bash
+        env:
+          RUNTIME_TAG: ${{ steps.meta.outputs.runtime_tag }}
+          EDGE_TAG: ${{ steps.meta.outputs.edge_tag }}
+        run: |
+          set -euo pipefail
+          secret_dir="$RUNNER_TEMP/p2-secrets"; mkdir -p "$secret_dir"
+          printf '[{"id":"local-owner","username":"owner","passwordHash":"ci-not-used","roles":["OWNER"]}]\n' > "$secret_dir/admin-users.json"
+          printf '0123456789abcdef0123456789abcdef0123456789abcdef\n' > "$secret_dir/admin-session-secret.txt"
+          cat > "$RUNNER_TEMP/p2.env" <<EOF
+          POSTGRES_IMAGE=postgres:16-alpine
+          POSTGRES_PASSWORD=p2-ci-postgres
+          DATABASE_URL=postgres://oldkoweb:p2-ci-postgres@db:5432/oldkoweb
+          RUNTIME_IMAGE=$RUNTIME_TAG
+          EDGE_IMAGE=$EDGE_TAG
+          ADMIN_USERS_JSON_FILE=$secret_dir/admin-users.json
+          ADMIN_SESSION_SECRET_FILE=$secret_dir/admin-session-secret.txt
+          ADMIN_ALLOWED_ORIGINS=http://admin.oldkoweb.com:18088
+          ACCOUNT_ALLOWED_ORIGINS=http://oldkoweb.com:18088
+          PLAY_ALLOWED_ORIGINS=http://play.oldkoweb.com:18088
+          PLAY_ALLOWED_HOSTS=play.oldkoweb.com
+          EDGE_PORT=18088
+          EOF
+          dc(){ docker compose --project-name oldkoweb-p2-ci --env-file "$RUNNER_TEMP/p2.env" -f deploy/domain-live/docker-compose.yml "$@"; }
+          trap 'dc logs --no-color > artifacts/phase2-qa/compose.log 2>&1 || true; dc down -v --remove-orphans >/dev/null 2>&1 || true' EXIT
+          dc up -d db
+          for i in {1..60}; do dc exec -T db pg_isready -U oldkoweb -d oldkoweb >/dev/null 2>&1 && break; sleep 1; done
+          dc run --rm --no-deps runtime node services/oldko-data/src/scripts/migrate.js
+          dc run --rm --no-deps account-api node services/account-api/src/scripts/apply-rate-limit-schema.js
+          hash="$(node --input-type=module - <<'NODE'
+          import {hashPassword} from './services/oldko-data/src/index.js';
+          process.stdout.write(await hashPassword('p2e2epass'));
+          NODE
+          )"
+          printf "INSERT INTO oldko.accounts(username,username_key,password_hash,email,status,nation,verified_at) VALUES('p2e2e','p2e2e','%s','p2e2e@example.invalid','active',0,now());\n" "$hash" \
+            | dc exec -T db psql -v ON_ERROR_STOP=1 -U oldkoweb -d oldkoweb
+          dc up -d
+          for i in {1..90}; do
+            if curl -fsS -H 'Host: play.oldkoweb.com' http://127.0.0.1:18088/ >/dev/null; then break; fi
+            sleep 2
+          done
+          dc ps | tee artifacts/phase2-qa/compose-ps.txt
+          curl -fsSI -H 'Host: play.oldkoweb.com' http://127.0.0.1:18088/ | tee artifacts/phase2-qa/play-headers.txt
+          grep -qi 'cross-origin-opener-policy: same-origin' artifacts/phase2-qa/play-headers.txt
+          grep -qi 'cross-origin-embedder-policy: require-corp' artifacts/phase2-qa/play-headers.txt
+          P2_PLAY_URL='http://play.oldkoweb.com:18088/' P2_QA_OUT=artifacts/phase2-qa/local-browser \
+            P2_QA_USER=p2e2e P2_QA_PASSWORD=p2e2epass P2_QA_CHAR=P2Hero \
+            node qa/phase2/p2-00-browser-e2e.cjs
+          dc restart runtime
+          sleep 4
+          dc exec -T db psql -U oldkoweb -d oldkoweb -Atc "SELECT count(*) FROM oldko.characters WHERE name='P2Hero' AND deleted_at IS NULL" | grep -qx '1'
+          echo 'LOCAL_CI_RESTART_PERSISTENCE PASS' | tee artifacts/phase2-qa/restart-persistence.txt
+
+      - name: Generate exact candidate and fail-closed coverage matrix
+        shell: bash
+        env:
+          RUNTIME_TAG: ${{ steps.meta.outputs.runtime_tag }}
+          EDGE_TAG: ${{ steps.meta.outputs.edge_tag }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib
+          def h(p): return hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()
+          rm=json.loads(pathlib.Path('real1298/runtime-manifest.json').read_text())
+          providers={
+            'P2-01':'2db93fed6afb099595b8224877159ac76e318070','P2-02':'52a2f75190ee9e2f4e00869432f008ca2e15d510',
+            'P2-03':'75561d63cdc91333a849af0a3de18a99806f7934','P2-04':'41102fd152cf30501cfbcd1a087ecfc4683ad839',
+            'P2-05':'8509147a899ab56a66715ad0256b20d396c12360','P2-06':'70e8199d1576523093ed870debb094f1a177ef0e',
+            'P2-07':'c9f799e697f687181bc09c2caea557164e117527','P2-08':'014b30862911cfc5da891cf9582c9871193ac4dc',
+            'P2-09':'22d265508556b89b864b696f686e676e027850a7','P2-10':'eb5eb4ffd8441c24a1ab11640825e7565f5db9bb',
+            'P2-11':'8c03b019f0240a98e4ba0b0fc5020f22cde808eb','P2-12':'57fadd5a148a0b2443b3b758bf869608c2b20549',
+            'P2-13':'bf8017e1257ec79093b9471ba7d2523c89a93084'}
+          doc={
+            'schema_version':'oldkoweb-phase2-candidate/v1','release_id':os.environ['RELEASE_ID'],'integration_source_sha':os.environ['GITHUB_SHA'],
+            'providers':providers,
+            'client':{'openko_sha':os.environ['OPENKO_SHA'],'ko_assets_sha':os.environ['KO_ASSETS_SHA'],'emscripten':'3.1.50',
+                      'js_sha256':h('real1298/KnightOnLine.js'),'wasm_sha256':h('real1298/KnightOnLine.wasm'),'data_sha256':h('real1298/KnightOnLine.data'),
+                      'content_version':rm['content_version'],'audio_build':'native-openal-pthreads'},
+            'images':{'runtime_tag':os.environ['RUNTIME_TAG'],'edge_tag':os.environ['EDGE_TAG']},
+            'database':{'migration_head':'0005_phase2_data_admin.sql','migration_order':['0001_init.sql','0002_persistence_hardening.sql','0003_public_account_api.sql','0004_admin_persistence.sql','0005_phase2_data_admin.sql']},
+            'verification':{'ci_exact_candidate':'PASS','target_pc_local':'NOT_RUN','public_domains':'NOT_RUN'},
+            'coverage_inventory':{
+              'maps':[],
+              'npcs':[{'id':'moradon-source-backed','name':'Moradon source-backed NPC population','critical':True}],
+              'npc_services':['dialog','merchant-window','repair-window','inn-window'],
+              'npc_spawn_groups':['moradon'],
+              'mobs':[{'id':'moradon-135','name':'Moradon 135 verified spawn slots','critical':True}],
+              'bosses':[],
+              'mob_spawn_groups':['moradon-verified'],
+              'classes':[],
+              'skills':[],
+              'effects':[],
+              'item_operations':['merchant-buy','merchant-sell','repair','inn-transfer','loot-pickup','trade-commit','equip','use-item'],
+              'social_pvp':['chat','whisper','party','pvp-zone-policy'],
+              'ui_controls':['inventory','character','skills','hotbar','chat','mouse-camera','focus','fullscreen','native-audio']},
+            'blocked_scope':[
+              'non-Moradon maps without complete source/entry authority','boss schedules/assets without source proof','unsupported skill effect families and complete cooldown authority',
+              'raw clan/friend client codecs without verified 1298 layouts','source-unverified upgrade recipes','P2-07 combat live composition pending authoritative player/equipment/world ports',
+              'P2-06 advanced AI live composition pending movement/combat port wiring','native audio runtime state is not promoted unless browser evidence observes a running context']
+          }
+          p=pathlib.Path('artifacts/phase2-qa/FINAL-CANDIDATE.json');p.write_text(json.dumps(doc,indent=2)+'\n')
+          print(json.dumps(doc,indent=2))
+          PY
+          set +e
+          node qa/phase2/build-coverage-matrix.mjs --candidate artifacts/phase2-qa/FINAL-CANDIDATE.json --out artifacts/phase2-qa/coverage-matrix.json
+          code=$?
+          set -e
+          test "$code" -eq 0 -o "$code" -eq 3
+
+      - name: Build verified Windows update package
+        shell: bash
+        env:
+          RUNTIME_TAG: ${{ steps.meta.outputs.runtime_tag }}
+          EDGE_TAG: ${{ steps.meta.outputs.edge_tag }}
+        run: |
+          set -euo pipefail
+          package="$RUNNER_TEMP/$RELEASE_ID"; mkdir -p "$package"
+          mkdir -p "$package/deploy/domain-live" "$package/hosting" "$package/database" "$package/coordination/phase2" "$package/evidence"
+          cp -a hosting/p2-12 "$package/hosting/"
+          mkdir -p "$package/hosting/p2-00"; cp hosting/p2-00/Apply-Release.ps1 "$package/hosting/p2-00/"
+          cp deploy/domain-live/docker-compose.yml "$package/deploy/domain-live/"
+          cp -a database/migrations "$package/database/"
+          cp -a artifacts/phase2-qa/. "$package/evidence/"
+          cat > "$package/deploy/domain-live/docker-compose.phase2.yml" <<EOF
+          services:
+            runtime:
+              image: $RUNTIME_TAG
+            account-api:
+              image: $RUNTIME_TAG
+            gateway-auth:
+              image: $RUNTIME_TAG
+            gateway-game:
+              image: $RUNTIME_TAG
+            edge:
+              image: $EDGE_TAG
+          EOF
+          docker save "$RUNTIME_TAG" | gzip -1 > "$package/runtime-image.tar.gz"
+          docker save "$EDGE_TAG" | gzip -1 > "$package/edge-image.tar.gz"
+          python3 - "$package" <<'PY'
+          import hashlib,json,pathlib,sys,os
+          root=pathlib.Path(sys.argv[1])
+          migdir=root/'database/migrations'
+          migrations=[]
+          for order,p in enumerate(sorted(migdir.glob('[0-9][0-9][0-9][0-9]_*.sql')),1):
+              migrations.append({'order':order,'id':p.stem,'path':str(p.relative_to(root)).replace('\\','/'),'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'kind':'forward-sql'})
+          plan={'schema_version':'oldkoweb-phase2-migrations/v1','backup_before_migrate':True,'rollback_compatible_with_previous_application':True,
+                'runner':{'mode':'compose-run','service':'runtime','command':['node','services/oldko-data/src/scripts/migrate.js']},'migrations':migrations}
+          planp=root/'coordination/phase2/migration-plan.json'; planp.write_text(json.dumps(plan,indent=2)+'\n')
+          files=[]
+          for p in sorted(root.rglob('*')):
+              if not p.is_file() or p.name in {'release-manifest.json','runtime-image.tar.gz','edge-image.tar.gz'}: continue
+              files.append({'path':str(p.relative_to(root)).replace('\\','/'),'sha256':hashlib.sha256(p.read_bytes()).hexdigest()})
+          def sha(name): return hashlib.sha256((root/name).read_bytes()).hexdigest()
+          manifest={'schema_version':'oldkoweb-p2-release/v1','release_id':os.environ['RELEASE_ID'],'source_sha':os.environ['GITHUB_SHA'],'files':files,
+                    'compose':{'project_name':'oldkoweb-domain-live','files':['deploy/domain-live/docker-compose.yml','deploy/domain-live/docker-compose.phase2.yml'],'env_file':'.oldkoweb/state/runtime.env'},
+                    'required_persistent_volumes':[{'service':'db','destination':'/var/lib/postgresql/data','type':'volume'}],
+                    'health_checks':[{'name':'db','kind':'compose-service','service':'db'},{'name':'runtime','kind':'compose-service','service':'runtime'},{'name':'account-api','kind':'compose-service','service':'account-api'},{'name':'edge','kind':'compose-service','service':'edge'}],
+                    'migration':{'plan_path':'coordination/phase2/migration-plan.json','runner_path':'hosting/p2-12/Run-Migrations.ps1','rollback_compatible_with_previous_application':True},
+                    'image_archives':[{'path':'runtime-image.tar.gz','sha256':sha('runtime-image.tar.gz'),'tag':os.environ['RUNTIME_TAG']},{'path':'edge-image.tar.gz','sha256':sha('edge-image.tar.gz'),'tag':os.environ['EDGE_TAG']}],
+                    'verification':{'ci_browser_e2e':'PASS','ci_restart_persistence':'PASS','target_pc_local':'NOT_RUN','public_domains':'NOT_RUN'},
+                    'scope_manifest':'evidence/FINAL-CANDIDATE.json'}
+          (root/'release-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
+          PY
+          powershell='hosting/p2-12/Test-ReleasePackage.ps1'
+          pwsh -NoProfile -File "$powershell" -PackageRoot "$package" -ManifestPath "$package/release-manifest.json"
+          cd "$RUNNER_TEMP"
+          zip -0 -qr "$RELEASE_ID.zip" "$RELEASE_ID"
+          sha256sum "$RELEASE_ID.zip" > "$RELEASE_ID.zip.sha256"
+          cp "$RELEASE_ID.zip" "$RELEASE_ID.zip.sha256" "$GITHUB_WORKSPACE/"
+
+      - name: Upload exact candidate evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p2-00-exact-candidate-evidence
+          path: artifacts/phase2-qa
+          if-no-files-found: error
+
+      - name: Upload verified Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.RELEASE_ID }}
+          path: |
+            ${{ env.RELEASE_ID }}.zip
+            ${{ env.RELEASE_ID }}.zip.sha256
+          compression-level: 0
+          if-no-files-found: error
+
+  powershell51:
+    needs: build-test-package
+    runs-on: windows-2022
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.RELEASE_ID }}
+      - name: Validate exact one-command package on Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $line=Get-Content -Raw ".\$env:RELEASE_ID.zip.sha256"
+          if($line -notmatch '^([0-9a-fA-F]{64})'){throw 'Invalid checksum sidecar'}
+          $actual=(Get-FileHash -Algorithm SHA256 ".\$env:RELEASE_ID.zip").Hash
+          if($actual.ToLowerInvariant() -ne $matches[1].ToLowerInvariant()){throw 'Release ZIP checksum mismatch'}
+          Expand-Archive -Force ".\$env:RELEASE_ID.zip" .\expanded
+          $root=(Resolve-Path ".\expanded\$env:RELEASE_ID").Path
+          Get-ChildItem -Path (Join-Path $root 'hosting') -Filter '*.ps1' -Recurse | ForEach-Object { [void][scriptblock]::Create((Get-Content -Raw -LiteralPath $_.FullName)) }
+          & (Join-Path $root 'hosting\p2-12\Test-ReleasePackage.ps1') -PackageRoot $root -ManifestPath (Join-Path $root 'release-manifest.json') | Out-Null
+          Write-Host 'WINDOWS_POWERSHELL_5_1_PACKAGE_GATE PASS'
+
+  publish:
+    needs: [build-test-package, powershell51]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.RELEASE_ID }}
+      - name: Publish immutable Phase 2 update package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          notes='P2-00 integrated Phase 2 update package. Genuine OpenKO C++/WASM is rebuilt from pinned source with P2-03/P2-10 source patches and pthread-native audio path. CI proves package integrity, local one-stack startup, real-browser login/character creation/Moradon render/movement, and restart persistence on a fresh controlled database. This release does NOT claim target-PC LOCAL_VERIFIED or public DOMAIN_VERIFIED before installation. Source/codec/asset gaps listed in FINAL-CANDIDATE.json remain BLOCKED and are not represented as completed features.'
+          if gh release view "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$RELEASE_ID.zip" "$RELEASE_ID.zip.sha256" --clobber -R "$GITHUB_REPOSITORY"
+          else
+            gh release create "$RELEASE_TAG" "$RELEASE_ID.zip" "$RELEASE_ID.zip.sha256" --target "$GITHUB_SHA" --title 'OldKOWeb Phase 2 integrated update' --notes "$notes" -R "$GITHUB_REPOSITORY"
+          fi
