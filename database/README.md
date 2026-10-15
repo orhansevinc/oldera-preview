@@ -1,6 +1,20 @@
 # OldKO persistence database
 
-WS07 targets PostgreSQL 16. The database layer owns durable storage, transaction boundaries, locking primitives, constraints and repository adapters; gameplay/business rules remain in their owning workstreams.
+P2-11 continues WS07 on PostgreSQL 16. The database layer owns durable storage, transaction boundaries, locking primitives, constraints and repository adapters; gameplay/business rules remain in their owning workstreams. Production authority is one PostgreSQL database and the `oldko` schema; browser localStorage and process memory are never persistence authorities.
+
+## Canonical migration order
+
+All production schema mutation is forward-only through `services/oldko-data/src/scripts/migrate.js` and `public._oldko_migrations`:
+
+1. `0001_init.sql`
+2. `0002_persistence_hardening.sql`
+3. `0003_public_account_api.sql`
+4. `0004_admin_persistence.sql`
+5. `0005_phase2_data_admin.sql`
+
+`0005` folds the historical WS13 `account_rate_limits` table into this canonical sequence and adds generic persistence surfaces for quest state, boss/event timing state, non-secret runtime configuration, runtime apply receipts, heartbeat-backed server status, admin content observations and runtime-confirmed privileged-command results. The historical `services/account-api/sql/0001_postgres_rate_limit.sql` remains as source history only; its compatibility command is verification-only and refuses to mutate a database that has not reached canonical `0005`.
+
+Live application is intentionally not performed by P2-11. P2-00/P2-12 must back up the real database, run the canonical migrator once, verify its checksum ledger and then perform restore/restart validation.
 
 ## Local development
 
@@ -19,15 +33,9 @@ The deterministic fixture is `ws07test / WS07Hero`; its password is always suppl
 
 ## Migration guarantees
 
-Migration SQL lives in `database/migrations`. The migrator:
+The migrator serializes runners with a PostgreSQL advisory lock, applies each migration in its own transaction, stores SHA-256 checksums in `public._oldko_migrations`, refuses mutation of an already-applied migration and supports `OLDKO_MIGRATION_TARGET=<filename>` for upgrade-path testing only. `0005` deliberately contains no transaction control statements because the canonical migrator owns the boundary.
 
-- serializes runners with a PostgreSQL advisory lock;
-- applies each migration in its own transaction;
-- stores SHA-256 checksums in `public._oldko_migrations`;
-- refuses mutation of an already-applied migration;
-- supports `OLDKO_MIGRATION_TARGET=<filename>` for upgrade-path testing only.
-
-Never edit `0001_init.sql` after it has shipped. Schema hardening is additive/forward-only in `0002_persistence_hardening.sql`. Rollback and recovery policy is documented in `workstreams/ws07/MIGRATIONS.md` and delegates destructive recovery to WS30 backup/PITR procedures.
+Never edit an applied migration. Add a new forward migration. Destructive recovery remains delegated to P2-12/WS30 backup and restore procedures.
 
 ## Validation commands
 
@@ -40,4 +48,4 @@ npm run test:integration
 npm run explain
 ```
 
-`npm run explain` checks that critical account-session, ban, live-character, session-lease and active-trade lookups can use their intended indexes. Read repositories use bounded/fixed query counts; no per-item SELECT loop is used for world or inventory snapshot loading.
+`verify:schema` requires the exact `0001..0005` ledger. P2-13 must additionally verify persistence across a real service/PostgreSQL restart for account, character position, items, quest, progression and clan membership, plus unauthorized admin access denial.

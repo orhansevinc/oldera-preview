@@ -7,3 +7,4 @@ export { PgWs27ProgressionRepository } from './ws27-progression.js';
 export { PgWs45LeaseStore } from './ws45-session-ownership.js';
 export { PgWs46CharacterLifecycleRepository } from './ws46-character-lifecycle.js';
 export { PgOperationReceiptRepository } from './operation-receipts.js';
+export { PgP2DataAdminRepository, assertRuntimeConfigKey, isRealApplyProof, projectServerStatus } from './p2-data-admin.js';
