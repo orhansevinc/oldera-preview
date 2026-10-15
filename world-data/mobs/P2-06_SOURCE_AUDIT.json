@@ -1,0 +1,44 @@
+{
+  "schema_version": "oldkoweb-p2-06-source-audit/v1",
+  "zone": {
+    "id": 21,
+    "name": "Moradon",
+    "world_spawn": {"x": 312.0, "z": 402.0},
+    "world_spawn_source": "services/ko1298-world/src/constants.js / OpenKO-db ZONE_INFO",
+    "mob_source": "Open-KO/OpenKO-db@bec619466938d278339c30e5b1a4bff3c9413bab",
+    "ai_source": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5",
+    "verified_spawn_rows": 20,
+    "verified_runtime_slots": 135
+  },
+  "monsters": [
+    {"id":750,"name":"Worm","model_resource_id":700,"level":1,"hp":7,"mp":25,"ac":5,"hit":1,"evade":1,"damage":4,"attack_delay_ms":2000,"attack_range":5,"search_range":3,"tracing_range":40,"respawn_seconds":[20,30],"animation_id":null},
+    {"id":751,"name":"Earth worm","model_resource_id":700,"level":2,"hp":11,"mp":48,"ac":10,"hit":1,"evade":1,"damage":4,"attack_delay_ms":2000,"attack_range":5,"search_range":3,"tracing_range":40,"respawn_seconds":[20],"animation_id":null},
+    {"id":752,"name":"Blood worm","model_resource_id":700,"level":4,"hp":20,"mp":80,"ac":20,"hit":2,"evade":3,"damage":5,"attack_delay_ms":2000,"attack_range":5,"search_range":3,"tracing_range":40,"respawn_seconds":[20],"animation_id":null},
+    {"id":754,"name":"Carrion crawler","model_resource_id":700,"level":6,"hp":32,"mp":120,"ac":31,"hit":3,"evade":4,"damage":6,"attack_delay_ms":2000,"attack_range":5,"search_range":3,"tracing_range":40,"respawn_seconds":[20],"animation_id":null},
+    {"id":755,"name":"Snatcher","model_resource_id":700,"level":8,"hp":48,"mp":167,"ac":41,"hit":4,"evade":6,"damage":7,"attack_delay_ms":2000,"attack_range":5,"search_range":3,"tracing_range":40,"respawn_seconds":[20],"animation_id":null},
+    {"id":850,"name":"Bandicoot","model_resource_id":800,"level":2,"hp":11,"mp":48,"ac":10,"hit":1,"evade":1,"damage":3,"attack_delay_ms":1700,"attack_range":5,"search_range":3,"tracing_range":40,"respawn_seconds":[20],"animation_id":null},
+    {"id":851,"name":"Wild Bandicoot","model_resource_id":800,"level":5,"hp":26,"mp":99,"ac":26,"hit":2,"evade":3,"damage":4,"attack_delay_ms":1700,"attack_range":5,"search_range":3,"tracing_range":40,"respawn_seconds":[20],"animation_id":null},
+    {"id":852,"name":"Scavenger Bandicoot","model_resource_id":800,"level":7,"hp":40,"mp":143,"ac":36,"hit":3,"evade":5,"damage":6,"attack_delay_ms":1700,"attack_range":5,"search_range":3,"tracing_range":40,"respawn_seconds":[20],"animation_id":null},
+    {"id":853,"name":"Rabid Bandicoot","model_resource_id":800,"level":9,"hp":57,"mp":194,"ac":46,"hit":4,"evade":7,"damage":7,"attack_delay_ms":1700,"attack_range":5,"search_range":3,"tracing_range":40,"respawn_seconds":[20],"animation_id":null},
+    {"id":854,"name":"Cannibal Bandicoot","model_resource_id":800,"level":11,"hp":99,"mp":253,"ac":57,"hit":6,"evade":9,"damage":9,"attack_delay_ms":1700,"attack_range":5,"search_range":3,"tracing_range":40,"respawn_seconds":[20],"animation_id":null}
+  ],
+  "spawn_authority": {
+    "file": "world-data/mobs/verified/moradon-zone21.verified.json",
+    "source_table": "ManualSetup/6_InsertData_K_NPCPOS.sql",
+    "selection": "deterministic source-rectangle slot materialization; terrain Y resolved by P2-04/WS14 authority",
+    "maximum_verified_spawn_z": 329,
+    "initial_player_z": 402,
+    "current_aoi_contract": "48-unit regions, current region plus one neighbor each axis",
+    "initial_spawn_observation": "All verified mob slots are outside the initial player's 3x3 region window; zero mobs at the Moradon login coordinate is therefore data/AOI-consistent rather than a missing K_MONSTER/K_NPCPOS seed. Moving toward the source-backed monster fields or widening AOI must remain P2-04/world policy, not a P2-06 coordinate fabrication."
+  },
+  "animation_authority": {
+    "status": "UNRESOLVED",
+    "reason": "The pinned K_MONSTER/K_NPCPOS rows establish monster resource IDs and behavior/stat fields but do not establish an exact client animation-id-to-binary mapping for these rows. P2-06 does not invent animation IDs."
+  },
+  "boss_authority": {
+    "status": "BLOCKED_SOURCE",
+    "verified_bosses_in_current_zone_slice": [],
+    "verified_world_clock_boss_schedules": [],
+    "reason": "No source-backed boss spawn schedule or boss-specific ability table is present in the current verified Moradon P2-06 input. WS36 provides deterministic world-clock scheduling mechanics, not boss schedule facts."
+  }
+}
