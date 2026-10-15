@@ -1,0 +1,39 @@
+{
+  "schema_version": "ws45-admin-session-authority/v1",
+  "workstream": "WS45",
+  "authority": "session ownership only",
+  "implementation": {
+    "module": "services/session-ownership/admin-session-authority.js",
+    "factory": "createAdminSessionAuthority({service, clock})"
+  },
+  "provided_surfaces": {
+    "listLeaseSnapshot": "Returns unexpired account/character lease ownership rows; grace rows may be included for operator diagnostics.",
+    "listOnlineCharacters": "Returns only unexpired active character leases; this is an authoritative online ownership signal, not character gameplay state.",
+    "revokeSession": "CAS-safe removal of leases owned by one session plus disconnect arbitration.",
+    "revokeAccount": "Resolves the current account lease, removes that session's ownership leases, and requests disconnect.",
+    "kickCharacter": "Resolves the authoritative character lease and revokes the owning session; it does not mutate character stats, inventory, zone state, or game packets."
+  },
+  "ws08_boundary": {
+    "can_back": [
+      "authoritative online character ownership read",
+      "session/account revoke",
+      "character-owner kick/revoke"
+    ],
+    "does_not_implement": [
+      "getCharacterState",
+      "mutateOnlineCharacter",
+      "character stat mutation",
+      "inventory mutation",
+      "combat mutation",
+      "game packet encoding or transport"
+    ],
+    "full_ADMIN_RUNTIME_AUTHORITY": false,
+    "integration_note": "WS08 may bridge these WS45-owned read/revoke surfaces, but full ADMIN_RUNTIME_AUTHORITY still requires the WS03/game runtime owner for gameplay state and online mutations."
+  },
+  "security": {
+    "raw_auth_password": false,
+    "raw_session_secret": false,
+    "credentials_logged": false,
+    "session_id_visibility": "server/admin integration boundary only"
+  }
+}
