@@ -1,0 +1,193 @@
+name: WS50 play live hotfix
+
+on:
+  push:
+    branches: [ws50-integration-rehearsal]
+    paths:
+      - deploy/domain-live/nginx.conf
+      - deploy/domain-live/play-production-index.html
+      - deploy/domain-live/apply-play-hotfix.ps1
+      - .github/workflows/ws50-play-live-hotfix.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+env:
+  C5_RUN_ID: '38604174659'
+  C5_ARTIFACT_ID: '11915666463'
+  C5_ARTIFACT_NAME: ws10-c5-visibility-passing-client-4
+  C5_ARTIFACT_DIGEST: sha256:f749750fc5bb0249a67b712bd4e1a03847773d8845fd209508b8c95f6c447a83
+  HOTFIX_TAG: oldkoweb-play-live-20261015-v1
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    outputs:
+      edge_tag: ${{ steps.meta.outputs.edge_tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify frozen C5 client artifact identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          digest="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$C5_ARTIFACT_ID" --jq .digest)"
+          expired="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$C5_ARTIFACT_ID" --jq .expired)"
+          test "$digest" = "$C5_ARTIFACT_DIGEST"
+          test "$expired" = false
+
+      - name: Download exact accepted real-browser C5 client
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          dest="$RUNNER_TEMP/c5-client"
+          mkdir -p "$dest"
+          gh run download "$C5_RUN_ID" -n "$C5_ARTIFACT_NAME" -R "$GITHUB_REPOSITORY" -D "$dest"
+          js="$(find "$dest" -type f -name KnightOnLine.js -print -quit)"
+          test -n "$js"
+          root="$(dirname "$js")"
+          test -s "$root/KnightOnLine.wasm"
+          test -s "$root/KnightOnLine.data"
+          test -s "$root/SHA256SUMS.txt"
+          (cd "$root" && sha256sum -c SHA256SUMS.txt)
+          printf 'C5_ROOT=%s\n' "$root" >> "$GITHUB_ENV"
+
+      - name: Stage production play client
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf real1298
+          mkdir -p real1298
+          cp "$C5_ROOT/KnightOnLine.js" real1298/
+          cp "$C5_ROOT/KnightOnLine.wasm" real1298/
+          cp "$C5_ROOT/KnightOnLine.data" real1298/
+          cp deploy/domain-live/play-production-index.html real1298/index.html
+          test -s real1298/KnightOnLine.js
+          test -s real1298/KnightOnLine.wasm
+          test -s real1298/KnightOnLine.data
+          grep -q "'/auth'" real1298/index.html
+          grep -q "'/game'" real1298/index.html
+          grep -q 'KnightOnLine.js' real1298/index.html
+          grep -q 'try_files /real1298/index.html' deploy/domain-live/nginx.conf
+          if grep -q 'try_files /real1298.html' deploy/domain-live/nginx.conf; then
+            echo 'legacy DOM play root is still active' >&2
+            exit 1
+          fi
+
+      - name: Build immutable play edge image
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="oldkoweb/edge:play-live-${GITHUB_SHA}"
+          docker build -t "$tag" -f deploy/domain-live/edge.Dockerfile .
+          docker image inspect "$tag" --format '{{.Id}}' | tee /tmp/edge-image-id
+          echo "edge_tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Validate edge payload and production routing
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag='${{ steps.meta.outputs.edge_tag }}'
+          cid="$(docker create "$tag")"
+          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+          docker cp "$cid:/usr/share/nginx/html/real1298/index.html" /tmp/play-index.html
+          docker cp "$cid:/etc/nginx/nginx.conf" /tmp/nginx.conf
+          grep -q 'OldKOWeb — 1298 Browser Client' /tmp/play-index.html
+          grep -q "'/auth'" /tmp/play-index.html
+          grep -q "'/game'" /tmp/play-index.html
+          grep -q 'server_name play.oldkoweb.com' /tmp/nginx.conf
+          grep -q 'try_files /real1298/index.html' /tmp/nginx.conf
+
+      - name: Run existing real backend contract smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test tests/ko-gateway/*.test.js
+          node --test tests/ko1298-session/production-lifecycle.test.js tests/ko1298-session/production-routing.test.js tests/ko1298-session/production-transport.test.js tests/ko1298-session/domain-live-provider.contract.js
+
+      - name: Build edge-only Windows hotfix bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="$RUNNER_TEMP/oldkoweb-play-live-20261015-v1"
+          mkdir -p "$bundle"
+          cp deploy/domain-live/apply-play-hotfix.ps1 "$bundle/"
+          cp deploy/domain-live/docker-compose.yml "$bundle/"
+          tag='${{ steps.meta.outputs.edge_tag }}'
+          docker save "$tag" | gzip -1 > "$bundle/edge.tar.gz"
+          image_id="$(cat /tmp/edge-image-id)"
+          jq -n \
+            --arg release_id oldkoweb-domain-live-20261015 \
+            --arg hotfix_id oldkoweb-play-live-20261015-v1 \
+            --arg source_commit "$GITHUB_SHA" \
+            --arg edge_tag "$tag" \
+            --arg edge_image_id "$image_id" \
+            --arg c5_artifact_id "$C5_ARTIFACT_ID" \
+            --arg c5_artifact_digest "$C5_ARTIFACT_DIGEST" \
+            '{release_id:$release_id,hotfix_id:$hotfix_id,source_commit:$source_commit,edge_tag:$edge_tag,edge_image_id:$edge_image_id,c5_client:{artifact_id:$c5_artifact_id,digest:$c5_artifact_digest},public_domain_acceptance:false}' \
+            > "$bundle/HOTFIX_STATUS.json"
+          (cd "$bundle" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum | sed 's#  \./#  #' > SHA256SUMS)
+          cd "$RUNNER_TEMP"
+          zip -0 -qr oldkoweb-play-live-20261015-v1.zip oldkoweb-play-live-20261015-v1
+          sha256sum oldkoweb-play-live-20261015-v1.zip > oldkoweb-play-live-20261015-v1.zip.sha256
+          cp oldkoweb-play-live-20261015-v1.zip oldkoweb-play-live-20261015-v1.zip.sha256 "$GITHUB_WORKSPACE/"
+
+      - name: Upload hotfix artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: oldkoweb-play-live-20261015-v1
+          path: |
+            oldkoweb-play-live-20261015-v1.zip
+            oldkoweb-play-live-20261015-v1.zip.sha256
+          compression-level: 0
+          if-no-files-found: error
+
+  powershell51:
+    needs: build
+    runs-on: windows-2022
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: oldkoweb-play-live-20261015-v1
+      - name: Validate checksum and PowerShell 5.1 installer
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $line=Get-Content -Raw .\oldkoweb-play-live-20261015-v1.zip.sha256
+          if($line -notmatch '^([0-9a-fA-F]{64})'){throw 'Invalid checksum sidecar'}
+          $actual=(Get-FileHash -Algorithm SHA256 .\oldkoweb-play-live-20261015-v1.zip).Hash
+          if($actual.ToLowerInvariant() -ne $matches[1].ToLowerInvariant()){throw 'ZIP checksum mismatch'}
+          Expand-Archive -Force .\oldkoweb-play-live-20261015-v1.zip .\expanded
+          $script=(Resolve-Path .\expanded\oldkoweb-play-live-20261015-v1\apply-play-hotfix.ps1).Path
+          [void][scriptblock]::Create((Get-Content -Raw -LiteralPath $script))
+          Write-Host 'Windows PowerShell 5.1 parse/checksum: PASS'
+
+  publish:
+    needs: [build, powershell51]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: oldkoweb-play-live-20261015-v1
+      - name: Publish verified play hotfix
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$HOTFIX_TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$HOTFIX_TAG" oldkoweb-play-live-20261015-v1.zip oldkoweb-play-live-20261015-v1.zip.sha256 --clobber -R "$GITHUB_REPOSITORY"
+          else
+            gh release create "$HOTFIX_TAG" oldkoweb-play-live-20261015-v1.zip oldkoweb-play-live-20261015-v1.zip.sha256 \
+              --target "$GITHUB_SHA" \
+              --title 'OldKOWeb real browser play hotfix v1' \
+              --notes 'Edge-only hotfix. Replaces the legacy DOM mock on play.oldkoweb.com with the frozen WS10 C5 real OpenKO C++/WASM client and same-origin auth/game WebSocket routing. Public gameplay acceptance is still required after install.' \
+              -R "$GITHUB_REPOSITORY"
+          fi
