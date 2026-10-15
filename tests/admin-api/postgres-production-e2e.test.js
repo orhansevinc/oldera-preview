@@ -41,9 +41,12 @@ async function startApi(repository, users, commandBus) {
   const base = `http://127.0.0.1:${server.address().port}/api/admin`;
   return {
     base,
-    close: () => new Promise((resolve) => server.close(resolve)),
+    async close() {
+      server.closeIdleConnections?.();
+      await new Promise((resolve) => server.close(resolve));
+    },
     async request(route, { method = 'GET', cookie, csrf, body, idempotencyKey } = {}) {
-      const headers = { origin: ORIGIN };
+      const headers = { origin: ORIGIN, connection: 'close' };
       if (cookie) headers.cookie = cookie;
       if (csrf) headers['x-csrf-token'] = csrf;
       if (idempotencyKey) headers['idempotency-key'] = idempotencyKey;
@@ -53,7 +56,11 @@ async function startApi(repository, users, commandBus) {
   };
 }
 
-test('WS08 real PostgreSQL production persistence survives restart and keeps authoritative outbox status', { skip: !process.env.DATABASE_URL }, async () => {
+async function closeQuietly(resource) {
+  try { await resource?.close?.(); } catch {}
+}
+
+test('WS08 real PostgreSQL production persistence survives restart and keeps authoritative outbox status', { skip: !process.env.DATABASE_URL, timeout: 60_000 }, async () => {
   const stamp = `${Date.now()}${process.pid}`.slice(-12);
   const username = `w8${stamp}`.slice(0, 30);
   const character = `W8${stamp.slice(-8)}`.slice(0, 20);
@@ -70,106 +77,118 @@ test('WS08 real PostgreSQL production persistence survives restart and keeps aut
 
   const { createPool } = await import(`file://${path.resolve(__dirname, '../../services/oldko-data/src/index.js')}`);
   const seedPool = createPool({ connectionString: process.env.DATABASE_URL, applicationName: 'ws08-e2e-seed', max: 2 });
-  const account = await seedPool.query(
-    `INSERT INTO oldko.accounts(username,username_key,password_hash,email,status,nation,verified_at)
-     VALUES($1,$2,'fixture-hash',$3,'active',1,now()) RETURNING id`,
-    [username, username.toLowerCase(), `${username}@example.test`]
-  );
-  const accountId = account.rows[0].id;
-  const created = await seedPool.query(
-    `INSERT INTO oldko.characters(account_id,slot,name,name_key,nation,race,class_id,zone_id,pos_x,pos_y,pos_z)
-     VALUES($1,0,$2,$3,1,1,101,21,321,0,654) RETURNING id`,
-    [accountId, character, character.toLowerCase()]
-  );
-  await seedPool.query(
-    `INSERT INTO oldko.character_stats(character_id,level,loyalty,gold,str,sta,dex,intel,cha)
-     VALUES($1,3,111,222,60,61,62,63,64)`,
-    [created.rows[0].id]
-  );
-  await seedPool.end();
+  try {
+    const account = await seedPool.query(
+      `INSERT INTO oldko.accounts(username,username_key,password_hash,email,status,nation,verified_at)
+       VALUES($1,$2,'fixture-hash',$3,'active',1,now()) RETURNING id`,
+      [username, username.toLowerCase(), `${username}@example.test`]
+    );
+    const accountId = account.rows[0].id;
+    const created = await seedPool.query(
+      `INSERT INTO oldko.characters(account_id,slot,name,name_key,nation,race,class_id,zone_id,pos_x,pos_y,pos_z)
+       VALUES($1,0,$2,$3,1,1,101,21,321,0,654) RETURNING id`,
+      [accountId, character, character.toLowerCase()]
+    );
+    await seedPool.query(
+      `INSERT INTO oldko.character_stats(character_id,level,loyalty,gold,str,sta,dex,intel,cha)
+       VALUES($1,3,111,222,60,61,62,63,64)`,
+      [created.rows[0].id]
+    );
+  } finally {
+    await seedPool.end();
+  }
 
   const pendingBus = { async execute(request) { return { requestId: request.requestId, status: 'pending', code: 'QUEUED', forwarded: false }; } };
+  let repositoryA; let repositoryB; let repositoryC;
+  let appA; let appB; let appC;
 
-  const repositoryA = await createAdminRepository({ env });
-  assert.equal(repositoryA.ws07SourceCommit, PINNED_WS07_SOURCE);
-  const appA = await startApi(repositoryA, users, pendingBus);
+  try {
+    repositoryA = await createAdminRepository({ env });
+    assert.equal(repositoryA.ws07SourceCommit, PINNED_WS07_SOURCE);
+    appA = await startApi(repositoryA, users, pendingBus);
 
-  let response = await appA.request('/session/login', { method: 'POST', body: { user: adminName, password } });
-  assert.equal(response.status, 200);
-  const login = await response.json();
-  assert.deepEqual(login.user.roles, ['VIEWER', 'OWNER']);
-  const cookie = cookieJar(response.headers.getSetCookie ? response.headers.getSetCookie() : response.headers.get('set-cookie'));
-  const csrf = login.csrfToken;
+    let response = await appA.request('/session/login', { method: 'POST', body: { user: adminName, password } });
+    assert.equal(response.status, 200);
+    const login = await response.json();
+    assert.deepEqual(login.user.roles, ['VIEWER', 'OWNER']);
+    const cookie = cookieJar(response.headers.getSetCookie ? response.headers.getSetCookie() : response.headers.get('set-cookie'));
+    const csrf = login.csrfToken;
 
-  response = await appA.request('/overview', { cookie });
-  assert.equal(response.status, 200);
-  assert.ok((await response.json()).overview.characters >= 1);
+    response = await appA.request('/overview', { cookie });
+    assert.equal(response.status, 200);
+    assert.ok((await response.json()).overview.characters >= 1);
 
-  response = await appA.request(`/players?q=${encodeURIComponent(character)}`, { cookie });
-  assert.equal(response.status, 200);
-  assert.equal((await response.json()).players[0].name, character);
+    response = await appA.request(`/players?q=${encodeURIComponent(character)}`, { cookie });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).players[0].name, character);
 
-  response = await appA.request(`/characters/${encodeURIComponent(character)}`, { cookie });
-  assert.equal(response.status, 200);
-  const before = (await response.json()).character;
-  assert.equal(before.level, 3);
-  assert.equal(before.version, 1);
+    response = await appA.request(`/characters/${encodeURIComponent(character)}`, { cookie });
+    assert.equal(response.status, 200);
+    const before = (await response.json()).character;
+    assert.equal(before.level, 3);
+    assert.equal(before.version, 1);
 
-  const mutation = { level: 4, expectedVersion: before.version, reason: 'controlled offline mutation' };
-  response = await appA.request(`/characters/${encodeURIComponent(character)}`, {
-    method: 'PATCH', cookie, csrf, idempotencyKey: `mut-${stamp}`, body: mutation
-  });
-  assert.equal(response.status, 200);
-  const firstMutation = await response.json();
-  assert.equal(firstMutation.value.level, 4);
-  assert.equal(firstMutation.value.version, 2);
-  assert.equal(firstMutation.idempotentReplay, false);
+    const mutation = { level: 4, expectedVersion: before.version, reason: 'controlled offline mutation' };
+    response = await appA.request(`/characters/${encodeURIComponent(character)}`, {
+      method: 'PATCH', cookie, csrf, idempotencyKey: `mut-${stamp}`, body: mutation
+    });
+    assert.equal(response.status, 200);
+    const firstMutation = await response.json();
+    assert.equal(firstMutation.value.level, 4);
+    assert.equal(firstMutation.value.version, 2);
+    assert.equal(firstMutation.idempotentReplay, false);
 
-  response = await appA.request(`/characters/${encodeURIComponent(character)}`, {
-    method: 'PATCH', cookie, csrf, idempotencyKey: `mut-${stamp}`, body: mutation
-  });
-  assert.equal(response.status, 200);
-  assert.equal((await response.json()).idempotentReplay, true);
+    response = await appA.request(`/characters/${encodeURIComponent(character)}`, {
+      method: 'PATCH', cookie, csrf, idempotencyKey: `mut-${stamp}`, body: mutation
+    });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).idempotentReplay, true);
 
-  response = await appA.request(`/characters/${encodeURIComponent(character)}`, {
-    method: 'PATCH', cookie, csrf, idempotencyKey: `cas-${stamp}`, body: { level: 5, expectedVersion: 1, reason: 'stale cas must fail' }
-  });
-  assert.equal(response.status, 409);
-  assert.equal((await response.json()).error, 'VERSION_CONFLICT');
+    response = await appA.request(`/characters/${encodeURIComponent(character)}`, {
+      method: 'PATCH', cookie, csrf, idempotencyKey: `cas-${stamp}`, body: { level: 5, expectedVersion: 1, reason: 'stale cas must fail' }
+    });
+    assert.equal(response.status, 409);
+    assert.equal((await response.json()).error, 'VERSION_CONFLICT');
 
-  response = await appA.request('/audit?limit=50', { cookie });
-  assert.equal(response.status, 200);
-  assert.ok((await response.json()).entries.some((entry) => entry.action === 'CHARACTER_EDIT'));
+    response = await appA.request('/audit?limit=50', { cookie });
+    assert.equal(response.status, 200);
+    assert.ok((await response.json()).entries.some((entry) => entry.action === 'CHARACTER_EDIT'));
 
-  await appA.close();
-  await repositoryA.close();
+    await appA.close(); appA = null;
+    await repositoryA.close(); repositoryA = null;
 
-  const repositoryB = await createAdminRepository({ env });
-  const appB = await startApi(repositoryB, users, pendingBus);
-  response = await appB.request('/session', { cookie });
-  assert.equal(response.status, 200, 'session created by app A must survive app restart');
+    repositoryB = await createAdminRepository({ env });
+    appB = await startApi(repositoryB, users, pendingBus);
+    response = await appB.request('/session', { cookie });
+    assert.equal(response.status, 200, 'session created by app A must survive app restart');
 
-  response = await appB.request('/commands', {
-    method: 'POST', cookie, csrf, idempotencyKey: `cmd-${stamp}`, body: { command: 'COUNT', reason: 'queue count command' }
-  });
-  assert.equal(response.status, 202);
-  const queued = await response.json();
-  assert.equal(queued.game.status, 'PENDING');
-  assert.equal(queued.command.status, 'PENDING');
+    response = await appB.request('/commands', {
+      method: 'POST', cookie, csrf, idempotencyKey: `cmd-${stamp}`, body: { command: 'COUNT', reason: 'queue count command' }
+    });
+    assert.equal(response.status, 202);
+    const queued = await response.json();
+    assert.equal(queued.game.status, 'PENDING');
+    assert.equal(queued.command.status, 'PENDING');
 
-  response = await appB.request(`/commands/${queued.command.id}`, { cookie });
-  assert.equal(response.status, 200);
-  assert.equal((await response.json()).command.status, 'PENDING');
+    response = await appB.request(`/commands/${queued.command.id}`, { cookie });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).command.status, 'PENDING');
 
-  response = await appB.request('/session/logout', { method: 'POST', cookie, csrf });
-  assert.equal(response.status, 200);
-  await appB.close();
-  await repositoryB.close();
+    response = await appB.request('/session/logout', { method: 'POST', cookie, csrf });
+    assert.equal(response.status, 200);
+    await appB.close(); appB = null;
+    await repositoryB.close(); repositoryB = null;
 
-  const repositoryC = await createAdminRepository({ env });
-  const appC = await startApi(repositoryC, users, pendingBus);
-  response = await appC.request('/session', { cookie });
-  assert.equal(response.status, 401, 'revoked session must remain revoked after another restart');
-  await appC.close();
-  await repositoryC.close();
+    repositoryC = await createAdminRepository({ env });
+    appC = await startApi(repositoryC, users, pendingBus);
+    response = await appC.request('/session', { cookie });
+    assert.equal(response.status, 401, 'revoked session must remain revoked after another restart');
+  } finally {
+    await closeQuietly(appC);
+    await closeQuietly(repositoryC);
+    await closeQuietly(appB);
+    await closeQuietly(repositoryB);
+    await closeQuietly(appA);
+    await closeQuietly(repositoryA);
+  }
 });
