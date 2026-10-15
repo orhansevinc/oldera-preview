@@ -3,6 +3,7 @@ WORKDIR /opt/oldkoweb
 COPY services ./services
 COPY database ./database
 COPY world-data ./world-data
+COPY protocol-lab ./protocol-lab
 COPY runtime ./runtime
 RUN npm --prefix services/oldko-data install --omit=dev --ignore-scripts \
  && npm --prefix services/account-api install --omit=dev --ignore-scripts
