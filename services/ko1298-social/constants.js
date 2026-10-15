@@ -1,0 +1,60 @@
+'use strict';
+
+const OPCODES = Object.freeze({
+  CHAT: 0x10,
+  PARTY: 0x2f,
+  CHAT_TARGET: 0x35,
+  KNIGHTS: 0x3c,
+  OPERATOR: 0x40,
+  FRIEND: 0x49,
+});
+
+const CHAT_TYPES = Object.freeze({
+  GENERAL: 1,
+  PRIVATE: 2,
+  PARTY: 3,
+  FORCE: 4,
+  SHOUT: 5,
+  KNIGHTS: 6,
+  PUBLIC: 7,
+  WAR_SYSTEM: 8,
+  GM: 12,
+  COMMAND: 13,
+});
+
+const PARTY_SUBOPCODES = Object.freeze({
+  CREATE: 0x01,
+  PERMIT: 0x02,
+  INSERT: 0x03,
+  REMOVE: 0x04,
+  DELETE: 0x05,
+});
+
+const FRIEND_SUBOPCODES = Object.freeze({ REQUEST: 1, REPORT: 2, ADD: 3, REMOVE: 4 });
+const KNIGHTS_SUBOPCODES = Object.freeze({
+  CREATE: 0x01, JOIN: 0x02, WITHDRAW: 0x03, REMOVE: 0x04, DESTROY: 0x05,
+  ADMIT: 0x06, REJECT: 0x07, PUNISH: 0x08, CHIEF: 0x09, VICE_CHIEF: 0x0a,
+  OFFICER: 0x0b, MEMBER_REQ: 0x0d, CURRENT_REQ: 0x0e, MODIFY_FAME: 0x10, JOIN_REQ: 0x11,
+});
+
+const NATION = Object.freeze({ KARUS: 1, EL_MORAD: 2 });
+const ZONE = Object.freeze({
+  KARUS_HOME: 1,
+  EL_MORAD_HOME: 2,
+  KARUS_ESLANT: 11,
+  EL_MORAD_ESLANT: 12,
+  MORADON: 21,
+  ARENA: 48,
+  BATTLE_1: 101,
+  BATTLE_2: 102,
+  BATTLE_3: 103,
+  SNOW_BATTLE: 111,
+});
+
+const LIMITS = Object.freeze({ MAX_MESSAGE_BYTES: 512, MAX_NAME_BYTES: 30, MAX_PARTY_MEMBERS: 8, MAX_FRIENDS: 29 });
+const PARTY_RESULT = Object.freeze({ GENERIC_FAILURE: -1, NATION_MISMATCH: -3 });
+
+module.exports = {
+  OPCODES, CHAT_TYPES, PARTY_SUBOPCODES, FRIEND_SUBOPCODES, KNIGHTS_SUBOPCODES,
+  NATION, ZONE, LIMITS, PARTY_RESULT,
+};

@@ -1,0 +1,8 @@
+{
+  "name": "@oldko/ko1298-social-p2",
+  "version": "0.2.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": { "test": "node --test ../../tests/ko1298-social/*.test.js", "check": "node --check *.js" },
+  "engines": { "node": ">=20" }
+}
