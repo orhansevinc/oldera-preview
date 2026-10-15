@@ -10,9 +10,9 @@ Every long-running service should have bounded logs, for example `logging: { dri
 
 ## Nginx / P2-02 dependency
 
-Port `nginx-phase2-cache.conf` into the final edge config after P2-02 publishes its cache/fingerprint contract. Until content-addressed or release-versioned asset URLs are guaranteed, P2-12 intentionally uses short `must-revalidate` caching for `.wasm/.data/.js` instead of a year-long `immutable` policy. HTML, API, auth, admin, and WebSocket routes are `no-store`.
+P2-02 implementation `729f9029d563f72728a7251869d2633fb1bdd5e3` now publishes the cache/fingerprint contract. Port `nginx-phase2-cache.conf` into the final edge config: `/real1298/runtime-manifest.json` is `no-store`; play shell/loading scripts revalidate; unversioned runtime files use short `must-revalidate`; only P2-02 hash-versioned `?sha256=...&bytes=...&cv=...` runtime requests may use long-lived `immutable` caching. API, auth, admin, credentials, and WebSocket routes remain `no-store`.
 
-The final edge must keep `application/wasm`, byte ranges, COOP/COEP/CORP, WebSocket upgrade headers, 3600-second read/send timeouts, and `proxy_buffering off` for game sockets. Diagnostics checks these headers separately from login evidence.
+The final edge must keep `application/wasm`, JavaScript/JSON MIME, `.data` as `application/octet-stream`, byte ranges, `Vary: Accept-Encoding` through `gzip_vary`, COOP/COEP/CORP, WebSocket upgrade headers, 3600-second read/send timeouts, and `proxy_buffering off` for game sockets. JS/WASM compression is enabled conservatively; `.data` is deliberately excluded from blind gzip. Diagnostics checks these headers separately from login evidence. P2-13 still owns same-device cold/warm transfer/time proof.
 
 ## P2-11 migration dependency
 
