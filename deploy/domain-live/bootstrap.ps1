@@ -89,7 +89,8 @@ if (-not (Test-Path -LiteralPath $adminUsersPath)) {
     $runtimeImage = [string]$status.images.runtime.tag
     $hash = (& docker run --rm -e "ADMIN_BOOTSTRAP_PASSWORD=$adminPassword" $runtimeImage node -e "const s=require('./services/admin-api/src/security');process.stdout.write(s.hashPassword(process.env.ADMIN_BOOTSTRAP_PASSWORD));" 2>&1 | Out-String).Trim()
     if ($LASTEXITCODE -ne 0 -or -not $hash.StartsWith('scrypt$')) { throw 'Failed to generate WS08 admin password hash' }
-    $admin = @(@{ id='local-owner'; username='owner'; passwordHash=$hash; roles=@('OWNER') }) | ConvertTo-Json -Compress
+    $adminObject = @{ id='local-owner'; username='owner'; passwordHash=$hash; roles=@('OWNER') }
+    $admin = ConvertTo-Json -Compress -InputObject @($adminObject)
     Write-AsciiNoBom $adminUsersPath $admin
     Write-AsciiNoBom $credentialPath ("username=owner`r`npassword=$adminPassword`r`n")
 }
