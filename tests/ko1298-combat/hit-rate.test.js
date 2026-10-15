@@ -1,0 +1,4 @@
+'use strict';
+const test=require('node:test');const assert=require('node:assert/strict');const {HIT_OUTCOME,outcomeForRoll}=require('../../services/ko1298-combat');
+test('all verified hit threshold boundaries remain exact',()=>{const cases=[[5,[3500,7500,9800]],[3,[2500,6000,9600]],[2,[2000,5000,9400]],[1.25,[1500,4000,9200]],[.8,[1000,3000,9000]],[.5,[800,2500,8000]],[.33,[600,2000,7000]],[.2,[400,1500,6000]],[.1,[200,1000,5000]]];for(const [rate,[a,b,c]] of cases){assert.equal(outcomeForRoll(rate,a),HIT_OUTCOME.GREAT_SUCCESS);assert.equal(outcomeForRoll(rate,a+1),HIT_OUTCOME.SUCCESS);assert.equal(outcomeForRoll(rate,b+1),HIT_OUTCOME.NORMAL);assert.equal(outcomeForRoll(rate,c+1),HIT_OUTCOME.FAIL);}});
+test('invalid roll fails closed',()=>assert.throws(()=>outcomeForRoll(1,0),/1\.\.10000/));

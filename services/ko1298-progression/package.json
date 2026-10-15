@@ -1,0 +1,14 @@
+{
+  "name": "@oldkoweb/ko1298-progression",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OldKO 1298 progression domain: XP, level, death and respawn",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test ../../tests/ko1298-progression/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

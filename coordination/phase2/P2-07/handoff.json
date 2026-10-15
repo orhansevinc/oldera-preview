@@ -1,0 +1,234 @@
+{
+  "schema_version": 1,
+  "workstream": "P2-07",
+  "status": "BLOCKED",
+  "ready_for_integration": false,
+  "branch": "phase2/07-combat",
+  "base": {
+    "branch": "ws50-integration-rehearsal",
+    "sha": "50ecabec15bd358d222a01891ca31359f3a928b0"
+  },
+  "coordinator": "phase2/00-integration",
+  "code_sha": "b43360eb1c3bc3448cee154a2236ddebb2278a6b",
+  "live_deploy_performed": false,
+  "coordination_inputs": {
+    "CHARTER.md": "MISSING_AT_TASK_START",
+    "OWNERS.json": "MISSING_AT_TASK_START",
+    "CONTRACTS.md": "MISSING_AT_TASK_START",
+    "dependency_proposal": "coordination/phase2/P2-07/DEPENDENCIES.md"
+  },
+  "continued_from": [
+    {
+      "workstream": "WS19",
+      "branch": "ws19-combat-core",
+      "sha": "cc1490672b676f0bf1675f83c8f4fc146b940df4",
+      "imported_service_tree": "8d00996fa39cbbd25a5a851b24118f619478843d",
+      "imported_test_tree": "1881960d6d536def81ba0f9006860f837b7f09ca",
+      "imported_evidence_tree": "8181013d4976afa95bc5873f9653a76bdf098ce6"
+    },
+    {
+      "workstream": "WS27",
+      "branch": "ws27-progression",
+      "sha": "e984a73c3be8a7407bfc3a34907f3d3376134add",
+      "imported_service_tree": "01a543bb00b776c3fbb18125e6eb81e95a91ffb4",
+      "imported_test_tree": "aca76024691aec1343864467e06034dea28a1b0b"
+    },
+    {
+      "workstream": "WS34",
+      "branch": "ws34-character-rules",
+      "sha": "ce87542f9c86245d29b1a73d5dd25fdae6028691",
+      "use": "class and promoted-class source rules reviewed; no wholesale merge"
+    }
+  ],
+  "source_pins": {
+    "openko_server": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5",
+    "openko_client_assets": "Open-KO/ko-client-assets@b4636332c7cd818b0ce171eccc973dd3d6b2e56d",
+    "openko_db": "Open-KO/OpenKO-db@bec619466938d278339c30e5b1a4bff3c9413bab"
+  },
+  "scope": {
+    "implemented_or_preserved": [
+      "real WIZ_ATTACK/WIZ_MAGIC_PROCESS session routing into combatAdapter.execute",
+      "production-server combat composition hook without changing login/camera/site/admin flows",
+      "server-authoritative PvE normal melee hit/miss/damage and mob-to-player damage",
+      "verified representative Type1 melee, Type2 ranged, Type3 heal/damage/duration and Type4 buff/debuff rule engine from WS19",
+      "resource/class/level/skill-point/item/range/zone validation surfaces and replay-safe request keys",
+      "single live-to-dead transition handling through existing mob/player authority ports",
+      "WS27 exp/level/stat/skill-point/death/respawn rules",
+      "persistent progression replay fence through PgOperationReceiptRepository-compatible transaction port",
+      "source-backed exhaustive player skill catalog generator and CI artifact"
+    ],
+    "explicitly_not_claimed": [
+      "all 984 catalog records are production-executable",
+      "Type5/7/8/9 behavior is implemented merely because a source row exists",
+      "client recast metadata is authoritative server cooldown",
+      "PvP policy/rewards/death loss are inferred from PvE",
+      "real C++/WASM UI usability is proven by API/protocol tests",
+      "missing animation/effect/icon filenames are guessed"
+    ]
+  },
+  "skill_catalog": {
+    "generator": "services/ko1298-combat/source-skill-catalog.js",
+    "builder": "tools/p2-07/build-skill-catalog.js",
+    "artifact_name": "p2-07-1298-player-skill-catalog",
+    "artifact_id": 12000124061,
+    "artifact_zip_sha256": "4eda8367cebf2d42ee41ab11815dc9ecef3d3308437f670f0fb83f1be452694d",
+    "player_record_count": 984,
+    "coverage": {
+      "BUFF_DEBUFF_STATS": 320,
+      "PHYSICAL_MELEE": 168,
+      "PHYSICAL_RANGED": 60,
+      "MAGIC_HP_OR_DURATION": 398,
+      "PASSIVE_OR_METADATA": 54,
+      "SOURCE_TYPE_5": 30,
+      "SOURCE_TYPE_7": 16,
+      "SOURCE_TYPE_8": 22,
+      "SOURCE_TYPE_9": 16
+    },
+    "record_fields": [
+      "id",
+      "class/promoted-class namespace",
+      "level or skill-point requirement",
+      "target moral",
+      "range",
+      "client cast/recast metadata",
+      "server cooldown authority state",
+      "MP/SP/HP/item costs",
+      "Type1-Type4 parsed effect data when source-backed",
+      "behavior/execution status",
+      "WIZ_MAGIC_PROCESS wire contract"
+    ]
+  },
+  "files": [
+    "services/ko1298-combat/**",
+    "services/ko1298-progression/**",
+    "services/ko1298-combat/source-skill-catalog.js",
+    "services/ko1298-progression/postgres-transaction-port.js",
+    "services/ko1298-session/p2-07-combat-composition.js",
+    "services/ko1298-session/production-server.js",
+    "tools/p2-07/build-skill-catalog.js",
+    "tests/ko1298-combat/**",
+    "tests/ko1298-progression/**",
+    "tests/ko1298-session/p2-07-combat-composition.test.js",
+    "coordination/phase2/P2-07/DEPENDENCIES.md",
+    ".github/workflows/p2-07-combat.yml"
+  ],
+  "contracts": [
+    {
+      "consumer": "P2-01",
+      "name": "combat.speed-effect.v1",
+      "summary": "P2-07 emits verified speed-effect facts; P2-01 remains movement/coordinate authority."
+    },
+    {
+      "consumer": "P2-06",
+      "name": "combat.mob-authority.v1",
+      "summary": "P2-06 supplies mob intent/snapshot; P2-07 resolves hit/damage/death result; P2-06 applies absolute HP through its existing authority."
+    },
+    {
+      "consumer": "P2-09",
+      "name": "combat.pvp-policy.v1",
+      "summary": "PvP target, reward and death-loss policy must be injected and fails closed if absent."
+    },
+    {
+      "consumer": "P2-08/P2-11",
+      "name": "combat.result-transaction.v1",
+      "summary": "Stable operationId plus progression/item expected versions and one receipt boundary; P2-07 does not create a second inventory transaction authority."
+    },
+    {
+      "consumer": "P2-10/P2-02",
+      "name": "combat.skill-visibility-assets.v1",
+      "summary": "Server eligibility/catalog facts are separate from UI binding and binary icon/animation/FX mapping."
+    }
+  ],
+  "tests_and_evidence": {
+    "api_protocol_and_rule_tests": {
+      "status": "PASS",
+      "github_actions_run_id": 38793376306,
+      "job_id": 116623392834,
+      "tests": 105,
+      "passed": 105,
+      "failed": 0,
+      "covers": [
+        "combat packet routing",
+        "wrong-state and malformed rejection",
+        "normal attack and Slash source-backed PvE slice",
+        "Type1-Type4 representative behaviors",
+        "duplicate attack/death/reward guards",
+        "progression and reconnect model",
+        "P2-07 production composition fail-closed boundaries",
+        "984-record pinned-source catalog audit"
+      ]
+    },
+    "real_client_usable_skill": {
+      "status": "NOT_PROVEN",
+      "reason": "No interactive C++/WASM run from UI skill visibility through cast animation/effect to authoritative server result was completed on this branch. Protocol/session tests are not counted as this evidence."
+    },
+    "production_postgresql_relog": {
+      "status": "NOT_PROVEN_END_TO_END",
+      "reason": "Persistent receipt/CAS transaction port and progression reconnect tests exist, but a Docker/PostgreSQL kill->XP->relog end-to-end run with the final Phase 2 provider composition was not completed."
+    }
+  },
+  "asset_reports_to_p2_10_p2_02": [
+    {
+      "id": "SLASH_ICON_101003",
+      "status": "SOURCE_VERIFIED",
+      "path": "UI/skillicon_03_1010.dxt"
+    },
+    {
+      "id": "SLASH_ANIMATION_ID_TO_BINARY_UNRESOLVED",
+      "detail": "Skill 101003 action 128 / self animation 26 -> exact animation binary filename unresolved"
+    },
+    {
+      "id": "SLASH_SELF_FX_ID_TO_BINARY_UNRESOLVED",
+      "detail": "Skill 101003 self FX 2601 -> exact binary filename unresolved"
+    },
+    {
+      "id": "SLASH_TARGET_FX_ID_TO_BINARY_UNRESOLVED",
+      "detail": "Skill 101003 target FX 10002 -> exact binary filename unresolved"
+    },
+    {
+      "id": "SHORT_SWORD_RESOURCE_ID_TO_BINARY_UNRESOLVED",
+      "detail": "Starter item 120010000 resource 12011000 -> exact model filename unresolved"
+    },
+    {
+      "id": "SHORT_SWORD_ICON_RESOURCE_ID_TO_BINARY_UNRESOLVED",
+      "detail": "Starter item 120010000 icon resource 12011000 -> exact icon filename unresolved"
+    }
+  ],
+  "blockers": [
+    {
+      "id": "P2_07_FULL_SKILL_EXECUTION_NOT_WIRED",
+      "owner": "P2-07",
+      "detail": "The production PvE adapter still executes the verified Slash slice; the generic Type1-Type4 engine is not yet wired across all eligible catalog records. Type5/7/8/9 are cataloged but not source-complete executors."
+    },
+    {
+      "id": "P2_07_SERVER_COOLDOWN_AUTHORITY_INCOMPLETE",
+      "owner": "P2-07",
+      "detail": "Per-skill server cooldown authority has not been source-backed for the complete catalog; client recast values remain metadata only."
+    },
+    {
+      "id": "P2_04_COMBAT_LOS_PORT_REQUIRED",
+      "owner": "P2-04",
+      "detail": "Complete ranged/magic production validation needs an authoritative line-of-sight/world query in addition to existing zone/range ports."
+    },
+    {
+      "id": "P2_08_11_ATOMIC_ITEM_COMBAT_TRANSACTION_REQUIRED",
+      "owner": "P2-08/P2-11",
+      "detail": "Arrow/reagent/item consumption and progression/resource result must share the agreed single operation receipt/transaction boundary before broad production skill enablement."
+    },
+    {
+      "id": "P2_09_PVP_POLICY_REQUIRED",
+      "owner": "P2-09",
+      "detail": "Player-vs-player target legality, rewards and death-loss policy are intentionally fail-closed until injected."
+    },
+    {
+      "id": "P2_10_02_REAL_SKILL_UI_ASSET_PROOF_REQUIRED",
+      "owner": "P2-10/P2-02",
+      "detail": "Skill-tree/UI binding and exact binary animation/self-FX/target-FX/icon mappings must be completed before claiming real-client usable skills."
+    },
+    {
+      "id": "P2_07_POSTGRES_REAL_CLIENT_E2E_REQUIRED",
+      "owner": "P2-07 + integration",
+      "detail": "Two-player/mob HP-MP-cooldown and kill->XP->relog persistence need one final real C++/WASM + Docker/PostgreSQL composed acceptance run."
+    }
+  ]
+}

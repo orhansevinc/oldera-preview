@@ -1,0 +1,63 @@
+name: P2-07 combat authority
+
+on:
+  push:
+    branches: [phase2/07-combat]
+    paths:
+      - 'services/ko1298-combat/**'
+      - 'services/ko1298-progression/**'
+      - 'services/ko1298-session/**'
+      - 'tests/ko1298-combat/**'
+      - 'tests/ko1298-progression/**'
+      - 'tests/ko1298-session/**'
+      - 'tools/p2-07/**'
+      - 'coordination/phase2/P2-07/**'
+      - '.github/workflows/p2-07-combat.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Unit and protocol tests
+        run: >-
+          node --test
+          tests/ko1298-combat/*.test.js
+          tests/ko1298-progression/*.test.js
+          tests/ko1298-session/combat-routing.test.js
+          tests/ko1298-session/p2-07-combat-composition.test.js
+      - name: Fetch pinned 1298 skill tables
+        run: |
+          mkdir -p /tmp/p207
+          curl -fsSL https://raw.githubusercontent.com/Open-KO/ko-client-assets/b4636332c7cd818b0ce171eccc973dd3d6b2e56d/Data/Skill_Magic_Main_us.tbl.csv -o /tmp/p207/main.csv
+          curl -fsSL https://raw.githubusercontent.com/Open-KO/ko-client-assets/b4636332c7cd818b0ce171eccc973dd3d6b2e56d/Data/Skill_Magic_1.tbl.csv -o /tmp/p207/type1.csv
+          curl -fsSL https://raw.githubusercontent.com/Open-KO/ko-client-assets/b4636332c7cd818b0ce171eccc973dd3d6b2e56d/Data/Skill_Magic_2.tbl.csv -o /tmp/p207/type2.csv
+          curl -fsSL https://raw.githubusercontent.com/Open-KO/ko-client-assets/b4636332c7cd818b0ce171eccc973dd3d6b2e56d/Data/skill_magic_3.tbl.csv -o /tmp/p207/type3.csv
+          curl -fsSL https://raw.githubusercontent.com/Open-KO/ko-client-assets/b4636332c7cd818b0ce171eccc973dd3d6b2e56d/Data/skill_magic_4.tbl.csv -o /tmp/p207/type4.csv
+      - name: Build exhaustive player skill catalog
+        run: |
+          node <<'NODE'
+          const fs=require('node:fs');
+          const {buildSkillCatalog}=require('./services/ko1298-combat/source-skill-catalog');
+          const c=buildSkillCatalog({
+            mainCsv:fs.readFileSync('/tmp/p207/main.csv','utf8'),
+            typeCsv:{1:fs.readFileSync('/tmp/p207/type1.csv','utf8'),2:fs.readFileSync('/tmp/p207/type2.csv','utf8'),3:fs.readFileSync('/tmp/p207/type3.csv','utf8'),4:fs.readFileSync('/tmp/p207/type4.csv','utf8')},
+          });
+          const records=c.records.filter(r=>r.namespace.className);
+          if(records.length < 100) throw new Error(`player skill catalog unexpectedly small: ${records.length}`);
+          const behavior={}; for(const r of records) for(const b of r.effect.behaviors) behavior[b]=(behavior[b]||0)+1;
+          const output={schemaVersion:c.schemaVersion,sourceLock:c.sourceLock,recordCount:records.length,coverage:behavior,records};
+          fs.writeFileSync('/tmp/p207/P2-07-1298-player-skill-catalog.json',JSON.stringify(output,null,2)+'\n');
+          console.log(JSON.stringify({recordCount:records.length,coverage:behavior}));
+          NODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p2-07-1298-player-skill-catalog
+          path: /tmp/p207/P2-07-1298-player-skill-catalog.json

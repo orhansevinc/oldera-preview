@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "task_provider_pins": {
+    "ws11": { "branch": "ws11-protocol-lab", "head": "4e86f75c55e66bef3da5cb8aa037d69b9f5c4852" },
+    "ws25": { "branch": "ws25-mob-ai", "head": "18c9e9b8439fef88fc93d74bfec7981b0cb41958" },
+    "ws31": { "branch": "ws31-data-catalog", "head": "56ada741532c8f6cabfc83b129a8e87e645db055" }
+  },
+  "source_pins": {
+    "openko_server": "7d6cf81093e142c928c2ac9510512b2b182178b5",
+    "openko_db": "bec619466938d278339c30e5b1a4bff3c9413bab",
+    "client_assets": "b4636332c7cd818b0ce171eccc973dd3d6b2e56d"
+  },
+  "canonical_slice": {
+    "character": { "nation_id": 1, "race_id": 1, "class_id": 101, "level": 3 },
+    "weapon": { "item_id": 120010000, "name": "Short Sword", "weapon_type_id": 21, "weapon_type": "SWORD", "damage": 4, "weapon_range": 1.0, "attack_delay_ms": 1140 },
+    "skill": { "skill_id": 101003, "name": "slash", "phase": "EFFECTING", "moral": 7, "required_level": 3, "resource_cost": 4, "type1": { "type": 0, "hit_rate_mod": 100, "damage_mod": 120 }, "client_recast_ms": 3100 },
+    "mob": { "sid": 850, "name": "Bandicoot", "level": 2, "hp": 11, "max_hp": 11, "mp": 48, "ac": 10, "hit_rate": 1, "evade_rate": 1, "attack": 0, "damage": 3, "attack_delay_ms": 1700, "attack_range": 5 }
+  },
+  "deterministic_player_fixture": {
+    "policy": "REAL_LEGAL_CHARACTER_FIXTURE_NOT_PRODUCT_DEFAULT",
+    "new_chr_row": { "id": 10101, "str": 65, "sta": 65, "dex": 60, "int": 50, "map": 50, "bonus": 10 },
+    "chosen_initial_bonus_allocation": { "str": 10, "sta": 0, "dex": 0, "int": 0, "map": 0 },
+    "unspent_levelup_points": 6,
+    "effective_stats": { "str": 75, "sta": 65, "dex": 60, "int": 50, "map": 50 },
+    "class_coefficient": { "sword": 0.00013, "hp": 0.0015, "mp": 0, "sp": 0.0015, "ac": 1, "hit_rate": 0.01, "evasion_rate": 0.01 },
+    "derived_combat": { "ap": 5, "ac": 3, "hit_rate": 2.8, "evasion_rate": 2.8, "max_hp": 33, "resource_kind": "SP", "max_resource": 33 },
+    "source_refs": [
+      "Open-KO/ko-client-assets@b4636332c7cd818b0ce171eccc973dd3d6b2e56d:Data/NewChrValue.tbl.csv#10101",
+      "Open-KO/OpenKO-db@bec619466938d278339c30e5b1a4bff3c9413bab:ManualSetup/6_InsertData_COEFFICIENT.sql#101",
+      "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:src/Server/Ebenezer/User.cpp::SetUserAbility"
+    ]
+  },
+  "slash_range_authority": {
+    "raw_valid_distance": 0,
+    "client_rule": "RIGHT_HAND_WEAPON_RANGE_PLUS_TARGET_RADIUS_PLUS_1",
+    "client_formula": "rightHand.siAttackRange/10.0 + targetRadius + 1.0",
+    "server_type1_distance_enforcement": "NONE_IN_PINNED_SOURCE",
+    "source_refs": [
+      "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:src/Client/WarFare/MagicSkillMng.cpp::CheckValidDistance",
+      "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:src/Server/Ebenezer/MagicProcess.cpp::IsAvailable",
+      "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:src/Server/AIServer/MagicProcess.cpp::ExecuteType1"
+    ]
+  }
+}
