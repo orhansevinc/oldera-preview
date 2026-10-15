@@ -19,4 +19,4 @@ The PostgreSQL adapter uses the schema already present at the WS50 baseline: `ol
 
 ## Tests
 
-`tests/phase2/p2-08-items/authority.test.cjs` is a deterministic provider test. `postgres.integration.test.cjs` is opt-in (`P2_08_REAL_POSTGRES=1`, `DATABASE_URL=...`) and verifies rollback plus replay after constructing a fresh transaction-manager instance. Real two-client trade/NPC shopping/relog acceptance remains an integration gate and must not be inferred from service tests.
+`tests/phase2/p2-08-items/authority.test.cjs` is a deterministic provider test. `postgres.integration.test.cjs` is opt-in (`P2_08_REAL_POSTGRES=1`, `DATABASE_URL=...`) and verifies rollback plus replay after constructing a fresh transaction-manager instance. Real two-client trade/NPC shopping/relog acceptance is defined in `workstreams/p2-08/acceptance.md`; it remains an integration gate and must not be inferred from service tests.
