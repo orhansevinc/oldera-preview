@@ -1,0 +1,36 @@
+name: P2-04 World Authority
+
+on:
+  push:
+    branches: ['phase2/04-world']
+    paths:
+      - 'services/ko1298-world/**'
+      - 'tests/ko1298-world/**'
+      - 'coordination/phase2/P2-04/**'
+      - '.github/workflows/p2-04-world.yml'
+  workflow_dispatch:
+
+jobs:
+  world-source-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Unit and contract tests
+        run: node --test tests/ko1298-world/p2-world-scope.test.js
+      - name: Fetch exact 1298 server map sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/p2-world-maps"
+          mkdir -p "$root"
+          base='https://raw.githubusercontent.com/Open-KO/KnightOnline/7d6cf81093e142c928c2ac9510512b2b182178b5/assets/Server/MAP'
+          for file in karus_0730.smd elmorad_1220.smd k_eslant.smd e_eslant.smd moradon_0826.smd freezone_1217.smd; do
+            curl --fail --location --silent --show-error --retry 3 "$base/$file" -o "$root/$file"
+          done
+          echo "P2_WORLD_MAP_ROOT=$root" >> "$GITHUB_ENV"
+      - name: Real SMD terrain/collision/source-spawn gate
+        run: node --test tests/ko1298-world/p2-real-maps.test.js
