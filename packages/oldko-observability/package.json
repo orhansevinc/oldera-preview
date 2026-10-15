@@ -1,9 +1,12 @@
 {
   "name": "@oldko/observability",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Backend-agnostic observability contracts and utilities for OldKOWeb services.",
+  "description": "Backend-agnostic observability contracts and domain-live diagnostics for OldKOWeb services.",
+  "bin": {
+    "oldko-diagnostics": "./bin/oldko-diagnostics.js"
+  },
   "exports": {
     ".": "./src/index.js",
     "./context": "./src/context.js",
@@ -12,13 +15,18 @@
     "./health": "./src/health.js",
     "./shutdown": "./src/shutdown.js",
     "./prometheus": "./src/prometheus.js",
-    "./redaction": "./src/redaction.js"
+    "./redaction": "./src/redaction.js",
+    "./correlation": "./src/correlation.js",
+    "./identity": "./src/identity.js",
+    "./classification": "./src/classification.js",
+    "./collector": "./src/collector.js",
+    "./incident-bundle": "./src/incident-bundle.js"
   },
   "engines": {
     "node": ">=20"
   },
   "scripts": {
     "test": "node --test ../../tests/observability/*.test.mjs",
-    "check": "node --check src/index.js && node --check src/context.js && node --check src/redaction.js && node --check src/logger.js && node --check src/metrics.js && node --check src/health.js && node --check src/shutdown.js && node --check src/prometheus.js"
+    "check": "node --check src/index.js && node --check src/context.js && node --check src/redaction.js && node --check src/logger.js && node --check src/metrics.js && node --check src/health.js && node --check src/shutdown.js && node --check src/prometheus.js && node --check src/correlation.js && node --check src/identity.js && node --check src/classification.js && node --check src/collector.js && node --check src/incident-bundle.js && node --check bin/oldko-diagnostics.js"
   }
 }
