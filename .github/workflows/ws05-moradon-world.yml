@@ -21,6 +21,7 @@ env:
   WS15_PIN: ce9bed13b8d45c32ff0592595aa3a0d1e7b3964d
   WS16_PIN: 5ed48ff32187000312652838674388df52fc3fb7
   WS25_PIN: 18c9e9b8439fef88fc93d74bfec7981b0cb41958
+  WS31_PIN: 56ada741532c8f6cabfc83b129a8e87e645db055
   OPENKO_PIN: 97eb0ea20207afc0c360bfed6915113572711be3
   KO_ASSETS_PIN: 2055ee6ed77f1b5cfef23832dd5bc31909e14a66
   QA_ARTIFACT_DIR: artifacts/ws05-human-visible
@@ -48,6 +49,7 @@ jobs:
             tools/ws05_moradon/patch_bandicoot_asset_probe.py \
             tools/ws05_moradon/tighten_visibility_v2.py \
             tools/ws05_moradon/build_human_visible_evidence.py
+          node --check tools/ws05_moradon/verify_ws25_record_contract.cjs
           node --check tools/ws05_moradon/integration_server_human_visible.cjs
           node --check tools/ws05_moradon/browser_human_visible_driver.cjs
           if grep -En 'ccall\(|cwrap\(|Module\._|applyDamage\(|injectDamage|memory.*position|position.*memory' tools/ws05_moradon/browser_human_visible_driver.cjs; then
@@ -56,6 +58,8 @@ jobs:
           fi
           grep -q 'RealBrowserInput' tools/ws05_moradon/browser_human_visible_driver.cjs
           grep -q 'fake_teleport=0' tools/ws05_moradon/integration_server_human_visible.cjs
+          grep -q "detail?.template_id==='ko1298:monster:850'" tools/ws05_moradon/integration_server_human_visible.cjs
+          grep -q "record?.detail?.pid===800" tools/ws05_moradon/integration_server_human_visible.cjs
 
   native-human-visible:
     needs: contract
@@ -76,8 +80,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$QA_ARTIFACT_DIR" .providers
-          git fetch --no-tags origin "$WS38_PIN" "$WS10_PIN" "$WS02_PIN" "$WS03_PIN" "$WS14_PIN" "$WS15_PIN" "$WS16_PIN" "$WS25_PIN"
+          git fetch --no-tags origin "$WS38_PIN" "$WS10_PIN" "$WS02_PIN" "$WS03_PIN" "$WS14_PIN" "$WS15_PIN" "$WS16_PIN" "$WS25_PIN" "$WS31_PIN"
           git show "$WS38_PIN:workstreams/ws38/MORADON_PLAYABLE_COMBAT_ASSET_MANIFEST.json" > "$QA_ARTIFACT_DIR/ws38-manifest.json"
+          printf 'ws38 %s\n' "$WS38_PIN" > "$QA_ARTIFACT_DIR/provider-refs.txt"
           stage(){ key="$1"; sha="$2"; git worktree add --detach ".providers/$key" "$sha"; printf '%s %s\n' "$key" "$sha" >> "$QA_ARTIFACT_DIR/provider-refs.txt"; }
           stage ws10 "$WS10_PIN"
           stage ws02 "$WS02_PIN"
@@ -86,6 +91,7 @@ jobs:
           stage ws15 "$WS15_PIN"
           stage ws16 "$WS16_PIN"
           stage ws25 "$WS25_PIN"
+          stage ws31 "$WS31_PIN"
           python3 - "$QA_ARTIFACT_DIR/ws38-manifest.json" <<'PY'
           import json,sys
           m=json.load(open(sys.argv[1]))
@@ -109,6 +115,38 @@ jobs:
           assert hashlib.sha1(f'blob {len(d)}\0'.encode()+d).hexdigest()=='cf47772b8e42a8bad71032419f47978c8bbd6142'
           PY
           echo "WS14_MORADON_SMD=$SMD" >> "$GITHUB_ENV"
+
+      - name: Verify exact WS25 record contract before native build
+        shell: bash
+        run: |
+          set -euo pipefail
+          WS14_ROOT="$GITHUB_WORKSPACE/.providers/ws14" \
+          WS16_ROOT="$GITHUB_WORKSPACE/.providers/ws16" \
+          WS25_ROOT="$GITHUB_WORKSPACE/.providers/ws25" \
+          WS14_MORADON_SMD="$WS14_MORADON_SMD" \
+          WS16_NPC_DATA="$GITHUB_WORKSPACE/.providers/ws16/world-data/npc/moradon.json" \
+          WS25_MOB_DATA="$GITHUB_WORKSPACE/.providers/ws25/world-data/mobs/verified/moradon-zone21.verified.json" \
+          WS05_RECORD_CONTRACT_OUT="$QA_ARTIFACT_DIR/ws25-record-contract.json" \
+          node tools/ws05_moradon/verify_ws25_record_contract.cjs | tee "$QA_ARTIFACT_DIR/ws25-record-contract.log"
+          python3 - "$QA_ARTIFACT_DIR/ws25-record-contract.json" <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1]))
+          assert d['result']=='PASS'
+          assert d['provider_pins']=={
+            'ws14':'ed5f806ce7505f4dfae406e4164735def63b6c86',
+            'ws16':'5ed48ff32187000312652838674388df52fc3fb7',
+            'ws25':'18c9e9b8439fef88fc93d74bfec7981b0cb41958',
+            'ws31':'56ada741532c8f6cabfc83b129a8e87e645db055'}
+          assert d['counts']['mob']==135 and d['counts']['bandicoot']>0
+          assert d['selector']['semantic_contract']=='visibilitySnapshot.detail'
+          assert d['selector']['template_id']=='ko1298:monster:850' and d['selector']['pid']==800
+          assert d['selector']['pid_exposed_by_ws25'] is True
+          assert d['selector']['ws31_pid_mapping_required'] is False
+          assert d['selected_bandicoot']['sid']==850 and d['selected_bandicoot']['pid']==800
+          assert isinstance(d['selected_bandicoot']['runtimeId'],int)
+          for k in ('x','y','z'): assert isinstance(d['selected_bandicoot'][k],(int,float))
+          print('WS05_WS25_SCHEMA_GATE PASS')
+          PY
 
       - name: Checkout exact OpenKO and genuine assets
         uses: actions/checkout@v4
@@ -261,6 +299,7 @@ jobs:
           test -n "$BANDICOOT_IDS"
           test -n "$NPC_IDS"
           echo "Bandicoot runtime IDs: $BANDICOOT_IDS"
+          echo "NPC runtime IDs: $NPC_IDS"
           CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
           WS10_REAL_INPUT="$GITHUB_WORKSPACE/.providers/ws10/qa/moradon/v2/real-browser-input.cjs" \
           WS05_BANDICOOT_IDS="$BANDICOOT_IDS" WS05_NPC_IDS="$NPC_IDS" \
@@ -270,6 +309,7 @@ jobs:
           python3 tools/ws05_moradon/build_human_visible_evidence.py \
             --asset-proof "$QA_ARTIFACT_DIR/bandicoot-asset-stage.json" \
             --pack-proof "$QA_ARTIFACT_DIR/packed-paths.txt" \
+            --record-contract "$QA_ARTIFACT_DIR/ws25-record-contract.json" \
             --server-log "$QA_ARTIFACT_DIR/composition-server.log" \
             --browser-log "$QA_ARTIFACT_DIR/browser-console.log" \
             --browser-result "$QA_ARTIFACT_DIR/browser-result.json" \
@@ -297,6 +337,8 @@ jobs:
         if: failure()
         shell: bash
         run: |
+          echo '--- WS25 record contract ---'
+          cat "$QA_ARTIFACT_DIR/ws25-record-contract.json" 2>/dev/null || true
           echo '--- composition tail ---'
           tail -n 400 "$QA_ARTIFACT_DIR/composition-server.log" 2>/dev/null || true
           echo '--- browser tail ---'
