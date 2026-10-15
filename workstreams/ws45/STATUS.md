@@ -2,53 +2,50 @@
 
 - Workstream: `WS45`
 - Branch: `ws45-session-ownership`
-- Base: `main`
+- Task start: `4a66338743553c2781c68ca84b866ff4e999c14e`
 - State: `COMPLETE`
-- Integration readiness: `READY` with one infrastructure condition: production must supply a shared atomic lease-store adapter.
+- Production shared atomic lease-store condition: `RESOLVED`.
 
 ## Delivered
 
 - Account session leases.
 - Character session leases with account-ownership precondition.
 - Configurable duplicate-login policy (`reject-new` / `replace-old`).
-- Stale lease reclaim.
-- Heartbeat renewal.
-- Crash recovery through lease expiry.
-- Reconnect grace and CAS resume primitive.
-- Disconnect cleanup with idempotent grace behavior.
-- Compare-and-set ownership store contract.
-- Account-ban active-session revoke interface.
-- GM kick/session revoke interface.
+- Stale lease reclaim, heartbeat renewal, crash recovery, reconnect grace, and CAS resume.
+- Account-ban/session revoke and character-owner kick/revoke surfaces.
 - In-memory reference/test adapter.
-- Race/concurrency tests.
-- GitHub Actions workflow.
-- Integration notes without modifying WS03/WS07/WS13/gateway.
+- `createPostgresLeaseStore(...)` backed by the single `oldko.session_leases` PostgreSQL table.
+- Transactional PostgreSQL CAS using unique-key insert conflict semantics plus version-conditional update/delete.
+- Atomic replace-old/stale-account cleanup of displaced character leases.
+- WS45 service-owned migration and migration manifest; no changes to the WS07 numbered migration ledger.
+- Narrow admin ownership contract for authoritative online leases and revoke/kick only.
+- Real PostgreSQL multi-store race/restart/reconnect/admin integration tests.
+
+## Production database contract
+
+WS07 already establishes `oldko.session_leases` in `database/migrations/0002_persistence_hardening.sql`. WS45 uses that exact shared table rather than creating a second source of truth. The WS45 service migration is idempotent, is ordered after WS07 `0002`, and adds the explicit `expires_at` alias plus supporting indexes without modifying WS07 migration files.
+
+Production configuration supplies `DATABASE_URL`; no connection string, password, auth secret, or session secret is committed or logged.
 
 ## Verification
 
-Command:
+The workflow `.github/workflows/ws45-sessions.yml` runs the original 16 in-memory/concurrency tests plus a PostgreSQL 16 integration suite covering:
 
-```bash
-node --test tests/session-ownership/*.test.js
-```
-
-Result at implementation time:
-
-```text
-16 tests
-16 pass
-0 fail
-```
-
-Concurrency coverage includes an adversarial two-party CAS gate forcing two login attempts to observe the same empty account slot before either write completes; exactly one session wins. A second gated race forces account takeover to occur between character authorization and character CAS, verifying that the displaced session cannot leave an orphan character lease behind.
+- two independent stores forced through the same empty account state;
+- exactly one reject-new winner;
+- replace-old protection against stale heartbeat/release;
+- concurrent character CAS with account ownership precondition;
+- crash/TTL reclaim and displaced-character cleanup;
+- reconnect grace CAS resume;
+- admin online snapshot and revoke/kick ownership.
 
 ## Boundaries respected
 
-No files outside these allowed areas are changed:
+Implementation changes remain in:
 
 - `services/session-ownership/**`
 - `tests/session-ownership/**`
 - `workstreams/ws45/**`
 - `.github/workflows/ws45-sessions.yml`
 
-No DB migration, client, admin, site, gateway, WS03, WS07, or WS13 implementation change is included.
+WS03, WS07, and WS08 branches/product implementation are not modified or imported. WS45 does not implement character stat mutation, inventory, combat, game packets, website API, admin frontend, `getCharacterState`, or `mutateOnlineCharacter`. Full `ADMIN_RUNTIME_AUTHORITY` is explicitly **not** claimed.
