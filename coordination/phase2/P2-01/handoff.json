@@ -1,0 +1,139 @@
+{
+  "schema_version": "oldkoweb-phase2-handoff/v1",
+  "owner": "P2-01",
+  "branch": "phase2/01-network",
+  "source_commit": "6c15254d8bd4e27cdea1d5ac76b77d39e4dde6ea",
+  "status": "BLOCKED",
+  "coordinator_contract_commit": "8e7410f7458e216fee184749ae8a333e0eb7ab3d",
+  "inherited": [
+    {"owner":"WS50","sha":"50ecabec15bd358d222a01891ca31359f3a928b0"},
+    {"owner":"WS02","sha":"1738f60945b24e00bdd2266e6600b5c0cf3c64cf"},
+    {"owner":"WS03","sha":"77e001bb6f43618883b626ae403d2fa134065c0f"},
+    {"owner":"WS11","sha":"013559b6e66ef9f6257403c96f3b012884739470"},
+    {"owner":"WS15","sha":"ce9bed13b8d45c32ff0592595aa3a0d1e7b3964d"},
+    {"owner":"WS45","sha":"96169fb3131254e401d77cca6e3455b0c62015b0"},
+    {"owner":"WS47","sha":"e881478dbc3b55b27f48d20bf12e38b2a9445ae2"}
+  ],
+  "source_authority": [
+    {
+      "repository": "Open-KO/KnightOnline",
+      "commit": "7d6cf81093e142c928c2ac9510512b2b182178b5",
+      "evidence": "WIZ_MOVE=0x06; payload x:u16,z:u16,y:i16,speed:u16,flag:u8 at x10 scale; 0x01 moving and 0x02 continuous bits; WIZ_SPEEDHACK_CHECK=0x41; base walk=1.5 and run delta=3.0; movement buffs multiply move delta."
+    },
+    {
+      "repository": "luisfelipe18/old-school-openko",
+      "commit": "97eb0ea20207afc0c360bfed6915113572711be3",
+      "evidence": "Coordinator-approved accepted real1298 client source baseline; no client binary or accepted input/camera patch was replaced by P2-01."
+    }
+  ],
+  "changed_files": [
+    "services/ko-gateway/src/gateway.js",
+    "services/ko1298-session/persistent-movement-port.js",
+    "services/ko1298-session/session-auth.js",
+    "services/ko1298-session/session-lifecycle.js",
+    "tests/ko-gateway/p2-01-close.test.js",
+    "tests/ko1298-session/p2-01-network.test.js"
+  ],
+  "dependencies": [
+    {"owner":"P2-00","contract":"shared-runtime-composition/v1","required":true},
+    {"owner":"P2-04","contract":"movement-baseline-reset/v1","required":true},
+    {"owner":"P2-07","contract":"authoritative-movement-speed-policy/v1","required":true},
+    {"owner":"P2-11","contract":"persistent-character-position/v1","required":true},
+    {"owner":"P2-13","contract":"real-browser-two-client-movement-acceptance/v1","required":true}
+  ],
+  "contracts_provided": [
+    {
+      "name": "p2-01/movement-policy-rejection/v1",
+      "interface": "PersistentMovementPort.handleMovePacket/handleRotatePacket",
+      "semantics": "MovementRejectedError becomes {accepted:false,rejected:true,disconnect:false,rejection:{category:'MOVEMENT_POLICY',code,details}}; persistence/internal failures remain exceptions."
+    },
+    {
+      "name": "p2-01/movement-baseline-reset/v1",
+      "interface": "PersistentMovementPort.resetMovementBaseline(sessionId,{zoneId,position,headingRaw,reason})",
+      "semantics": "Delegates only to trusted MovementService.teleport(), resetting moving/speed/flag/last-move/fingerprints while retaining teleport generation and bounds enforcement. teleport() remains a compatibility alias."
+    },
+    {
+      "name": "p2-01/gateway-close-diagnostics/v1",
+      "interface": "ko-gateway close log + RFC6455 close frame",
+      "semantics": "Gateway records closeCode/closeReason and emits explicit reasons for upstream TCP error/end/close, idle, pong timeout, buffer limit, protocol error and client close. Unexpected upstream loss uses 1011 instead of being mislabeled clean 1000."
+    },
+    {
+      "name": "p2-01/session-lease-heartbeat/v1",
+      "interface": "GameSession._startOwnershipHeartbeat/_stopOwnershipHeartbeat",
+      "semantics": "After successful account lease acquisition, WS45 heartbeat(sessionId) is invoked every 10 seconds with an unref timer; disconnect stops the timer before cleanup. Transient heartbeat provider errors are logged and lease expiry remains authoritative."
+    }
+  ],
+  "contracts_consumed": [
+    "WS15 KO1298 movement protocol and speedPolicy",
+    "WS45 account/character CAS lease, heartbeat and grace-disconnect semantics",
+    "P2-00 coordination/phase2/CHARTER.md",
+    "P2-00 coordination/phase2/OWNERS.json",
+    "P2-00 coordination/phase2/CONTRACTS.md",
+    "Open-KO 1298 packet/source authority"
+  ],
+  "tests": [
+    {
+      "command": "node --test tests/ko-gateway/p2-01-close.test.js tests/ko1298-session/p2-01-network.test.js",
+      "result": "NOT_RUN",
+      "evidence": "Tests are committed. The available execution container cannot resolve github.com, so the branch could not be cloned into the shell runtime; no GitHub Actions run is configured/triggered for this provider branch."
+    },
+    {
+      "command": "15-minute real-client walk/run/sprint/stop/turn soak",
+      "result": "NOT_RUN",
+      "evidence": "A 15-minute virtual-clock regression is committed, but the user's Windows/OpenKO browser runtime is not available to this provider session; real-client soak is intentionally not claimed."
+    },
+    {
+      "command": "two real browser clients: position/direction/region visibility + restart/persisted-position",
+      "result": "NOT_RUN",
+      "evidence": "Requires P2-00 exact local candidate plus P2-13 browser access and the user's PC/PostgreSQL runtime."
+    }
+  ],
+  "runtime_evidence": [
+    "Source inspection confirms current WS15 decoder matches real 1298 WIZ_MOVE wire layout: opcode 0x06, 9-byte payload, u16 x/z, i16 y, u16 speed, u8 flag, x10 scale.",
+    "Current movement authority already enforces WORLD_READY, receive ordering, flood guard, bounds, speedPolicy, range/teleport and trusted teleport baseline reset; these controls were preserved, not disabled.",
+    "Gateway now makes unexpected backend closure distinguishable to a browser/packet capture by 1011 plus close reason instead of generic 1000 with empty reason.",
+    "No live-domain deployment, accepted website/admin surface change, or real1298 binary replacement was performed."
+  ],
+  "source_or_asset_gaps": [
+    {
+      "owner": "P2-00",
+      "gap": "Secure reconnect-grace rebinding is not representable by current game auth packets: WS45 resumeGrace requires previousSessionId, but the current client/auth contract carries no authenticated resume identity. Do not guess/rebind by account name alone."
+    },
+    {
+      "owner": "P2-07",
+      "gap": "Final authoritative skill/buff movement modifier contract must supply the runtime speed cap consumed by WS15 speedPolicy."
+    },
+    {
+      "owner": "P2-13",
+      "gap": "Real browser close code/reason capture, two-client visibility and >=15-minute real walk/run/sprint soak remain unexecuted."
+    }
+  ],
+  "shared_file_requests": [
+    {
+      "owner": "P2-00",
+      "path": "services/ko1298-session/production-composition.js",
+      "request": "Wire the final P2-07 authoritative movement speed provider into MovementService.speedPolicy(state, move) without changing P2-01 absolute/range/flood/teleport protections. The provider must return a finite non-negative units/sec cap."
+    },
+    {
+      "owner": "P2-00",
+      "path": "services/domain-live-runtime/** and final local composition",
+      "request": "Preserve ko-gateway closeCode/closeReason logs in the final diagnostic path so P2-13 can correlate browser close events with upstream TCP/session failures."
+    },
+    {
+      "owner": "P2-00",
+      "path": "final cross-provider session contract",
+      "request": "Resolve a secure reconnect credential/resume identity before wiring WS45 resumeGrace(previousSessionId,newSessionId). Account-name-only reassignment is explicitly not requested."
+    }
+  ],
+  "migration_entries": [],
+  "blockers": [
+    {"owner":"P2-00","code":"P2_01_SHARED_COMPOSITION_AND_SECURE_RECONNECT_CONTRACT_PENDING"},
+    {"owner":"P2-07","code":"P2_07_AUTHORITATIVE_SPEED_POLICY_PENDING"},
+    {"owner":"P2-13","code":"P2_01_REAL_BROWSER_TWO_CLIENT_SOAK_NOT_EXECUTED"}
+  ],
+  "notes": [
+    "Status is BLOCKED rather than READY because the required real-browser/two-client/15-minute acceptance was not executed and the final cross-provider speed/reconnect contracts are unresolved.",
+    "The committed virtual soak alternates walk 1.5, run 4.5 and buffed sprint 6.5, includes stop/turn, asserts persistence calls, and separately asserts excessive speed is still rejected without a disconnect outcome.",
+    "No shared P2-00-owned composition file was modified on this provider branch."
+  ]
+}
