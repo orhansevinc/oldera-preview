@@ -56,7 +56,7 @@ Integrated browser matrix after P2-00 builds the candidate:
 
 ```bash
 npm install --no-save playwright@1.55.0
-P2_03_URL=http://127.0.0.1:<candidate-port>/ P2_03_LABEL=after node qa/p2-03/render_probe.mjs
+P2_03_URL=http://127.0.0.1:<candidate-port>/ P2_03_LABEL=after node tools/p2_03_render_probe.mjs
 ```
 
 Repeat against the pinned pre-P2-03 candidate with `P2_03_LABEL=before` at the same camera/state for before/after evidence. Final PC/domain evidence belongs to P2-00/P2-13.
