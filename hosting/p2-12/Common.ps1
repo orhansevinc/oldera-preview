@@ -169,6 +169,7 @@ function Get-P212ComposeIdentity {
         service = $labels.'com.docker.compose.service'
         working_dir = $labels.'com.docker.compose.project.working_dir'
         config_files = $labels.'com.docker.compose.project.config_files'
+        environment_file = $labels.'com.docker.compose.project.environment_file'
     }
 }
 
