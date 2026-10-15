@@ -1,0 +1,84 @@
+{
+  "schema_version": "oldkoweb-phase2-acceptance-scenarios/v1",
+  "rules": {
+    "controlled_accounts_only": true,
+    "delete_existing_player_data": false,
+    "critical_failure_blocks_release": true,
+    "domain_verified_requires_all_three_public_domains": true,
+    "candidate_identity_must_match_evidence": true
+  },
+  "scenarios": [
+    {
+      "id":"E2E-01","critical":true,"owners":["P2-00","P2-01","P2-04","P2-05","P2-06","P2-07","P2-08","P2-11"],
+      "name":"single-client integrated gameplay chain",
+      "steps":["register controlled account","login","create/select character","enter world","sprint","target/use NPC service","find visible mob","normal attack","cast skill/effect","kill mob","observe drop","pickup to inventory","advance/inspect quest","transition zone","relog"],
+      "required_evidence":["browser video or ordered screenshots","console log","network/WebSocket trace","server correlation IDs","before/after persistent state","exact candidate fingerprint"]
+    },
+    {
+      "id":"E2E-02","critical":true,"owners":["P2-01","P2-06","P2-08","P2-09"],
+      "name":"two real clients shared world",
+      "steps":["start two real clients","place both in same region","verify reciprocal movement","observe same mob/boss identity","form party","perform trade","attempt allowed PvP","enter safe-zone","verify prohibited PvP rejection"],
+      "required_evidence":["two session IDs","shared entity IDs","party/trade receipts","PvP and safe-zone server outcomes","screenshots from both clients"]
+    },
+    {
+      "id":"E2E-03","critical":true,"owners":["P2-11","P2-12"],
+      "name":"restart persistence",
+      "steps":["record account/character position/items/quest/progression/clan","restart backend composition","reconnect","compare state","perform controlled PC/container restart when authorized","reconnect and compare again"],
+      "required_evidence":["pre/post DB checksums or keyed queries","service restart timestamps","relog proof","no destructive reset"]
+    },
+    {
+      "id":"E2E-04","critical":true,"owners":["P2-11"],
+      "name":"admin authority and denial",
+      "steps":["login as authorized controlled admin","execute reversible supported command","prove runtime application","prove persistence/audit","login as normal player","attempt same privileged action","verify rejection and no state change"],
+      "required_evidence":["admin HTTP receipt","runtime application proof","audit record","player denial response","before/after target state"]
+    },
+    {
+      "id":"PERF-01","critical":true,"owners":["P2-02","P2-03","P2-10"],
+      "name":"cold versus warm exact-build browser load",
+      "steps":["same device/network","clear browser cache/service-worker storage for cold run","load exact candidate","record navigation/resource timings","close and reopen without clearing for warm run","record same timings","capture canvas backing/CSS/DPR/WebGL","sample FPS/frame time","exercise pointer at corners/center"],
+      "required_evidence":["exact client hashes","cold/warm timing JSON","resource transfer sizes/cache flags","canvas metrics","WebGL renderer","FPS/frame-time sample","pointer coordinates"]
+    },
+    {
+      "id":"REG-01","critical":true,"owners":["P2-02"],
+      "name":"reproduce historical 6-7 minute loading complaint",
+      "steps":["cold start with stopwatch","record first byte/JS/WASM/DATA/world-ready milestones","fail if world-ready exceeds approved threshold or stalls"],
+      "required_evidence":["timeline","HAR/resource timings","world-ready timestamp"]
+    },
+    {
+      "id":"REG-02","critical":true,"owners":["P2-01","P2-10"],
+      "name":"reproduce historical sprint disconnect",
+      "steps":["enter Moradon","hold sprint while moving/turning","cross regions","repeat burst sprint","observe WebSocket/session for disconnect"],
+      "required_evidence":["movement packet timeline","WebSocket close code/reason if any","server disconnect log"]
+    },
+    {
+      "id":"REG-03","critical":true,"owners":["P2-04","P2-06"],
+      "name":"reproduce historical invisible mobs",
+      "steps":["enter known populated region","compare server AOI entities with client-visible entities","target and approach mob","cross region boundary and return"],
+      "required_evidence":["server entity list","visibility packet trace","client screenshot","entity ID correlation"]
+    },
+    {
+      "id":"REG-04","critical":true,"owners":["P2-05"],
+      "name":"reproduce historical nonfunctional NPC",
+      "steps":["select visible NPC","send interaction","open dialog/service","execute one reversible service action"],
+      "required_evidence":["click/request/dialog/action/response trace","runtime state change"]
+    },
+    {
+      "id":"REG-05","critical":true,"owners":["P2-07","P2-10"],
+      "name":"reproduce historical nonfunctional skill",
+      "steps":["bind skill","select legal target","cast","observe cooldown/resource/effect/damage or heal","try illegal target and verify denial"],
+      "required_evidence":["skill ID","server authority result","effect proof","state delta"]
+    },
+    {
+      "id":"REG-06","critical":true,"owners":["P2-11"],
+      "name":"reproduce historical command forwarding without application",
+      "steps":["capture target state","send supported admin command","require completion only after downstream apply proof","verify target state and audit"],
+      "required_evidence":["command ID","apply receipt","state delta","audit row"]
+    },
+    {
+      "id":"REG-07","critical":true,"owners":["P2-03"],
+      "name":"reproduce historical blurry render",
+      "steps":["record viewport/CSS canvas/backing buffer/DPR","capture screenshot","resize window","repeat","verify no low-resolution scaling"],
+      "required_evidence":["pixel dimensions","DPR","screenshot","WebGL drawing buffer size"]
+    }
+  ]
+}
