@@ -1,0 +1,121 @@
+name: oldkoweb-domain-live
+services:
+  db:
+    image: ${POSTGRES_IMAGE}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: oldkoweb
+      POSTGRES_USER: oldkoweb
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - oldkoweb_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oldkoweb -d oldkoweb"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  runtime:
+    image: ${RUNTIME_IMAGE}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      OLDKO_DB_SSL: disable
+      AUTH_PORT: "15100"
+      GAME_PORT: "15001"
+      GAME_HOST: play.oldkoweb.com
+      OLDKO_SERVER_ID: oldkoweb-domain-live
+      OLDKO_MORADON_SMD: /opt/oldkoweb/runtime/moradon_0826.smd
+      OLDKO_MORADON_NPC_DATA: /opt/oldkoweb/world-data/npc/moradon.json
+      OLDKO_MORADON_MOB_DATA: /opt/oldkoweb/world-data/mobs/verified/moradon-zone21.verified.json
+      ADMIN_PORT: "8088"
+      ADMIN_USERS_JSON_FILE: /run/secrets/admin-users.json
+      ADMIN_SESSION_SECRET_FILE: /run/secrets/admin-session-secret.txt
+      ADMIN_ROOT_OWNER_ID: local-owner
+      ADMIN_ALLOWED_ORIGINS: ${ADMIN_ALLOWED_ORIGINS}
+      ADMIN_SECURE_COOKIES: "0"
+    volumes:
+      - "${ADMIN_USERS_JSON_FILE}:/run/secrets/admin-users.json:ro"
+      - "${ADMIN_SESSION_SECRET_FILE}:/run/secrets/admin-session-secret.txt:ro"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8088/api/admin/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 4s
+      retries: 30
+
+  account-api:
+    image: ${RUNTIME_IMAGE}
+    restart: unless-stopped
+    command: ["node", "services/domain-live-runtime/account-server.mjs"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      OLDKO_DB_SSL: disable
+      ACCOUNT_PORT: "8081"
+      OLDKO_ACCOUNT_ALLOWED_ORIGINS: ${ACCOUNT_ALLOWED_ORIGINS}
+      OLDKO_TRUST_PROXY: "1"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('net').connect(8081,'127.0.0.1').once('connect',function(){this.end();process.exit(0)}).once('error',()=>process.exit(1))"]
+      interval: 5s
+      timeout: 4s
+      retries: 30
+
+  gateway-auth:
+    image: ${RUNTIME_IMAGE}
+    restart: unless-stopped
+    command: ["node", "services/ko-gateway/src/server.js"]
+    depends_on:
+      runtime:
+        condition: service_healthy
+    environment:
+      GATEWAY_MODE: auth
+      PORT: "8080"
+      WS_PATH: /auth
+      AUTH_TCP_HOST: runtime
+      AUTH_TCP_PORT: "15100"
+      REQUIRE_ORIGIN: "true"
+      TRUST_PROXY: "true"
+      ALLOWED_ORIGINS: ${PLAY_ALLOWED_ORIGINS}
+      ALLOWED_HOSTS: ${PLAY_ALLOWED_HOSTS}
+
+  gateway-game:
+    image: ${RUNTIME_IMAGE}
+    restart: unless-stopped
+    command: ["node", "services/ko-gateway/src/server.js"]
+    depends_on:
+      runtime:
+        condition: service_healthy
+    environment:
+      GATEWAY_MODE: game
+      PORT: "8080"
+      WS_PATH: /game
+      GAME_TCP_HOST: runtime
+      GAME_TCP_PORT: "15001"
+      REQUIRE_ORIGIN: "true"
+      TRUST_PROXY: "true"
+      ALLOWED_ORIGINS: ${PLAY_ALLOWED_ORIGINS}
+      ALLOWED_HOSTS: ${PLAY_ALLOWED_HOSTS}
+
+  edge:
+    image: ${EDGE_IMAGE}
+    restart: unless-stopped
+    depends_on:
+      account-api:
+        condition: service_healthy
+      runtime:
+        condition: service_healthy
+      gateway-auth:
+        condition: service_started
+      gateway-game:
+        condition: service_started
+    ports:
+      - "127.0.0.1:${EDGE_PORT:-8088}:8080"
+
+volumes:
+  oldkoweb_pgdata:
+    name: oldkoweb_domain_live_pgdata
