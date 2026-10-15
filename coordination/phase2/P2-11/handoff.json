@@ -1,0 +1,190 @@
+{
+  "workstream": "P2-11",
+  "name": "data-admin",
+  "branch": "phase2/11-data-admin",
+  "status": "BLOCKED",
+  "base": {
+    "branch": "ws50-integration-rehearsal",
+    "sha": "50ecabec15bd358d222a01891ca31359f3a928b0"
+  },
+  "implementation_sha": "03445f825140997e4971c5855b32e9cd0fd631a4",
+  "coordinator": "phase2/00-integration",
+  "target": [
+    "Windows PC",
+    "Docker",
+    "PostgreSQL",
+    "oldkoweb.com",
+    "play.oldkoweb.com",
+    "admin.oldkoweb.com"
+  ],
+  "constraints": {
+    "live_deploy_performed": false,
+    "live_migration_performed": false,
+    "website_account_design_modified": false,
+    "admin_v10_design_modified": false,
+    "second_database_created": false,
+    "local_storage_persistence_authority_created": false,
+    "process_memory_persistence_authority_created": false
+  },
+  "source_schema": {
+    "repo_canonical_head_before_p2_11": "0004_admin_persistence.sql",
+    "historical_extra_service_schema": "services/account-api/sql/0001_postgres_rate_limit.sql",
+    "target_runtime_ledger": "UNVERIFIED_ON_TARGET_PC",
+    "candidate_canonical_head": "0005_phase2_data_admin.sql"
+  },
+  "legacy_sources": {
+    "WS07": { "sha": "eaac4700c3535c449f6a2b7d20c925bc61382c35", "source": "WS50 accepted pin" },
+    "WS08": { "sha": "944f704f55eb5e9656b8f77d9a2f5f87d136e270", "source": "WS50 accepted pin" },
+    "WS13": { "sha": "e53966d9f882d98e2a5b4746262f38355dfda848", "source": "WS50 accepted pin" },
+    "WS28": { "sha": "c1ef0f6e84456cb38edd2f3ce2b11ca5ff7de99a", "source": "WS50 accepted pin" },
+    "WS35": { "sha": "5327d50906d02c829add08cf1ca73fbe978526dc", "source": "legacy branch head inspected" },
+    "WS44": { "sha": "50c337bd3b5b7069d3b8d618c52c7d665ff28a28", "source": "legacy branch head inspected" },
+    "WS46": { "sha": "20ed42370eb64598254e052fa1812932f2503476", "source": "legacy branch head inspected" },
+    "WS48": { "sha": "b08914d602ead8a42b3741249668c27e3f457c78", "source": "legacy branch head inspected" }
+  },
+  "migration_order": [
+    "0001_init.sql",
+    "0002_persistence_hardening.sql",
+    "0003_public_account_api.sql",
+    "0004_admin_persistence.sql",
+    "0005_phase2_data_admin.sql"
+  ],
+  "migration_notes": [
+    "0005 is additive/forward-only and relies on the existing canonical migrator for one-transaction application, checksum ledger and advisory locking.",
+    "0005 folds oldko.account_rate_limits into the canonical stream using IF NOT EXISTS so an existing WS13 table/data is preserved.",
+    "The historical WS13 apply-rate-limit command was changed to verification-only; it refuses independent mutation when canonical 0005 is absent.",
+    "P2-11 does not apply 0005 to the live target; P2-00/P2-12 must do that after backup and ledger verification."
+  ],
+  "schema_added": [
+    "oldko.account_rate_limits (canonicalized)",
+    "oldko.character_quests",
+    "oldko.boss_runtime_state",
+    "oldko.runtime_config",
+    "oldko.runtime_config_apply_receipts",
+    "oldko.server_runtime_heartbeats",
+    "oldko.runtime_content_observations",
+    "oldko.admin_runtime_command_confirmations"
+  ],
+  "interfaces": {
+    "module": "services/oldko-data/src/adapters/p2-data-admin.js",
+    "class": "PgP2DataAdminRepository",
+    "methods": [
+      "transaction(work, {tx})",
+      "getSchemaVersion({tx})",
+      "saveQuestState({characterId, questKey, state, expectedVersion, tx})",
+      "saveBossState({authority, bossKey, zoneId, state, nextTransitionAt, expectedVersion, tx})",
+      "setRuntimeConfig({key, value, actorAdminId, requiresRestart, expectedVersion, tx})",
+      "recordRuntimeConfigApply({key, version, service, applied, evidence, tx})",
+      "recordServerHeartbeat({source, realmId, availability, playerCount, serverVersion, targetPatch, statusMessage, lastHeartbeat, tx})",
+      "getServerStatus({realmId, maxAgeMs, now, tx})",
+      "recordContentObservation({source, kind, entityKey, payload, revision, observedAt, tx})",
+      "listContentObservations({kind, maxAgeMs, now, tx})",
+      "confirmAdminCommand({commandId, result, source, tx})",
+      "persistenceSnapshot(characterId, {tx})"
+    ],
+    "helpers": [
+      "assertRuntimeConfigKey",
+      "isRealApplyProof",
+      "projectServerStatus"
+    ],
+    "transaction_model": "existing inSerializableTransaction/withTransaction SERIALIZABLE boundary with rollback and retry semantics"
+  },
+  "account_character_lifecycle_evidence": {
+    "existing_postgres_account_suite": "tests/account-api/postgres.integration.test.mjs",
+    "covers": [
+      "register",
+      "email-verification token confirmation",
+      "login/current/logout and revoked session",
+      "password change invalidates prior credential/session",
+      "password reset rotates credential",
+      "one-use/expiry/policy checks",
+      "shared PostgreSQL rate limiting"
+    ],
+    "existing_game_composition_suite": "tests/ko1298-session/postgres-composition.test.mjs",
+    "covers_game": [
+      "same PostgreSQL account row powers website and KO auth",
+      "unverified account rejected by KO auth",
+      "nation selection",
+      "character slot creation with race/class",
+      "character selection/world-ready",
+      "position persistence",
+      "ban denial",
+      "password change visible to KO auth",
+      "fresh repository/process restart restores account/character/position"
+    ],
+    "mail_warning": "These automated suites use capture/test delivery for token retrieval. They prove account flow semantics, not real production email delivery."
+  },
+  "admin_security_evidence": {
+    "existing_suites": [
+      "tests/admin-api/production-admin-api.test.js",
+      "tests/admin-api/postgres-production-e2e.test.js",
+      "tests/admin-api/runtime-authority-contract.test.js",
+      "tests/admin-api/ws28-command-semantics.test.js"
+    ],
+    "properties": [
+      "admin identity/session persistence is separate from player account identity",
+      "root OWNER role is bound to configured verified root id; forged OWNER role is stripped",
+      "unsafe mutation requires trusted origin/CSRF/idempotency/audit",
+      "online character mutation routes to runtime authority rather than offline SQL mutation",
+      "WS28 command becomes SUCCEEDED only after runtime apply proof; pending/unsupported/failure remain distinct",
+      "logout revocation survives restart"
+    ],
+    "p2_11_extension": "oldko.admin_runtime_command_confirmations persists the authoritative applied=true result proof; DB enqueue/update alone cannot satisfy confirmAdminCommand."
+  },
+  "new_tests": [
+    "services/oldko-data/test/p2-data-admin.test.js",
+    "services/oldko-data/test/integration/p2-data-admin.integration.test.js"
+  ],
+  "new_test_coverage": [
+    "secret-bearing runtime config keys rejected",
+    "missing/stale heartbeat cannot report online or fabricated player count",
+    "DB-only admin command result cannot be confirmed successful",
+    "quest and boss state use optimistic versions",
+    "one PostgreSQL character identity joins position/progression/item/quest/clan evidence",
+    "fresh PostgreSQL pool sees committed state instead of process-memory authority",
+    "canonical ledger must be exactly 0001..0005",
+    "WS13 compatibility command is verification-only",
+    "NullDelivery remains fail-closed"
+  ],
+  "verification": {
+    "source_and_contract_inspection": "COMPLETED",
+    "target_pc_docker_postgres_execution": "NOT_RUN",
+    "live_migration": "NOT_RUN_BY_DESIGN",
+    "ci_status_on_implementation_sha": "NO_STATUS_REPORTED",
+    "note": "No target PC/Docker/PostgreSQL executor was available in this workstream session; therefore no test is claimed PASS without runtime evidence."
+  },
+  "p2_12_gate": [
+    "capture backup of the real target DB before 0005",
+    "record exact public._oldko_migrations ledger/checksums",
+    "apply only the canonical migrator in rehearsal/approved integration chain",
+    "prove rerun is a no-op and checksum mismatch is rejected",
+    "interrupt a migration transaction in rehearsal and prove rollback leaves no partial schema/data",
+    "destroy/restore and compare account/character/item/quest/progression/clan evidence"
+  ],
+  "p2_13_gate": [
+    "restart PostgreSQL and all relevant services",
+    "prove account login and character selection after restart",
+    "prove position/item/quest/progression/clan persistence from one DB",
+    "prove normal player credentials cannot authenticate as admin/GM",
+    "prove revoked/unauthorized admin access is rejected",
+    "prove server status becomes offline/unknown-count when heartbeat goes stale"
+  ],
+  "blockers": [
+    {
+      "code": "PHASE2_COORDINATION_CONTRACTS_MISSING",
+      "detail": "coordination/phase2/CHARTER.md, OWNERS.json and CONTRACTS.md were absent at the pinned base. P2-11 published coordination/phase2/P2-11/DEPENDENCY_PROPOSAL.md for P2-00 ratification."
+    },
+    {
+      "code": "TARGET_DB_LEDGER_AND_0005_NOT_VERIFIED",
+      "detail": "Repository source head before P2-11 is 0004 plus a historical service-owned WS13 rate-limit migration, but the real PC PostgreSQL ledger was not queried and 0005 was intentionally not applied. P2-00/P2-12 must verify/backup/apply."
+    },
+    {
+      "code": "REAL_EMAIL_DELIVERY_NOT_PROVEN",
+      "detail": "NullDelivery is fail-closed and test CaptureDelivery is not production delivery. A configured real provider with accepted acknowledgement is required for email verification/password reset production proof; no secret values are stored in this handoff."
+    },
+    {
+      "code": "P2_12_P2_13_RUNTIME_GATES_PENDING",
+      "detail": "Backup/restore, interrupted-transaction rehearsal, full target restart persistence, real runtime admin-result verification and unauthorized-access denial must execute on the composed target before READY_FOR_INTEGRATION can be promoted."
+    }
+  ]
+}
