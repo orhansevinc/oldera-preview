@@ -53,7 +53,8 @@ function createPersistentAuth({ repository, users, rootOwnerId, sessionSecret, t
   const identities = normalizeUsers(users || [], rootOwnerId);
   const byUsername = new Map(identities.map((u) => [u.username.toLowerCase(), u]));
   const byId = new Map(identities.map((u) => [u.id, u]));
-  const digest = (value) => crypto.createHmac('sha256', sessionSecret).update(String(value)).digest('base64url');
+  const digestHex = (label, value) => crypto.createHmac('sha256', sessionSecret).update(`${label}:${String(value)}`).digest('hex');
+  const csrfForToken = (token) => crypto.createHmac('sha256', sessionSecret).update(`csrf:${String(token)}`).digest('base64url');
 
   function sessionCookie(token) {
     return `oldko_admin_session=${encodeURIComponent(token)}; Path=/api/admin; HttpOnly; SameSite=Strict; Max-Age=${ttlSeconds}${secureCookies ? '; Secure' : ''}`;
@@ -73,14 +74,16 @@ function createPersistentAuth({ repository, users, rootOwnerId, sessionSecret, t
     const user = byUsername.get(String(username || '').trim().toLowerCase());
     if (!user || !verifyPassword(password, user.passwordHash)) return null;
     const token = crypto.randomBytes(32).toString('base64url');
-    const csrf = crypto.randomBytes(24).toString('base64url');
+    const csrf = csrfForToken(token);
     const now = Date.now();
-    const session = {
-      id: digest(token), userId: user.id, csrfHash: digest(csrf), createdAt: new Date(now).toISOString(),
-      expiresAt: new Date(now + ttlSeconds * 1000).toISOString(), sourceIp: context.sourceIp || null,
-      userAgent: context.userAgent || null, revokedAt: null
-    };
-    await repository.createAdminSession(session);
+    const session = await repository.createAdminSession({
+      userId: user.id,
+      tokenHash: digestHex('session', token),
+      createdAt: new Date(now).toISOString(),
+      expiresAt: new Date(now + ttlSeconds * 1000).toISOString(),
+      sourceIp: context.sourceIp || null,
+      userAgent: context.userAgent || null
+    });
     return { user, session, cookies: [sessionCookie(token), csrfCookie(csrf)], csrfToken: csrf };
   }
 
@@ -88,17 +91,18 @@ function createPersistentAuth({ repository, users, rootOwnerId, sessionSecret, t
     const cookies = parseCookie(req.headers.cookie);
     const token = cookies.oldko_admin_session;
     if (!token) return null;
-    const session = await repository.getAdminSession(digest(token));
+    const session = await repository.getAdminSession(digestHex('session', token));
     if (!session || session.revokedAt || Date.parse(session.expiresAt) <= Date.now()) return null;
-    const user = byId.get(String(session.userId));
+    const user = byId.get(String(session.userId || session.actorId));
     if (!user) return null;
-    return { user, session, csrfCookie: cookies.oldko_admin_csrf || '' };
+    return { user, session, csrfCookie: cookies.oldko_admin_csrf || '', expectedCsrf: csrfForToken(token) };
   }
 
   function verifyCsrf(req, authn) {
     const header = String(req.headers['x-csrf-token'] || '');
     const cookie = String(authn?.csrfCookie || '');
-    return Boolean(header && cookie && timingSafeEqualText(header, cookie) && timingSafeEqualText(digest(header), authn.session.csrfHash));
+    const expected = String(authn?.expectedCsrf || '');
+    return Boolean(header && cookie && expected && timingSafeEqualText(header, cookie) && timingSafeEqualText(header, expected));
   }
 
   async function logout(authn) {
