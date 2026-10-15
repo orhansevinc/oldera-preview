@@ -1,0 +1,163 @@
+{
+  "schema_version": "oldkoweb-phase2-handoff/v1",
+  "owner": "P2-03",
+  "branch": "phase2/03-render",
+  "source_commit": "89a0b9e871fc47981289d83009c08d58bc6a025d",
+  "status": "BLOCKED",
+  "disposition": "BLOCKED",
+  "baseline": {
+    "ref": "ws50-integration-rehearsal",
+    "commit": "50ecabec15bd358d222a01891ca31359f3a928b0"
+  },
+  "legacy_inputs": [
+    {
+      "workstream": "WS05",
+      "branch": "ws05-moradon-world",
+      "commit": "b55cab4e79a200d103472d16c231011cc1263548",
+      "reuse": "accepted real OpenKO browser patch chain and the Emscripten 1024x768 compatibility block that caused CSS-only upscale blur"
+    },
+    {
+      "workstream": "WS43",
+      "branch": "ws43-client-display-compat",
+      "commit": "8ccf0fcb643ec1ebb5f019e8f53c8d3d93f85e03",
+      "reuse": "display/fullscreen presentation evidence and native-widescreen contract; presentation-only scaling is not treated as native render resolution"
+    }
+  ],
+  "engine_source": {
+    "repo": "luisfelipe18/old-school-openko",
+    "commit": "97eb0ea20207afc0c360bfed6915113572711be3",
+    "ko_assets_commit": "2055ee6ed77f1b5cfef23832dd5bc31909e14a66",
+    "publication_rule": "P2-00 must rebuild KnightOnLine.js, KnightOnLine.wasm and KnightOnLine.data from the reconciled source and genuine assets; P2-03 publishes no replacement binary."
+  },
+  "changed_files": [
+    "tools/p2_03_patch_openko_render.py",
+    "tools/p2_03_render_probe.mjs",
+    "tests/p2-03/test_render_patch.py",
+    "coordination/phase2/P2-03/RENDER_CONTRACT.md",
+    "coordination/phase2/P2-03/INTEGRATION_PATCH.md"
+  ],
+  "dependencies": [
+    {
+      "owner": "P2-00",
+      "contract": "accepted-client-rebuild-contract",
+      "required": true,
+      "detail": "apply P2-03 to the pinned OpenKO source after canonical WS05 patching, compose the remaining source patches and produce one fresh provenance-matched JS/WASM/data build"
+    },
+    {
+      "owner": "P2-10",
+      "contract": "client-window/input integration",
+      "required": true,
+      "pinned_handoff_code_sha": "748a589872948388768d19be965e3264cd7cec2c",
+      "detail": "P2-10 explicitly consumes one P2-03 viewport-to-game transform and must not duplicate DPR/renderScale pointer math"
+    },
+    {
+      "owner": "P2-02",
+      "contract": "loading/launcher/canvas presentation integration",
+      "required": true,
+      "detail": "final real-browser acceptance needs the reconciled loader/canvas shell; P2-02 handoff was not present at the last check"
+    },
+    {
+      "owner": "P2-13",
+      "contract": "independent real-browser acceptance",
+      "required": true,
+      "detail": "final domain proof should rerun the supplied render matrix against the exact integrated candidate"
+    }
+  ],
+  "contracts_provided": [
+    "P2-03/render-coordinate-contract-v1",
+    "P2-03/render-quality-policy-v1",
+    "P2-03/render-telemetry-v1",
+    "P2-03/openko-render-source-patch-v1"
+  ],
+  "contracts_consumed": [
+    "phase2/accepted-client-baseline-and-rebuild-contract",
+    "WS43/native-backing-store-contract",
+    "P2-10/single-provider-owned-viewport-transform requirement"
+  ],
+  "interfaces": {
+    "p2_00": "run tools/p2_03_patch_openko_render.py against the exact OpenKO source after the accepted WS05 base browser patch; rebuild real JS/WASM/data once after all client providers are reconciled",
+    "p2_02": "loader/CSS must present the native canvas without reintroducing a fixed 1024x768 transform or mutating the backing store behind the renderer",
+    "p2_10": "use logical viewport coordinates exactly once: logicalX=(clientX-rect.left)*logicalWidth/rect.width and logicalY=(clientY-rect.top)*logicalHeight/rect.height; never multiply picking by DPR/renderScale",
+    "p2_13": "run tools/p2_03_render_probe.mjs on the immutable integrated candidate and archive screenshots/JSON/console evidence"
+  },
+  "implementation": [
+    "Removed the WS05 Emscripten-only fixed 1024x768 logical resolution while preserving accepted browser window-mode/cursor behavior.",
+    "Established viewport-native logical dimensions from visualViewport/window before SDL/UI initialization and on later resize/fullscreen changes, preventing the old 4:3 presentation rectangle from feeding back as the native render target.",
+    "Separated logical game/UI/picking coordinates from physical WebGL backing pixels and bounded renderScale to 1.0-2.0 with performance/balanced/sharp/native quality modes and pixel budgets.",
+    "Refreshed RHIDeviceGL physical drawable dimensions from the actual Emscripten canvas before drawing so GL viewport/scissor density follows the backing store rather than stale startup dimensions.",
+    "Published runtime CSS/viewport/logical/backing/drawingBuffer/DPR/renderScale, FPS/frame-time, WASM/JS memory estimate and texture/mipmap telemetry in window.__OLDKO_RENDER_METRICS__.",
+    "Kept genuine KO assets and existing D3D sampler/mipmap authority; no unsourced HD replacement and no global filter override was introduced."
+  ],
+  "tests": [
+    {
+      "command": "GitHub compare 50ecabec15bd358d222a01891ca31359f3a928b0...phase2/03-render",
+      "result": "PASS",
+      "evidence": "implementation diff is limited to five P2-03-owned source/test/contract/tool files before this handoff; no website/admin, P2-02 loader, P2-10 client source, final real1298 binary, or P2-13 qa/** file is changed"
+    },
+    {
+      "command": "python3 -m py_compile tools/p2_03_patch_openko_render.py tests/p2-03/test_render_patch.py && python3 -m pytest -q tests/p2-03/test_render_patch.py",
+      "result": "NOT_RUN",
+      "evidence": "the execution environment could not resolve github.com to materialize the branch/OpenKO checkout; tests are committed but no passing execution is claimed"
+    },
+    {
+      "command": "P2_03_URL=<fresh-integrated-candidate> P2_03_LABEL=after node tools/p2_03_render_probe.mjs",
+      "result": "NOT_RUN",
+      "evidence": "requires P2-00's fresh reconciled real OpenKO WASM build; harness covers 1366x768 and 1920x1080 x 100/125/150 percent scale x windowed/fullscreen = 12 cases"
+    }
+  ],
+  "runtime_evidence": [
+    {
+      "state": "SOURCE_BACKED_ONLY",
+      "finding": "accepted WS05 browser patch fixes the logical client to 1024x768 while accepted upstream RHI already contains logical-to-physical HiDPI viewport support; P2-03 removes that browser-specific resolution lock and connects the backing store to the live viewport"
+    },
+    {
+      "state": "PENDING_INTEGRATED_RUN",
+      "expected_metrics": [
+        "cssWidth/cssHeight",
+        "viewportWidth/viewportHeight",
+        "logicalWidth/logicalHeight",
+        "backingWidth/backingHeight",
+        "drawingBufferWidth/drawingBufferHeight",
+        "devicePixelRatio/renderScale/quality",
+        "fps/frameTimeMs",
+        "wasmHeapBytes/jsHeapBytes/renderTargetsEstimateBytes",
+        "textureCreateCount/maxTextureWidth/maxTextureHeight/maxMipLevels/texturesWithMipmaps"
+      ]
+    }
+  ],
+  "source_or_asset_gaps": [
+    "No renderer source gap is known and no new art asset is required.",
+    "Specific genuine low-resolution UI/texture assets, if any remain visibly soft after native framebuffer correction, must be identified from fresh texture/mipmap telemetry rather than replaced speculatively.",
+    "Exact GPU VRAM usage is not reliably exposed by WebGL; renderTargetsEstimateBytes is explicitly a minimum color+depth estimate, not invented VRAM telemetry."
+  ],
+  "shared_file_requests": [
+    {
+      "owner": "P2-00",
+      "request": "Apply the P2-03 generated changes to shared upstream src/Client/WarFare/WarFareMainSDL.cpp and RHIDeviceGL.cpp during the one reconciled source build; do not copy an old real1298 artifact."
+    },
+    {
+      "owner": "P2-00/P2-10",
+      "request": "Smoke ALT+ENTER after composition because P2-10 adds a physical key-event fullscreen path while the upstream frame loop also contains ALT+ENTER polling; resolve any double-toggle in input ownership, not in P2-03."
+    }
+  ],
+  "migration_entries": [],
+  "blockers": [
+    {
+      "id": "P2_00_FRESH_BROWSER_REBUILD_REQUIRED",
+      "detail": "P2-03 is a native source change. No old JS/WASM/data artifact can prove it. P2-00 must build the exact reconciled client before READY_FOR_INTEGRATION can be asserted."
+    },
+    {
+      "id": "P2_02_HANDOFF_MISSING_AT_LAST_CHECK",
+      "detail": "The P2-02 loader/canvas handoff was absent when checked, so final presentation/backing-store composition is not pinned yet."
+    },
+    {
+      "id": "RUNTIME_RENDER_MATRIX_NOT_EXECUTED",
+      "detail": "The requested same-state before/after screenshots plus true drawingBuffer resolution, FPS/frame-time and memory measurements for all 12 resolution/scale/mode cases await the fresh P2-00 candidate."
+    }
+  ],
+  "notes": [
+    "No live deployment was performed.",
+    "The default sharp mode caps DPR at 1.5 and 4.7M backing pixels; native is opt-in and capped at DPR 2.0/8.3M to avoid forcing maximum DPR on every device.",
+    "P2-10 handoff explicitly requests one P2-03 viewport-to-game transform, matching this contract."
+  ]
+}
