@@ -4,6 +4,8 @@ const { GAME } = require('./protocol');
 const { SESSION_STATES, canTransition } = require('./contracts');
 const { SessionError, ERROR_CATEGORY } = require('./errors');
 
+const OWNERSHIP_HEARTBEAT_INTERVAL_MS = 10_000;
+
 function install(GameSession) {
   GameSession.prototype._wrongStateResponse = function(opcode) {
     switch (opcode) {
@@ -40,9 +42,39 @@ function install(GameSession) {
     };
   };
 
+  GameSession.prototype._startOwnershipHeartbeat = function() {
+    if (!this.ownership || typeof this.ownership.heartbeat !== 'function' || this._ownershipHeartbeatTimer) return false;
+    this._ownershipHeartbeatInFlight = false;
+    this._ownershipHeartbeatTimer = setInterval(async () => {
+      if (this._ownershipHeartbeatInFlight || this.state.phase === SESSION_STATES.DISCONNECTING || this.state.phase === SESSION_STATES.CLOSED) return;
+      this._ownershipHeartbeatInFlight = true;
+      try {
+        const outcome = await this.ownership.heartbeat(this.sessionId);
+        if (outcome?.ok === false) {
+          this.logger('ownership_heartbeat_rejected', { socketId: this.socketId, code: outcome.code || 'REJECTED' });
+        }
+      } catch (error) {
+        this.logger('ownership_heartbeat_error', { socketId: this.socketId, code: error?.code || 'ERROR' });
+      } finally {
+        this._ownershipHeartbeatInFlight = false;
+      }
+    }, OWNERSHIP_HEARTBEAT_INTERVAL_MS);
+    this._ownershipHeartbeatTimer.unref?.();
+    return true;
+  };
+
+  GameSession.prototype._stopOwnershipHeartbeat = function() {
+    if (!this._ownershipHeartbeatTimer) return false;
+    clearInterval(this._ownershipHeartbeatTimer);
+    this._ownershipHeartbeatTimer = null;
+    this._ownershipHeartbeatInFlight = false;
+    return true;
+  };
+
   GameSession.prototype._disconnectOnce = async function({ reason, useGrace }) {
     if (this.state.phase === SESSION_STATES.CLOSED) return;
     if (this.state.phase !== SESSION_STATES.DISCONNECTING) this._transition(SESSION_STATES.DISCONNECTING, reason);
+    this._stopOwnershipHeartbeat();
     const actor = this.actorContext();
     const cleanupSteps = [
       ['WS15', async () => {
@@ -77,4 +109,4 @@ function install(GameSession) {
   };
 }
 
-module.exports = { install };
+module.exports = { install, OWNERSHIP_HEARTBEAT_INTERVAL_MS };
