@@ -10,7 +10,6 @@ const {
   classifyNpcBinding,
   buildNpcCoverage,
 } = require('../../services/ko1298-npc/production');
-const { OfferedOptionLedger } = require('../../services/ko1298-npc/quest-bridge');
 
 function click(id) {
   const packet = Buffer.alloc(3);
@@ -74,6 +73,9 @@ test('catalog classification exposes source mismatches instead of silently wirin
   assert.deepEqual(classifyNpcBinding({ name: 'Miraselth[Warehouse Keeper]', npcType: 29, role: 'other', sellingGroup: 0 }), {
     service: 'source-review', status: 'blocked-source-mismatch', blocker: 'WAREHOUSE_NAME_TYPE_MISMATCH_EXPECTED_31_GOT_29',
   });
+  assert.deepEqual(classifyNpcBinding({ name: 'Selith[Special Store]', npcType: 23, role: 'other', sellingGroup: 0 }), {
+    service: 'special-store', status: 'blocked-source', blocker: 'SELITH_SPECIAL_STORE_HANDLER_UNVERIFIED',
+  });
   assert.deepEqual(classifyNpcBinding({ name: 'Aban[Battlefield Gate-keeper]', npcType: 136, role: 'gate', interactionRoute: 'world', sellingGroup: 0 }), {
     service: 'source-review', status: 'blocked-source-mismatch', blocker: 'GATE_ROUTE_TYPE_MISMATCH_EXPECTED_28_GOT_136',
   });
@@ -98,6 +100,9 @@ test('coverage register contains every template and every spawn anchor', () => {
   assert.equal(coverage[1].spawns[0].z, 425);
 });
 
+const { OfferedOptionLedger } = require('../../services/ko1298-npc/quest-bridge');
+const canonicalMoradon = require('../../world-data/npc/moradon.json');
+
 test('quest option ledger accepts only the exact server-offered option and consumes it once', () => {
   const ledger = new OfferedOptionLedger();
   ledger.offer({ sessionId: 's1', npcRuntimeId: 10004, npcTemplateSid: 13009, options: [{ action: 'accept:21001', menuId: 21101 }] });
@@ -110,4 +115,14 @@ test('quest option ledger rejects selection for a different NPC', () => {
   const ledger = new OfferedOptionLedger();
   ledger.offer({ sessionId: 's2', npcRuntimeId: 10004, npcTemplateSid: 13009, options: [{ action: 'accept:21001' }] });
   assert.throws(() => ledger.select({ sessionId: 's2', npcRuntimeId: 10005, index: 0 }), /does not belong/);
+});
+
+test('canonical Moradon catalog has an exhaustive binding record for all 31 source templates and every spawn', () => {
+  const coverage = buildNpcCoverage(canonicalMoradon);
+  assert.equal(canonicalMoradon.templates.length, 31);
+  assert.equal(coverage.length, canonicalMoradon.templates.length);
+  assert.equal(coverage.reduce((n, row) => n + row.spawns.length, 0), canonicalMoradon.spawns.length);
+  assert.deepEqual(new Set(coverage.map(row => row.templateSid)), new Set(canonicalMoradon.templates.map(row => row.templateSid)));
+  assert.ok(coverage.every(row => typeof row.source === 'string' && row.source.length > 0));
+  assert.ok(coverage.every(row => row.status !== 'wired' || row.interactionVerified));
 });
