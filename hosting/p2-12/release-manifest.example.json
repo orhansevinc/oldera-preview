@@ -1,0 +1,22 @@
+{
+  "schema_version": "oldkoweb-p2-release/v1",
+  "release_id": "phase2-rc-example",
+  "source_sha": "0000000000000000000000000000000000000000",
+  "files": [
+    {"path": "deploy/domain-live/docker-compose.yml", "sha256": "REPLACE_WITH_SHA256"},
+    {"path": "real1298/index.html", "sha256": "REPLACE_WITH_SHA256"},
+    {"path": "real1298/KnightOnLine.js", "sha256": "REPLACE_WITH_SHA256"},
+    {"path": "real1298/KnightOnLine.wasm", "sha256": "REPLACE_WITH_SHA256"},
+    {"path": "real1298/KnightOnLine.data", "sha256": "REPLACE_WITH_SHA256"}
+  ],
+  "compose": {
+    "project_name": "oldkoweb-domain-live",
+    "files": ["deploy/domain-live/docker-compose.yml"],
+    "env_file": ".oldkoweb/state/runtime.env"
+  },
+  "migration": {
+    "plan_path": "coordination/phase2/migration-plan.json",
+    "runner_path": "hosting/p2-12/Run-Migrations.ps1",
+    "rollback_compatible_with_previous_application": true
+  }
+}
