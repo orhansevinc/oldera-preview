@@ -39,7 +39,9 @@ for (const required of [
 const manifest = JSON.parse(fs.readFileSync(path.join(kit, 'release-manifest.example.json'), 'utf8'));
 assert.equal(manifest.schema_version, 'oldkoweb-p2-release/v1');
 assert.equal(manifest.compose.project_name, 'oldkoweb-domain-live');
-assert.ok(Array.isArray(manifest.files) && manifest.files.length >= 5);
+assert.ok(Array.isArray(manifest.files) && manifest.files.length >= 8);
+assert.ok(Array.isArray(manifest.required_persistent_volumes) && manifest.required_persistent_volumes.length >= 1);
+assert.ok(Array.isArray(manifest.health_checks) && manifest.health_checks.length >= 1);
 
 const migration = JSON.parse(fs.readFileSync(path.join(kit, 'migration-plan.example.json'), 'utf8'));
 assert.equal(migration.backup_before_migrate, true);
@@ -48,11 +50,15 @@ assert.equal(typeof migration.rollback_compatible_with_previous_application, 'bo
 const update = fs.readFileSync(path.join(kit, 'Update-Release.ps1'), 'utf8');
 assert.match(update, /Backup-Database\.ps1/);
 assert.match(update, /Test-BackupRestore\.ps1/);
+assert.match(update, /Test-ReleaseHealth\.ps1/);
+assert.match(update, /required_persistent_volumes/);
 assert.match(update, /'up','-d'/);
 assert.ok(!/--remove-orphans/.test(update), 'update must not remove unrelated containers');
 
 const migrationRunner = fs.readFileSync(path.join(kit, 'Run-Migrations.ps1'), 'utf8');
 assert.match(migrationRunner, /\$releaseRoot=Get-P212RepoRoot/, 'migration paths must resolve from staged release root');
+assert.match(migrationRunner, /runner\.mode/, 'canonical migration runner contract must be enforced');
+assert.ok(!/psql'.*'-f'/.test(migrationRunner), 'P2-12 must not bypass the canonical migrator with direct psql -f');
 
 const rollback = fs.readFileSync(path.join(kit, 'Rollback-Code.ps1'), 'utf8');
 assert.match(rollback, /database_restored=\$false/);
