@@ -8,6 +8,8 @@ const { createProductionAdminApi } = require('./production-app');
 const { createWs28CommandExecutor } = require('./ws28-command-executor');
 const { assertProductionRepository, assertRuntimeAuthority, assertCommandBus } = require('./production-contract');
 
+const BUNDLED_WS07_REPOSITORY_MODULE = path.join(__dirname, 'ws07-admin-repository-module.js');
+
 function loadUsers() {
   const raw = process.env.ADMIN_USERS_JSON;
   if (!raw) throw new Error('ADMIN_USERS_JSON is required');
@@ -16,8 +18,8 @@ function loadUsers() {
   return users;
 }
 
-function requireModule(envName) {
-  const configured = process.env[envName];
+function requireModule(envName, fallback = null) {
+  const configured = process.env[envName] || fallback;
   if (!configured) throw new Error(`${envName} is required in production`);
   const resolved = path.isAbsolute(configured) ? configured : path.resolve(process.cwd(), configured);
   return require(resolved);
@@ -30,7 +32,7 @@ async function callFactory(mod, factoryName, label) {
 }
 
 async function createProductionComposition() {
-  const repository = assertProductionRepository(await callFactory(requireModule('ADMIN_REPOSITORY_MODULE'), 'createAdminRepository', 'WS07 admin adapter module'));
+  const repository = assertProductionRepository(await callFactory(requireModule('ADMIN_REPOSITORY_MODULE', BUNDLED_WS07_REPOSITORY_MODULE), 'createAdminRepository', 'WS07 admin adapter module'));
   const runtimeAuthority = assertRuntimeAuthority(await callFactory(requireModule('ADMIN_RUNTIME_AUTHORITY_MODULE'), 'createAdminRuntimeAuthority', 'WS03/WS45 runtime module'));
   const commandBus = assertCommandBus(await callFactory(requireModule('ADMIN_COMMAND_BUS_MODULE'), 'createAdminCommandBus', 'WS28 command composition module'));
   const commandExecutor = createWs28CommandExecutor({ repository, commandBus });
