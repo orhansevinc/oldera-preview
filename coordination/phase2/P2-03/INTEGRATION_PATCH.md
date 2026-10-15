@@ -26,8 +26,8 @@ The script is fail-closed: its anchors must match exactly once and it is idempot
 The generated patch is intentionally limited to two accepted upstream files:
 
 - `src/Client/WarFare/WarFareMainSDL.cpp`
-  - remove browser-only forced `1024x768` logical resolution and forced window mode;
-  - preserve browser software cursor choice;
+  - remove only the browser-only forced `1024x768` logical resolution;
+  - preserve the accepted browser window-mode and software-cursor behavior;
   - derive logical size from the live canvas CSS rectangle;
   - set backing-store size separately using bounded render scale;
   - update logical D3D viewport on resize/fullscreen/scale changes;
