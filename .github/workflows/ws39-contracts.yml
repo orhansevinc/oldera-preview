@@ -5,6 +5,8 @@ on:
     paths:
       - 'contracts/**'
       - 'contract-tests/**'
+      - 'tools/ws39_contracts/**'
+      - 'coordination/handoffs/domain-live/WS39.json'
       - 'release/sets/ws50/**'
       - 'workstreams/ws39/**'
       - '.github/workflows/ws39-contracts.yml'
@@ -12,6 +14,8 @@ on:
     paths:
       - 'contracts/**'
       - 'contract-tests/**'
+      - 'tools/ws39_contracts/**'
+      - 'coordination/handoffs/domain-live/WS39.json'
       - 'release/sets/ws50/**'
       - 'workstreams/ws39/**'
       - '.github/workflows/ws39-contracts.yml'
@@ -24,5 +28,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Validate WS39 registry, immutable provider sets, routing and compatibility rules
+      - name: Validate WS39 C3 pilot and domain-live generic contract gate
         run: node --test contract-tests/*.test.cjs
