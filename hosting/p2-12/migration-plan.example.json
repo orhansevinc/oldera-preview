@@ -1,0 +1,19 @@
+{
+  "schema_version": "oldkoweb-phase2-migrations/v1",
+  "release_id": "phase2-rc-example",
+  "backup_before_migrate": true,
+  "rollback_compatible_with_previous_application": true,
+  "migrations": [
+    {"order": 1, "id": "0001_init", "path": "database/migrations/0001_init.sql", "sha256": "REPLACE_WITH_SHA256"},
+    {"order": 2, "id": "0002_persistence_hardening", "path": "database/migrations/0002_persistence_hardening.sql", "sha256": "REPLACE_WITH_SHA256"},
+    {"order": 3, "id": "0003_public_account_api", "path": "database/migrations/0003_public_account_api.sql", "sha256": "REPLACE_WITH_SHA256"},
+    {"order": 4, "id": "0004_admin_persistence", "path": "database/migrations/0004_admin_persistence.sql", "sha256": "REPLACE_WITH_SHA256"},
+    {"order": 5, "id": "0005_phase2_data_admin", "path": "database/migrations/0005_phase2_data_admin.sql", "sha256": "REPLACE_WITH_SHA256"}
+  ],
+  "runner": {
+    "mode": "compose-run",
+    "service": "account-api",
+    "env": {"OLDKO_MIGRATION_TARGET": "0005_phase2_data_admin.sql"},
+    "command": ["npm", "run", "migrate", "--prefix", "/opt/oldkoweb/services/oldko-data"]
+  }
+}
