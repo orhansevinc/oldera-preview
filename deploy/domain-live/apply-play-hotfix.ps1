@@ -73,10 +73,10 @@ while((Get-Date) -lt $deadline){
 }
 if(-not $ok){ throw 'Play edge local smoke failed' }
 
-$home=Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$edgePort/" -Headers @{Host='oldkoweb.com'} -TimeoutSec 10
-if($home.StatusCode -ne 200){ throw 'Website local smoke failed after hotfix' }
-$admin=Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$edgePort/api/admin/health" -Headers @{Host='admin.oldkoweb.com'} -TimeoutSec 10
-if($admin.StatusCode -ne 200){ throw 'Admin local smoke failed after hotfix' }
+$websiteResponse=Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$edgePort/" -Headers @{Host='oldkoweb.com'} -TimeoutSec 10
+if($websiteResponse.StatusCode -ne 200){ throw 'Website local smoke failed after hotfix' }
+$adminResponse=Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$edgePort/api/admin/health" -Headers @{Host='admin.oldkoweb.com'} -TimeoutSec 10
+if($adminResponse.StatusCode -ne 200){ throw 'Admin local smoke failed after hotfix' }
 
 Write-Host 'OLDKOWEB PLAY EDGE HOTFIX: PASS' -ForegroundColor Green
 Write-Host 'Open: https://play.oldkoweb.com/' -ForegroundColor Cyan
