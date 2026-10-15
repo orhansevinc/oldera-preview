@@ -13,8 +13,12 @@ def test_main_patch_removes_ws05_resolution_lock_and_preserves_logical_input_spa
     src = '''#include "StdAfx.h"\n#include <SDL3/SDL_main.h>\n\nnamespace\n{\nSDL_Window* g_pWindow      = nullptr;\nbool g_bWindowInFocus      = true;\nbool g_bQuitRequested      = false;\n}\nLoadGameOptions();\n#ifdef __EMSCRIPTEN__\nCN3Base::s_Options.iViewWidth    = 1024;\nCN3Base::s_Options.iViewHeight   = 768;\nCN3Base::s_Options.bWindowMode   = true;\nCN3Base::s_Options.bWindowCursor = false;\n#endif\n\tCN3Base::RHIDeviceSet(pRHIDevice.get());\n\tspdlog::info("render backend: {}", szBackendName);\n\t\tlocalInput.Tick();\n\t\tSDL_Delay(g_bWindowInFocus ? 10 : 50);\n'''
     out = mod.patch_main(src)
     assert "iViewWidth    = 1024" not in out
+    assert "CN3Base::s_Options.bWindowMode = true" in out
+    assert "OldKOWebSyncRenderSurface(nullptr, true)" in out
     assert "OldKOWebSyncRenderSurface(pRHIDevice.get(), true)" in out
     assert "OldKOWebSyncRenderSurface(pRHIDevice.get(), false)" in out
+    assert "window.visualViewport" in out
+    assert "OldKOWebViewportWidth" in out
     assert "CN3Base::s_Options.iViewWidth = next.logicalW" in out
     assert "emscripten_set_canvas_element_size" in out
     assert "renderScale" in out
