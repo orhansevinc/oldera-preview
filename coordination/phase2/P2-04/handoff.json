@@ -1,0 +1,97 @@
+{
+  "schema_version": "oldkoweb-phase2-handoff/v1",
+  "owner": "P2-04",
+  "branch": "phase2/04-world",
+  "source_commit": "bffc15045f6de92dc966bcb9ec925906f0a1acaf",
+  "base_commit": "50ecabec15bd358d222a01891ca31359f3a928b0",
+  "status": "BLOCKED",
+  "status_reason": "The source-pinned multi-zone world authority, generic SMD terrain/collision loader configuration, safe-spawn gate and shared AOI/runtime-ID enforcement are implemented. Full map-by-map entry/walk/minimap/exit-return/restart-relog verification remains blocked by exact P2-02 client/runtime asset materialization, P2-09 entry/zone-ability policy, and an authoritative EMC safe-spawn correction. Non-Moradon zones therefore remain fail-closed rather than being falsely declared complete.",
+  "coordination_consumed": {
+    "branch": "phase2/00-integration",
+    "commit": "8e7410f7458e216fee184749ae8a333e0eb7ab3d",
+    "files": [
+      "coordination/phase2/CHARTER.md",
+      "coordination/phase2/OWNERS.json",
+      "coordination/phase2/CONTRACTS.md"
+    ]
+  },
+  "inherited": [
+    {"workstream":"WS50","sha":"50ecabec15bd358d222a01891ca31359f3a928b0","role":"Phase 2 baseline; includes WS14 ko1298-world implementation"},
+    {"workstream":"WS14","sha":"ed5f806ce7505f4dfae406e4164735def63b6c86","role":"world-session lifecycle, transition state machine, zone registry, SMD resolver, visibility and shared KO1298_NPC namespace"},
+    {"workstream":"WS31","sha":"56ada741532c8f6cabfc83b129a8e87e645db055","role":"source-pinned 1298 zone/client/DB catalog authority"},
+    {"workstream":"WS05","sha":"b55cab4e79a200d103472d16c231011cc1263548","role":"real-client Moradon evidence and server zone 21 / client table zone 210 namespace distinction"}
+  ],
+  "changed_files": [
+    "services/ko1298-world/data/world-scope.1298.json",
+    "services/ko1298-world/data/client-zone-assets.1298.json",
+    "services/ko1298-world/src/world-asset-registry.js",
+    "services/ko1298-world/src/shared-world-aoi.js",
+    "services/ko1298-world/index.js",
+    "tests/ko1298-world/p2-world-scope.test.js",
+    "tests/ko1298-world/p2-client-assets.test.js",
+    "tests/ko1298-world/p2-real-maps.test.js"
+  ],
+  "data_sources": [
+    {"source":"Open-KO/KnightOnline","commit":"7d6cf81093e142c928c2ac9510512b2b182178b5","paths":["src/Client/WarFare/GameDef.h","assets/Server/MAP/1.evt","assets/Server/MAP/2.evt","assets/Server/MAP/21.evt","assets/Server/MAP/201.evt","assets/Server/MAP/karus_0730.smd","assets/Server/MAP/elmorad_1220.smd","assets/Server/MAP/k_eslant.smd","assets/Server/MAP/e_eslant.smd","assets/Server/MAP/moradon_0826.smd","assets/Server/MAP/freezone_1217.smd"]},
+    {"source":"Open-KO/ko-client-assets","commit":"b4636332c7cd818b0ce171eccc973dd3d6b2e56d","path":"Data/Zones.tbl.csv"},
+    {"source":"OpenKO database snapshot used by WS31","commit":"bec619466938d278339c30e5b1a4bff3c9413bab","authority":"ZONE_INFO and spawn catalog provenance recorded by WS31"}
+  ],
+  "zone_scope": [
+    {"server_zone_id":1,"client_zone_table_id":10,"name":"Karus / Luferson","server_smd":"karus_0730.smd","state":"PARTIAL"},
+    {"server_zone_id":2,"client_zone_table_id":20,"name":"El Morad Castle (EMC)","server_smd":"elmorad_1220.smd","state":"BLOCKED_SOURCE","blocker":"ZONE_INFO InitX=1630000 converts to x=16300 and is not representable in the KO1298 u16-tenths wire coordinate; no guessed correction is used."},
+    {"server_zone_id":11,"client_zone_table_id":110,"name":"Eslant (Karus)","server_smd":"k_eslant.smd","state":"PARTIAL","source_gap":"11.evt absent from pinned OpenKO server snapshot"},
+    {"server_zone_id":12,"client_zone_table_id":120,"name":"Eslant (El Morad)","server_smd":"e_eslant.smd","state":"PARTIAL","source_gap":"12.evt absent from pinned OpenKO server snapshot"},
+    {"server_zone_id":21,"client_zone_table_id":210,"name":"Moradon","server_smd":"moradon_0826.smd","state":"PARTIAL","evidence":"inherits WS05 real C++/WASM Moradon render namespace evidence; this provider does not re-claim current full-browser acceptance"},
+    {"server_zone_id":201,"client_zone_table_id":2010,"name":"Colony Zone / Frontier (CZ)","server_smd":"freezone_1217.smd","state":"PARTIAL","note":"freezone_1218.smd exists as an alternate source artifact but is not silently substituted for the ZONE_INFO-selected 1217 variant"}
+  ],
+  "interfaces": [
+    {"name":"p2-04/world-asset-registry","version":"v1","module":"services/ko1298-world/src/world-asset-registry.js","provides":["exact server/client zone pairing","source-pinned SMD path/hash/length requests","generic SmdHeightResolver composition for all target maps","fail-closed collision-resolved source spawn"]},
+    {"name":"p2-04/shared-world-aoi","version":"v1","module":"services/ko1298-world/src/shared-world-aoi.js","provides":["single shared zone world for player/NPC/mob entities","distance AOI without invented map/region bounds","source-zone cleanup","shared NPC/mob signed-i16 runtime-ID collision enforcement"]},
+    {"name":"ws14/world-session","version":"inherited","module":"services/ko1298-world/src/world-session-service.js","preserved":["WORLD_READY gating","source cleanup before target load","WIZ_ZONE_CHANGE lifecycle","disconnect cleanup","authoritative reconnect path"]}
+  ],
+  "contracts_provided": [
+    "p2-04/world-asset-registry/v1",
+    "p2-04/shared-world-aoi/v1"
+  ],
+  "contracts_consumed": [
+    "WS14 world-session lifecycle and zonePolicy adapter",
+    "WS14 shared KO1298_NPC runtime ID namespace",
+    "P2-00 Phase 2 ownership/shared-file/verification contracts"
+  ],
+  "dependencies": [
+    {"owner":"P2-02","contract":"materialize the exact client zone asset graph and exact server SMD runtime paths/identities listed by P2-04; no similarly named variant fallback","required":true},
+    {"owner":"P2-05","contract":"provide source-backed NPC positions/source identities and consume shared KO1298_NPC runtime IDs","required":true},
+    {"owner":"P2-06","contract":"provide source-backed mob/boss positions/source identities and consume shared KO1298_NPC runtime IDs","required":true},
+    {"owner":"P2-09","contract":"provide authoritative canEnter nation/level/event rules and source-backed zone-ability semantics for non-Moradon zones","required":true},
+    {"owner":"P2-01","contract":"movement accepts only current WORLD_READY transition generation and drops/queues stale transition movement","required":true},
+    {"owner":"P2-07","contract":"combat accepts only current WORLD_READY transition generation and rejects stale source/target races","required":true}
+  ],
+  "tests": [
+    {"command":"node --check services/ko1298-world/src/world-asset-registry.js && node --check services/ko1298-world/src/shared-world-aoi.js","result":"PASS","evidence":"local Node v22.16.0 syntax gate"},
+    {"command":"node --test tests/ko1298-world/p2-world-scope.test.js tests/ko1298-world/p2-client-assets.test.js","result":"PASS","evidence":"6/6 local contract tests passed; isolated harness uses the same exported HEIGHT_STATUS/I16 public contract for inherited modules"},
+    {"command":"P2_WORLD_MAP_ROOT=<directory containing the six exact pinned SMD files> node --test tests/ko1298-world/p2-real-maps.test.js","result":"NOT_RUN","evidence":"test is committed and validates actual SMD hash/length/parser/terrain-collision/source-spawn; provider did not add a Phase-2 workflow because .github/workflows/*phase2* is P2-00-owned"}
+  ],
+  "runtime_evidence": [
+    {"kind":"source_inventory","result":"VERIFIED","detail":"Exact zone IDs, client table IDs, SMD variants, SMD blob hashes/sizes, Zones.tbl row hashes, client terrain/color/light/object/minimap refs and available EVT trigger rectangles are recorded."},
+    {"kind":"map_by_map_browser_acceptance","result":"NOT_INTEGRATED","detail":"Not claimed. Requires P2-02 staged client assets, P2-09 entry policy and P2-00 composed candidate, then P2-13 browser acceptance."}
+  ],
+  "source_or_asset_gaps": [
+    "P2-02 must verify that the accepted Phase-2 client asset set contains the exact GTD/TCT/TLT/OPD/OPDEXT/DXT/GLO/GEV/ENS/FLAG references and enumerate transitive N3 model/texture dependencies from OPD/OPDEXT.",
+    "Runtime mount paths for karus_0730.smd, elmorad_1220.smd, k_eslant.smd, e_eslant.smd, moradon_0826.smd and freezone_1217.smd are not yet supplied by the integrated PC package.",
+    "EMC authoritative safe spawn is unresolved because the source ZONE_INFO initial X is protocol-unrepresentable; an alternate exact source-backed spawn/warp target is required.",
+    "11.evt and 12.evt are absent from the pinned OpenKO server MAP snapshot; Eslant warp/event semantics require another authoritative source if needed.",
+    "Non-Moradon entry rules and client zone-ability values remain P2-09-owned and are intentionally fail-closed.",
+    "Non-Moradon NPC/mob population coordinates remain P2-05/P2-06-owned; P2-04 provides common visibility/identity plumbing only."
+  ],
+  "shared_file_requests": [
+    {"owner":"P2-00","request":"Wire the P2-04 asset registry/root and shared AOI into final production composition only after P2-02/P2-05/P2-06/P2-09 contracts are pinned."},
+    {"owner":"P2-00","request":"Run tests/ko1298-world/p2-real-maps.test.js with the exact six pinned SMD files during integration; do not add provider-owned Phase-2 workflow wiring."},
+    {"owner":"P2-00","request":"Preserve WS14 transition ordering and pass P2-01/P2-07 movement/combat generation gates through the shared final dispatcher/composition."}
+  ],
+  "migration_entries": [],
+  "notes": [
+    "No website/account/admin UI, real1298 built artifact, deployment composition or live domain was modified.",
+    "No player-specific fake world/population was introduced.",
+    "A zone row or source asset listing is not treated as map completion."
+  ]
+}
