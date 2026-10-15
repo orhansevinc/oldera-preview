@@ -61,21 +61,42 @@ assert_safe_metadata_value() {
   [[ "$value" != *$'\n'* && "$value" != *$'\r'* ]] || die "unsafe newline in metadata field: $field"
 }
 
+# A restore-stable structural inventory. Avoid pretty-printed DDL text because
+# PostgreSQL may render equivalent definitions differently after dump/restore.
+# Migration file hashes plus semantic integrity checks validate the definitions;
+# this fingerprint validates the restored catalog shape and object identities.
 schema_inventory() {
   local database_url="$1"
   psql "$database_url" -X -v ON_ERROR_STOP=1 -Atqc "
+    WITH target_tables AS (
+      SELECT c.oid, n.nspname, c.relname, c.relkind
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE c.relkind='r'
+        AND (n.nspname='oldko' OR (n.nspname='public' AND c.relname='_oldko_migrations'))
+    )
     SELECT line FROM (
-      SELECT 'TABLE|' || n.nspname || '|' || c.relname AS line
-      FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-      WHERE c.relkind='r' AND (n.nspname='oldko' OR (n.nspname='public' AND c.relname='_oldko_migrations'))
+      SELECT 'TABLE|' || t.nspname || '|' || t.relname || '|' || t.relkind::text AS line
+      FROM target_tables t
       UNION ALL
-      SELECT 'CONSTRAINT|' || n.nspname || '|' || c.relname || '|' || con.conname || '|' || con.contype::text || '|' || replace(pg_get_constraintdef(con.oid,true), E'\\n', ' ')
-      FROM pg_constraint con JOIN pg_class c ON c.oid=con.conrelid JOIN pg_namespace n ON n.oid=c.relnamespace
-      WHERE n.nspname='oldko' OR (n.nspname='public' AND c.relname='_oldko_migrations')
+      SELECT 'COLUMN|' || t.nspname || '|' || t.relname || '|' || a.attnum::text || '|' || a.attname || '|' ||
+             format_type(a.atttypid,a.atttypmod) || '|' || a.attnotnull::text || '|' || a.attidentity::text || '|' || a.attgenerated::text
+      FROM target_tables t
+      JOIN pg_attribute a ON a.attrelid=t.oid
+      WHERE a.attnum > 0 AND NOT a.attisdropped
       UNION ALL
-      SELECT 'INDEX|' || schemaname || '|' || tablename || '|' || indexname || '|' || replace(indexdef, E'\\n', ' ')
-      FROM pg_indexes
-      WHERE schemaname='oldko' OR (schemaname='public' AND tablename='_oldko_migrations')
+      SELECT 'CONSTRAINT|' || t.nspname || '|' || t.relname || '|' || con.conname || '|' || con.contype::text || '|' ||
+             con.convalidated::text || '|' || con.condeferrable::text || '|' || con.condeferred::text
+      FROM target_tables t
+      JOIN pg_constraint con ON con.conrelid=t.oid
+      UNION ALL
+      SELECT 'INDEX|' || tn.nspname || '|' || tc.relname || '|' || ic.relname || '|' ||
+             i.indisunique::text || '|' || i.indisprimary::text || '|' || i.indisvalid::text || '|' || i.indnkeyatts::text
+      FROM pg_index i
+      JOIN pg_class ic ON ic.oid=i.indexrelid
+      JOIN pg_class tc ON tc.oid=i.indrelid
+      JOIN pg_namespace tn ON tn.oid=tc.relnamespace
+      WHERE tn.nspname='oldko' OR (tn.nspname='public' AND tc.relname='_oldko_migrations')
     ) inventory
     ORDER BY line;"
 }
