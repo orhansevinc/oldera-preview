@@ -51,7 +51,7 @@ async function seedRealAccountAndCharacter() {
     assert.equal(auth.user.verified, true);
 
     const game = new GameSession(repo, { socketId: 64000 });
-    assert.deepEqual([...(await game.handle(credentials(GAME.LOGIN, username, password)))[0]], [GAME.LOGIN, 0]);
+    assert.deepEqual([...(await game.handle(credentials(GAME.LOGIN, username, password)))[0]], [GAME.LOGIN, 1]);
     assert.deepEqual([...(await game.handle(Buffer.from([GAME.SEL_NATION, 1])))[0]], [GAME.SEL_NATION, 1]);
     assert.deepEqual([...(await game.handle(createCharacter(characterName)))[0]], [GAME.NEW_CHAR, 0]);
     await game.disconnect({ reason: 'WS50_SEED_COMPLETE', useGrace: false });
@@ -97,7 +97,7 @@ async function openRealGameSession() {
   const version = await send(Buffer.from([GAME.VERSION_CHECK]), GAME.VERSION_CHECK);
   assert.equal(version.readInt16LE(1), 1298);
   const login = await send(credentials(GAME.LOGIN, username, password), GAME.LOGIN);
-  assert.equal(login[1], 0);
+  assert.equal(login[1], 1, 'real KO1298 game login failed');
   await send(Buffer.from([GAME.ALLCHAR_INFO_REQ]), GAME.ALLCHAR_INFO_REQ);
   const selected = await send(selectCharacter(username, characterName), GAME.SEL_CHAR);
   assert.equal(selected[1], 1, 'real character selection failed');
