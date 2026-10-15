@@ -26,6 +26,12 @@ function normalizedHost(req, trustProxy) {
   return String(raw).split(',')[0].trim().toLowerCase();
 }
 
+function decodeCloseFrame(payload) {
+  const p = Buffer.from(payload || []);
+  if (p.length < 2) return { code: 1000, reason: '' };
+  return { code: p.readUInt16BE(0), reason: p.subarray(2).toString('utf8').slice(0, 123) };
+}
+
 function createGateway(config, options = {}) {
   const logger = options.logger || makeLogger(config.logLevel);
   const metrics = { startedAt: Date.now(), active: 0, accepted: 0, rejected: 0, tcpConnectFailures: 0 };
@@ -75,7 +81,7 @@ function createGateway(config, options = {}) {
     let pingTimer = null;
     const touch = () => {
       clearTimeout(idleTimer);
-      idleTimer = setTimeout(() => closeBoth('idle_timeout', 1001), config.idleTimeoutMs);
+      idleTimer = setTimeout(() => closeBoth('idle_timeout', 1001, 'idle_timeout'), config.idleTimeoutMs);
       idleTimer.unref?.();
     };
     const cleanup = () => {
@@ -88,8 +94,9 @@ function createGateway(config, options = {}) {
     const closeBoth = (event, code = 1000, reason = '') => {
       if (closed) return;
       closed = true;
-      logger.info({ event, connectionId });
-      if (upgraded && !wsSocket.destroyed) wsSocket.write(encodeFrame(0x8, closePayload(code, reason)));
+      const closeReason = String(reason || '').slice(0, 123);
+      logger.info({ event, connectionId, closeCode: code, closeReason });
+      if (upgraded && !wsSocket.destroyed) wsSocket.write(encodeFrame(0x8, closePayload(code, closeReason)));
       wsSocket.end();
       tcp.destroy();
       cleanup();
@@ -107,7 +114,7 @@ function createGateway(config, options = {}) {
       onBinary(payload) {
         touch();
         if (tcp.destroyed) return;
-        if (tcp.writableLength + payload.length > config.maxBufferedBytes) return closeBoth('buffer_limit', 1009);
+        if (tcp.writableLength + payload.length > config.maxBufferedBytes) return closeBoth('buffer_limit', 1009, 'buffer_limit');
         if (!tcp.write(payload)) wsSocket.pause();
       },
       onPing(payload) {
@@ -119,7 +126,10 @@ function createGateway(config, options = {}) {
         awaitingPong = false;
         clearTimeout(pongDeadline);
       },
-      onClose() { closeBoth('client_close', 1000); },
+      onClose(payload) {
+        const { code, reason } = decodeCloseFrame(payload);
+        closeBoth('client_close', code, reason);
+      },
       onProtocolError(code, reason) { closeBoth('protocol_error', code, reason); }
     });
 
@@ -145,7 +155,7 @@ function createGateway(config, options = {}) {
         if (awaitingPong) return;
         awaitingPong = true;
         wsSocket.write(encodeFrame(0x9));
-        pongDeadline = setTimeout(() => closeBoth('pong_timeout', 1001), config.pongTimeoutMs);
+        pongDeadline = setTimeout(() => closeBoth('pong_timeout', 1001, 'pong_timeout'), config.pongTimeoutMs);
         pongDeadline.unref?.();
       }, config.pingIntervalMs);
       pingTimer.unref?.();
@@ -155,7 +165,7 @@ function createGateway(config, options = {}) {
       touch();
       if (!upgraded || closed || wsSocket.destroyed) return;
       const frame = encodeFrame(0x2, chunk);
-      if (wsSocket.writableLength + frame.length > config.maxBufferedBytes) return closeBoth('buffer_limit', 1009);
+      if (wsSocket.writableLength + frame.length > config.maxBufferedBytes) return closeBoth('buffer_limit', 1009, 'buffer_limit');
       if (!wsSocket.write(frame)) tcp.pause();
     });
     tcp.on('drain', () => wsSocket.resume());
@@ -168,17 +178,19 @@ function createGateway(config, options = {}) {
         metrics.tcpConnectFailures++;
         return reject(502, 'Bad Gateway');
       }
-      logger.warn({ event: 'tcp_error', connectionId, code: err.code || 'ERR' });
-      closeBoth('tcp_error', 1011);
+      const code = err.code || 'ERR';
+      logger.warn({ event: 'tcp_error', connectionId, code });
+      closeBoth('tcp_error', 1011, `upstream_tcp_error:${code}`);
     });
     wsSocket.on('error', (err) => {
-      logger.warn({ event: 'ws_socket_error', connectionId, code: err.code || 'ERR' });
-      closeBoth('ws_socket_error', 1006);
+      const code = err.code || 'ERR';
+      logger.warn({ event: 'ws_socket_error', connectionId, code });
+      closeBoth('ws_socket_error', 1011, `gateway_socket_error:${code}`);
     });
-    tcp.on('end', () => closeBoth('tcp_end', 1000));
-    tcp.on('close', () => { if (!closed && upgraded) closeBoth('tcp_close', 1000); });
-    wsSocket.on('end', () => closeBoth('client_end', 1000));
-    wsSocket.on('close', () => { if (!closed) closeBoth('client_close', 1000); });
+    tcp.on('end', () => closeBoth('tcp_end', 1011, 'upstream_tcp_end'));
+    tcp.on('close', () => { if (!closed && upgraded) closeBoth('tcp_close', 1011, 'upstream_tcp_close'); });
+    wsSocket.on('end', () => closeBoth('client_end', 1000, 'client_end'));
+    wsSocket.on('close', () => { if (!closed) closeBoth('client_close', 1000, 'client_close'); });
   });
 
   return {
@@ -201,4 +213,4 @@ function createGateway(config, options = {}) {
   };
 }
 
-module.exports = { createGateway, makeLogger };
+module.exports = { createGateway, makeLogger, decodeCloseFrame };
