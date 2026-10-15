@@ -38,14 +38,17 @@ def patch_main(text: str) -> str:
         "#ifdef __EMSCRIPTEN__\n"
         "\t// P2-03 browser render surface: CSS size is the logical viewport;\n"
         "\t// backing-store size is selected independently from DPR/quality.\n"
+        "\tCN3Base::s_Options.bWindowMode = true;\n"
         "\tCN3Base::s_Options.bWindowCursor = false;\n"
         "#endif",
         text,
         count=1,
     )
 
-    include_anchor = "#include <SDL3/SDL_main.h>\n"
-    include_block = '''#include <SDL3/SDL_main.h>
+    text = replace_once(
+        text,
+        "#include <SDL3/SDL_main.h>\n",
+        '''#include <SDL3/SDL_main.h>
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -54,8 +57,9 @@ def patch_main(text: str) -> str:
 
 #include <algorithm>
 #include <cmath>
-'''
-    text = replace_once(text, include_anchor, include_block, "main include")
+''',
+        "main include",
+    )
 
     globals_anchor = '''SDL_Window* g_pWindow      = nullptr;
 bool g_bWindowInFocus      = true;
@@ -85,8 +89,7 @@ double OldKOWebCssWidth()
 		const c = (typeof Module !== 'undefined' && Module.canvas)
 			? Module.canvas : document.querySelector('#canvas');
 		if (!c) return 0;
-		const r = c.getBoundingClientRect();
-		return r.width;
+		return c.getBoundingClientRect().width;
 	});
 }
 
@@ -96,8 +99,7 @@ double OldKOWebCssHeight()
 		const c = (typeof Module !== 'undefined' && Module.canvas)
 			? Module.canvas : document.querySelector('#canvas');
 		if (!c) return 0;
-		const r = c.getBoundingClientRect();
-		return r.height;
+		return c.getBoundingClientRect().height;
 	});
 }
 
@@ -138,8 +140,12 @@ double OldKOWebPixelBudget(const char* quality)
 OldKOWebRenderSurface OldKOWebDesiredRenderSurface()
 {
 	OldKOWebRenderSurface out;
-	out.logicalW = std::max(1, static_cast<int>(std::lround(OldKOWebCssWidth())));
-	out.logicalH = std::max(1, static_cast<int>(std::lround(OldKOWebCssHeight())));
+	const double cssW = OldKOWebCssWidth();
+	const double cssH = OldKOWebCssHeight();
+	out.logicalW = cssW >= 2.0 ? static_cast<int>(std::lround(cssW))
+		: std::max(1, CN3Base::s_Options.iViewWidth);
+	out.logicalH = cssH >= 2.0 ? static_cast<int>(std::lround(cssH))
+		: std::max(1, CN3Base::s_Options.iViewHeight);
 	out.dpr = static_cast<float>(EM_ASM_DOUBLE({ return window.devicePixelRatio || 1; }));
 	out.dpr = std::max(1.0f, std::min(out.dpr, 2.0f));
 	out.quality = OldKOWebQualityName();
@@ -233,16 +239,19 @@ void OldKOWebPublishFrameTime()
 '''
     text = replace_once(text, globals_anchor, helper, "main globals")
 
-    device_anchor = '''\tCN3Base::RHIDeviceSet(pRHIDevice.get());
+    text = replace_once(
+        text,
+        '''\tCN3Base::RHIDeviceSet(pRHIDevice.get());
 \tspdlog::info("render backend: {}", szBackendName);
-'''
-    device_patch = '''\tCN3Base::RHIDeviceSet(pRHIDevice.get());
+''',
+        '''\tCN3Base::RHIDeviceSet(pRHIDevice.get());
 #ifdef __EMSCRIPTEN__
 \tOldKOWebSyncRenderSurface(pRHIDevice.get(), true);
 #endif
 \tspdlog::info("render backend: {}", szBackendName);
-'''
-    text = replace_once(text, device_anchor, device_patch, "device sync")
+''',
+        "device sync",
+    )
     text = replace_once(
         text,
         "\t\tlocalInput.Tick();\n",
@@ -264,13 +273,15 @@ def patch_rhi(text: str) -> str:
     text = replace_once(
         text,
         '#include "RHIDeviceGL.h"\n',
-        '#include "RHIDeviceGL.h"\n\n#ifdef __EMSCRIPTEN__\n#include <emscripten.h>\n#include <emscripten/html5.h>\n#endif\n',
+        '#include "RHIDeviceGL.h"\n\n#ifdef __EMSCRIPTEN__\n#include <emscripten.h>\n#include <emscripten/html5.h>\n#endif\n\n#include <algorithm>\n',
         "rhi include",
     )
-    texture_anchor = """\t*ppTexture = new RHITextureGL(width, height, levels, format);
+    text = replace_once(
+        text,
+        """\t*ppTexture = new RHITextureGL(width, height, levels, format);
 \treturn D3D_OK;
-"""
-    texture_patch = """#ifdef __EMSCRIPTEN__
+""",
+        """#ifdef __EMSCRIPTEN__
 \tEM_ASM({
 \t\tconst m = window.__OLDKO_RENDER_METRICS__ || {};
 \t\tm.textureCreateCount = (m.textureCreateCount || 0) + 1;
@@ -283,17 +294,20 @@ def patch_rhi(text: str) -> str:
 #endif
 \t*ppTexture = new RHITextureGL(width, height, levels, format);
 \treturn D3D_OK;
-"""
-    text = replace_once(text, texture_anchor, texture_patch, "rhi texture metrics")
+""",
+        "rhi texture metrics",
+    )
 
-    begin_anchor = '''bool RHIDeviceGL::BeginDraw(const gltr::FVFLayout& layout)
+    return replace_once(
+        text,
+        '''bool RHIDeviceGL::BeginDraw(const gltr::FVFLayout& layout)
 {
 \tif (!m_bValid || !layout.valid)
 \t\treturn false;
 
 \tgl::UseProgram(m_uProgram);
-'''
-    begin_patch = '''bool RHIDeviceGL::BeginDraw(const gltr::FVFLayout& layout)
+''',
+        '''bool RHIDeviceGL::BeginDraw(const gltr::FVFLayout& layout)
 {
 \tif (!m_bValid || !layout.valid)
 \t\treturn false;
@@ -314,18 +328,17 @@ def patch_rhi(text: str) -> str:
 #endif
 
 \tgl::UseProgram(m_uProgram);
-'''
-    return replace_once(text, begin_anchor, begin_patch, "rhi BeginDraw")
+''',
+        "rhi BeginDraw",
+    )
 
 
 def main() -> None:
     for path in (MAIN, RHI):
         if not path.is_file():
             raise SystemExit(f"missing OpenKO source: {path}")
-    main_text = MAIN.read_text(encoding="utf-8-sig")
-    rhi_text = RHI.read_text(encoding="utf-8-sig")
-    MAIN.write_text(patch_main(main_text), encoding="utf-8")
-    RHI.write_text(patch_rhi(rhi_text), encoding="utf-8")
+    MAIN.write_text(patch_main(MAIN.read_text(encoding="utf-8-sig")), encoding="utf-8")
+    RHI.write_text(patch_rhi(RHI.read_text(encoding="utf-8-sig")), encoding="utf-8")
     print(f"P2-03 patched {MAIN}")
     print(f"P2-03 patched {RHI}")
 
