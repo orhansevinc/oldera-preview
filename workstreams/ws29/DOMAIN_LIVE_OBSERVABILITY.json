@@ -1,0 +1,58 @@
+{
+  "schema_version": "oldkoweb-domain-live-observability/v1",
+  "release_id": "oldkoweb-domain-live-20261015",
+  "owner": "WS29",
+  "branch": "ws29-observability",
+  "base_source_commit": "d26f5af7aae0892576af5f35599a9d6076daf129",
+  "scope": "observability-contracts-and-diagnostic-tooling-only",
+  "release_identity": {
+    "fields": ["release_id", "provider_set", "client_artifact", "client_digest", "client_build", "service_version", "service_versions", "migration_head", "coordinator_source_commit"],
+    "moving_branch_head_is_version": false,
+    "ws50_handoff_supported": true
+  },
+  "request_correlation": {
+    "fields": ["request_id", "trace_id", "session_ref", "account_hash", "character_id", "game_connection_id", "runtime_target_id", "admin_command_id"],
+    "account_hash": "sha256-release-scoped",
+    "raw_account_identifier_required": false
+  },
+  "flows": {
+    "account_to_game": ["website", "account_api", "postgresql", "game_auth", "game_session", "character", "world_ready"],
+    "combat": ["mob_visibility", "target", "attack", "slash", "hp", "death"],
+    "admin_command": ["admin_login", "command_enqueue", "downstream", "terminal_status"]
+  },
+  "secret_redaction": {
+    "guaranteed_classes": ["password", "authorization", "cookie", "set_cookie", "csrf", "verification_token", "password_reset_token", "delivery_webhook_secret", "database_url_credentials", "tunnel_token", "admin_session_secret", "private_key"],
+    "variants": ["nested_json", "headers", "query", "assignment_strings", "bearer", "credential_urls", "binary"],
+    "synthetic_exact_byte_leak_test": true
+  },
+  "health_collector": {
+    "inputs": ["compose_project", "compose_file", "service_endpoints"],
+    "collects": ["container_state", "restart_count", "container_health", "http_health_readiness", "postgres_connectivity", "migration_version", "disk_free", "release_identity", "gateway_ports", "recent_sanitized_logs"],
+    "collects_docker_environment": false
+  },
+  "incident_bundle": {
+    "command": "oldko-diagnostics incident bundle --config <file> --out <dir>",
+    "files": ["summary.json", "release.json", "health.json", "migrations.json", "containers.json", "known-error-signatures.json", "browser-evidence.json", "logs/"],
+    "forbidden": ["db_dump", "password", "session_cookie", "private_key", "raw_token"]
+  },
+  "failure_categories": ["ACCOUNT_API_UNREADY", "DATABASE_UNREACHABLE", "MIGRATION_MISMATCH", "AUTH_GATEWAY_DOWN", "GAME_GATEWAY_DOWN", "WORLD_NOT_READY", "WEBSOCKET_DISCONNECT", "CLIENT_ASSET_MISSING", "ENTITY_NOT_CREATED", "MODEL_LOAD_FAILED", "ADMIN_REPOSITORY_UNREADY", "ADMIN_RUNTIME_BRIDGE_UNREADY", "UNKNOWN"],
+  "classification_policy": "evidence-required-otherwise-UNKNOWN",
+  "browser_evidence_handoff": {
+    "schema_version": "oldkoweb-browser-evidence-ref/v1",
+    "fields": ["run_id", "provider_set", "entity_runtime_id", "asset_id", "frame_evidence_path", "entity_created", "model_loaded", "asset_missing", "websocket_disconnected"],
+    "screenshot_generation_required": false
+  },
+  "windows": {
+    "powershell_friendly": true,
+    "ws09_wrapper_contract": "node .\\packages\\oldko-observability\\bin\\oldko-diagnostics.js incident bundle --config <file> --out .\\diagnostics"
+  },
+  "retention": {
+    "default_max_bundles": 10,
+    "default_max_age_days": 7,
+    "default_logs_since": "15m",
+    "default_logs_tail": 500,
+    "docker_rotation_mutated_by_ws29": false
+  },
+  "tests": ["redaction_golden", "synthetic_secret_leakage", "classification", "broken_service", "healthy_fixture", "cross_platform_path"],
+  "domain_live_diagnostics_ready": true
+}
