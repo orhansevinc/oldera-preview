@@ -19,6 +19,12 @@ for (const name of psFiles) {
   assert.ok(!/git\s+(reset|clean)\b/i.test(text), `${name} must not reset/clean local user changes`);
 }
 
+const discovery = fs.readFileSync(path.join(kit, 'Discover-Host.ps1'), 'utf8');
+assert.match(discovery, /origin_chain=/, 'discovery must expose domain-to-origin evidence');
+assert.match(discovery, /REMOTE_MANAGED_TOKEN/, 'token tunnel must remain unresolved without local ingress proof');
+const diagnostics = fs.readFileSync(path.join(kit, 'Diagnostics.ps1'), 'utf8');
+assert.match(diagnostics, /origin_chain=\$discovery\.origin_chain/, 'diagnostics must include origin chain');
+
 const common = fs.readFileSync(path.join(kit, 'Common.ps1'), 'utf8');
 assert.match(common, /\$LASTEXITCODE/, 'native wrapper must capture LASTEXITCODE');
 assert.match(common, /Protect-P212Text/, 'redaction helper must exist');
@@ -42,6 +48,7 @@ assert.equal(manifest.compose.project_name, 'oldkoweb-domain-live');
 assert.ok(Array.isArray(manifest.files) && manifest.files.length >= 8);
 assert.ok(Array.isArray(manifest.required_persistent_volumes) && manifest.required_persistent_volumes.length >= 1);
 assert.ok(Array.isArray(manifest.health_checks) && manifest.health_checks.length >= 1);
+for (const migrationFile of ['0001_init.sql','0002_persistence_hardening.sql','0003_public_account_api.sql','0004_admin_persistence.sql','0005_phase2_data_admin.sql']) assert.ok(manifest.files.some((f) => f.path.endsWith(migrationFile)), `release manifest must stage ${migrationFile}`);
 
 const migration = JSON.parse(fs.readFileSync(path.join(kit, 'migration-plan.example.json'), 'utf8'));
 assert.equal(migration.backup_before_migrate, true);
