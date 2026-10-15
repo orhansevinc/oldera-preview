@@ -147,7 +147,7 @@ jobs:
             -e CI_ADMIN_PASSWORD="$CI_ADMIN_PASSWORD" \
             -e CI_ADMIN_ORIGIN=http://localhost:18088 \
             -e CI_ACCOUNT_ORIGIN=http://localhost:18088 \
-            runtime node services/domain-live-runtime/ci-real-smoke.mjs pre
+            runtime node services/domain-live-runtime/ci-real-smoke-entry.mjs pre
 
       - name: Restart services and prove persistence
         shell: bash
@@ -161,7 +161,7 @@ jobs:
             -e CI_ADMIN_PASSWORD="$CI_ADMIN_PASSWORD" \
             -e CI_ADMIN_ORIGIN=http://localhost:18088 \
             -e CI_ACCOUNT_ORIGIN=http://localhost:18088 \
-            runtime node services/domain-live-runtime/ci-real-smoke.mjs post
+            runtime node services/domain-live-runtime/ci-real-smoke-entry.mjs post
 
       - name: Export package payload
         if: steps.meta.outputs.package_ready == 'true'
