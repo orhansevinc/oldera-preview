@@ -5,3 +5,8 @@ export * from './metrics.js';
 export * from './health.js';
 export * from './shutdown.js';
 export * from './prometheus.js';
+export * from './correlation.js';
+export * from './identity.js';
+export * from './classification.js';
+export * from './collector.js';
+export * from './incident-bundle.js';
