@@ -1,0 +1,245 @@
+{
+  "schema_version": "oldkoweb-phase2-handoff/v1",
+  "owner": "P2-12",
+  "workstream": "hosting",
+  "branch": "phase2/12-hosting",
+  "source_commit": "fe0a16313a1a91753c93f34d60c07090ef499185",
+  "code_sha": "fe0a16313a1a91753c93f34d60c07090ef499185",
+  "status": "BLOCKED",
+  "integration_disposition": "IMPLEMENTATION_READY_RUNTIME_EVIDENCE_BLOCKED",
+  "base": {
+    "branch": "ws50-integration-rehearsal",
+    "sha": "50ecabec15bd358d222a01891ca31359f3a928b0"
+  },
+  "coordinator": {
+    "branch": "phase2/00-integration",
+    "contracts_sha_observed": "8e7410f7458e216fee184749ae8a333e0eb7ab3d"
+  },
+  "legacy_sources": [
+    {"owner": "WS09", "branch": "ws09-production-infra", "task_start_sha": "9d07509558961c9f63e3eda4667a375488e746f5", "continued_as": "existing-PC bootstrap/update discovery"},
+    {"owner": "WS20", "branch": "ws20-reliability-security", "task_start_sha": "2406af54eb549759403b54b20813dc499ef8f788", "continued_as": "fail-closed host/update safety"},
+    {"owner": "WS29", "branch": "ws29-observability", "task_start_sha": "7f426a91cd108620134c4f4da925ef97fe45164e", "continued_as": "one-shot redacted diagnostics"},
+    {"owner": "WS30", "branch": "ws30-backup-recovery", "task_start_sha": "aa94d9e489f25e6b8f39e54014e11606807d4d59", "continued_as": "real backup/isolated restore rehearsal"}
+  ],
+  "ws50_baseline": {
+    "handoff_path": "coordination/handoffs/domain-live/WS50.json",
+    "handoff_source_commit": "ffb2b8dc3e2a86a136fb13deddd4ea551c031939",
+    "base_branch_sha": "50ecabec15bd358d222a01891ca31359f3a928b0",
+    "phase1_local_origin_verified": true,
+    "phase1_domain_live_verified": false,
+    "note": "P2-12 does not treat the older Phase-1 package as the final Phase-2 candidate."
+  },
+  "phase2_dependencies": [
+    {
+      "owner": "P2-00",
+      "required": true,
+      "contract": "final immutable Phase-2 release manifest/package, pinned images/client identities, shared Compose/Nginx integration",
+      "state": "PENDING_FINAL_PACKAGE"
+    },
+    {
+      "owner": "P2-02",
+      "required": true,
+      "source_commit": "729f9029d563f72728a7251869d2633fb1bdd5e3",
+      "handoff_commit": "52a2f75190ee9e2f4e00869432f008ca2e15d510",
+      "contract": "runtime-manifest/hash-versioned cache policy, MIME/compression rules",
+      "state": "CONSUMED_EDGE_CONTRACT; LIVE_RUNTIME_PER_FILE_IDENTITY_AND_COLD_WARM_EVIDENCE_PENDING"
+    },
+    {
+      "owner": "P2-11",
+      "required": true,
+      "source_commit": "03445f825140997e4971c5855b32e9cd0fd631a4",
+      "handoff_commit": "8c03b019f0240a98e4ba0b0fc5020f22cde808eb",
+      "contract": "canonical PostgreSQL migration order/head and migrator",
+      "state": "CONSUMED_SOURCE_CONTRACT; TARGET_LEDGER_AND_0005_APPLICATION_PENDING"
+    },
+    {
+      "owner": "P2-13",
+      "required": true,
+      "contract": "same exact candidate domain/browser/authenticated gameplay and admin acceptance",
+      "state": "PENDING"
+    }
+  ],
+  "changed_files": [
+    "hosting/p2-12/Backup-Database.ps1",
+    "hosting/p2-12/Common.ps1",
+    "hosting/p2-12/Diagnostics.ps1",
+    "hosting/p2-12/Discover-Host.ps1",
+    "hosting/p2-12/Host-Readiness.ps1",
+    "hosting/p2-12/INTEGRATION_PROPOSAL.md",
+    "hosting/p2-12/README.md",
+    "hosting/p2-12/Register-Startup.ps1",
+    "hosting/p2-12/Restore-Database.ps1",
+    "hosting/p2-12/Retention.ps1",
+    "hosting/p2-12/Rollback-Code.ps1",
+    "hosting/p2-12/Run-Migrations.ps1",
+    "hosting/p2-12/Start-Host.ps1",
+    "hosting/p2-12/Test-BackupRestore.ps1",
+    "hosting/p2-12/Test-ReleaseHealth.ps1",
+    "hosting/p2-12/Test-ReleasePackage.ps1",
+    "hosting/p2-12/Update-Release.ps1",
+    "hosting/p2-12/migration-plan.example.json",
+    "hosting/p2-12/nginx-phase2-cache.conf",
+    "hosting/p2-12/release-manifest.example.json",
+    "tests/hosting/p2-12-static.mjs"
+  ],
+  "contracts_provided": [
+    "oldkoweb-p2-host-discovery/v1: read-only install/Compose/container/image/mount/port/tunnel/DNS/domain-origin discovery",
+    "oldkoweb-p2-diagnostics/v1: one redacted release/image/client/DB/domain/WebSocket/origin-chain bundle with gameplay-login evidence boundary",
+    "oldkoweb-p2-release/v1 validation/orchestration: exact source/files/checksums, one existing Compose project, persistent-volume gate, mandatory health checks",
+    "oldkoweb-p2-db-backup/v1: PostgreSQL custom-format backup + SHA256 + migration ledger metadata",
+    "oldkoweb-p2-restore-rehearsal/v1: restore into one temporary same-image PostgreSQL container without touching production DB",
+    "oldkoweb-p2-code-rollback/v1: code/composition rollback kept separate from DB restore",
+    "oldkoweb-p2-db-restore/v1: explicit quiesce assertion, active-session guard, pre-restore backup and post-restore ledger/table verification",
+    "oldkoweb-p2-startup/v1: exact existing Compose project startup with restart-safe tunnel gate"
+  ],
+  "installation_requirements": {
+    "target": "Orhan Windows 11 Pro PC; existing Docker/Compose/WSL installation",
+    "known_source_root": "C:\\Users\\Orhan\\OldKOWeb",
+    "actual_runtime_root": "DISCOVER_ON_TARGET; never assume a fresh install",
+    "single_compose_project": true,
+    "no_paid_server": true,
+    "no_second_stack": true,
+    "no_mass_client_builds": true,
+    "preserve_env_secrets_user_files": true,
+    "preserve_postgresql_volume": true,
+    "live_deploy_performed_by_p2_12": false,
+    "target_pc_install_claimed": false,
+    "powershell": "Windows PowerShell 5.1; all P2-12 .ps1 files UTF-8 BOM; native wrapper captures LASTEXITCODE/output; no reserved $HOME/$home",
+    "startup": "Discover exact Compose config/environment labels; register at most one logon task only when tunnel restart is proven via Windows service or selected Compose project.",
+    "host_readiness": "Report Docker Resource Saver/autostart hints, Windows AC sleep, free disk and log rotation without silently changing personal host settings."
+  },
+  "migration_requirements": {
+    "owner": "P2-11",
+    "candidate_head": "0005_phase2_data_admin.sql",
+    "ordered_sequence": [
+      "0001_init.sql",
+      "0002_persistence_hardening.sql",
+      "0003_public_account_api.sql",
+      "0004_admin_persistence.sql",
+      "0005_phase2_data_admin.sql"
+    ],
+    "canonical_migrator": "services/oldko-data/src/scripts/migrate.js through the exact final Compose service; P2-12 must not bypass it with direct psql -f",
+    "preconditions": [
+      "final package lists every migration payload and checksum",
+      "real target public._oldko_migrations ledger captured before apply",
+      "real DB backup completed and SHA256 recorded",
+      "restore rehearsal passes in one temporary same-image PostgreSQL container",
+      "rollback_compatible_with_previous_application is explicit"
+    ],
+    "postconditions": [
+      "canonical migrator ledger contains every expected filename with exact SHA256",
+      "mandatory local release health checks pass",
+      "if health switch fails and DB is backward compatible, pre-apply code composition is restored automatically",
+      "if DB is not backward compatible, code-only rollback is refused and explicit quiesced DB restore is required"
+    ]
+  },
+  "edge_requirements": {
+    "p2_02_source_commit": "729f9029d563f72728a7251869d2633fb1bdd5e3",
+    "proposal": "hosting/p2-12/nginx-phase2-cache.conf",
+    "rules": [
+      "runtime-manifest.json no-store + JSON MIME",
+      "play cache/loading shell revalidate",
+      "only hash-versioned runtime URLs may be long-lived immutable",
+      "application/wasm for .wasm; JS/JSON MIME; .data application/octet-stream",
+      "gzip_vary; conservative JS/WASM gzip; no blind .data gzip",
+      "COOP/COEP/CORP and byte ranges for runtime",
+      "auth/game WebSocket upgrade + 3600s read/send timeout + proxy_buffering off",
+      "auth/game/API/account/admin no-store/cache bypass"
+    ],
+    "final_shared_nginx_edit_owner": "P2-00"
+  },
+  "tests": [
+    {
+      "command": "node tests/hosting/p2-12-static.mjs",
+      "result": "PASS",
+      "evidence": "15 PowerShell files checked for UTF-8 BOM and destructive-command exclusions; LASTEXITCODE/redaction, P2-02 edge rules, origin-chain diagnostics, persistent-volume/health gates, full 0001..0005 staging, canonical migrator use, and separate rollback/restore contracts checked."
+    },
+    {
+      "command": "UTF-8 BOM byte gate over hosting/p2-12/*.ps1",
+      "result": "PASS",
+      "evidence": "15/15 scripts start EF BB BF."
+    },
+    {
+      "command": "Windows PowerShell 5.1 parse/runtime on Orhan PC",
+      "result": "NOT_RUN",
+      "evidence": "No Windows/PowerShell 5.1 target executor was available in this workstream session."
+    },
+    {
+      "command": "Discover-Host.ps1 + Diagnostics.ps1 on target PC",
+      "result": "NOT_RUN",
+      "evidence": "No target-PC access; actual container/image/volume/port/tunnel/origin snapshot is intentionally not fabricated."
+    },
+    {
+      "command": "Backup-Database.ps1 + Test-BackupRestore.ps1 against target PostgreSQL",
+      "result": "NOT_RUN",
+      "evidence": "No target-PC Docker/PostgreSQL access; no production backup/restore claim."
+    },
+    {
+      "command": "Update-Release.ps1 -Apply + mandatory health + rollback on exact final Phase-2 package",
+      "result": "NOT_RUN",
+      "evidence": "P2-00 final immutable Phase-2 package/manifest is not yet published and P2-12 must not initiate a second deploy."
+    },
+    {
+      "command": "PC restart + Docker/tunnel startup + authenticated game login",
+      "result": "NOT_RUN",
+      "evidence": "Requires the user's real PC and P2-13/browser evidence; HTTP 200 or WebSocket connect is explicitly insufficient."
+    }
+  ],
+  "runtime_evidence": [
+    "No live deploy, migration, volume deletion, stack-wide down, Docker prune, git reset or git clean was performed by P2-12.",
+    "No target-PC runtime state was inferred from repository files.",
+    "P2-12 diagnostics classify HTTP/domain and WebSocket transport separately from authenticated gameplay login.",
+    "P2-02 edge contract and P2-11 canonical migration source contract were reconciled into P2-12 tooling."
+  ],
+  "shared_file_requests": [
+    {
+      "owner": "P2-00",
+      "request": "Port hosting/p2-12/nginx-phase2-cache.conf into the final integration-owned deploy/domain-live/nginx.conf without duplicate location blocks."
+    },
+    {
+      "owner": "P2-00",
+      "request": "Add bounded Docker log rotation to the final long-running services and keep the existing PostgreSQL named volume."
+    },
+    {
+      "owner": "P2-00",
+      "request": "Publish one exact Phase-2 release manifest/package containing pinned image/client identities, P2-02 runtime-manifest identity, required persistent mounts, mandatory health checks, P2-11 migration plan/payloads and the canonical migration runner."
+    }
+  ],
+  "source_or_asset_gaps": [
+    "P2-02 exact live KnightOnLine.js/.wasm/.data per-file sizes/SHA256 and controlled cold/warm browser measurements remain target-integration evidence, not fabricated here.",
+    "P2-11 real target DB ledger before 0005 remains unqueried in this workstream.",
+    "P2-00 final immutable Phase-2 package/checksums are not yet available to execute the update gate."
+  ],
+  "blockers": [
+    {
+      "code": "TARGET_PC_RUNTIME_NOT_AVAILABLE",
+      "owner": "P2-00 / target PC",
+      "detail": "This session has no access to Orhan's Windows Docker/PostgreSQL/tunnel runtime. Exact existing Compose/volume/port/origin discovery, PowerShell 5.1 execution, backup/restore rehearsal, restart behavior and local authenticated gameplay cannot be claimed."
+    },
+    {
+      "code": "P2_00_FINAL_PHASE2_PACKAGE_PENDING",
+      "owner": "P2-00",
+      "detail": "The hosting mechanism is implemented, but the exact immutable integrated Phase-2 release manifest/package and pinned image/client identities required by the update flow do not yet exist on this branch."
+    },
+    {
+      "code": "P2_11_TARGET_LEDGER_AND_0005_PENDING",
+      "owner": "P2-11 / P2-00 / P2-12 target execution",
+      "detail": "P2-11 defines canonical head 0005 and migrator semantics, but the real PC public._oldko_migrations ledger was not queried and 0005 was intentionally not applied. Backup + restore rehearsal + canonical migration must run in the approved integration chain."
+    },
+    {
+      "code": "P2_02_RUNTIME_IDENTITY_AND_BENCHMARK_PENDING",
+      "owner": "P2-00 / P2-13",
+      "detail": "P2-02 edge/cache contract is consumed, but exact final runtime-manifest per-file client identity and same-device cold/warm evidence remain pending."
+    },
+    {
+      "code": "DOMAIN_AND_AUTHENTICATED_GAMEPLAY_ACCEPTANCE_PENDING",
+      "owner": "P2-13",
+      "detail": "Public TLS/domain/API/WebSocket transport plus real browser client startup and authenticated gameplay/admin flow must be proven against the same integrated candidate; HTTP 200 alone is not accepted."
+    }
+  ],
+  "notes": [
+    "Implementation is ready for P2-00 code integration, but overall P2-12 status remains BLOCKED until target-runtime evidence is produced.",
+    "P2-12 owns mechanisms only; P2-00 owns final shared Compose/Nginx/release workflow edits and live cutover.",
+    "No paid server migration or unnecessary reinstall is required or proposed."
+  ]
+}
