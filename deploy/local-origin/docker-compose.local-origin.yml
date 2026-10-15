@@ -1,0 +1,66 @@
+# Thin local-origin overlay for docker-compose.ws09.yml.
+# Reuses the same services, networks, volume and restart policies. Public TLS/DNS are intentionally absent.
+services:
+  reverse-proxy:
+    ports: !override
+      - "${LOCAL_HTTP_BIND:-127.0.0.1:8088}:80"
+    environment:
+      OFFICIAL_HOST: ${OFFICIAL_HOST:-oldkoweb.com}
+      PLAY_HOST: ${PLAY_HOST:-play.oldkoweb.com}
+      ADMIN_HOST: ${ADMIN_HOST:-admin.oldkoweb.com}
+      ACCOUNT_API_PORT: ${ACCOUNT_API_PORT:-8081}
+      ADMIN_API_PORT: ${ADMIN_API_PORT:-8080}
+      GATEWAY_INTERNAL_PORT: ${GATEWAY_INTERNAL_PORT:-8080}
+      ADMIN_UPSTREAM: ${LOCAL_ADMIN_UPSTREAM:-admin-api-fixture}
+      NGINX_ENVSUBST_FILTER: '^(OFFICIAL_HOST|PLAY_HOST|ADMIN_HOST|ACCOUNT_API_PORT|ADMIN_API_PORT|GATEWAY_INTERNAL_PORT|ADMIN_UPSTREAM)$'
+    volumes: !override
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/nginx/mime.types:/etc/nginx/oldkoweb-mime.types:ro
+      - ./deploy/local-origin/local-origin.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ${LOCAL_ARTIFACT_ROOT:?bootstrap.ps1 must set LOCAL_ARTIFACT_ROOT}:/srv/oldkoweb:ro
+      - ${LOCAL_META_ROOT:?bootstrap.ps1 must set LOCAL_META_ROOT}:/srv/oldkoweb-local-meta:ro
+    depends_on: !override
+      account-api:
+        condition: service_healthy
+      gateway-auth:
+        condition: service_healthy
+      gateway-game:
+        condition: service_healthy
+
+  account-api:
+    # Local HTTP is deliberately development mode: no fake production TLS/mail claim.
+    # PostgreSQL repository remains explicitly configured, while delivery is NOT_CONFIGURED.
+    environment:
+      NODE_ENV: development
+      OLDKO_ACCOUNT_ALLOWED_ORIGINS: http://${OFFICIAL_HOST:-oldkoweb.com}:${LOCAL_EDGE_PORT:-8088}
+      OLDKO_TRUST_PROXY: "1"
+      OLDKO_ACCOUNT_DELIVERY_WEBHOOK_URL: ""
+      OLDKO_ACCOUNT_DELIVERY_WEBHOOK_SECRET: ""
+      OLDKO_ACCOUNT_MAIL_FROM: ""
+
+  admin-api:
+    # A future immutable bundle with a real WS08 image enables this profile.
+    profiles: ["real-admin"]
+
+  admin-api-fixture:
+    image: ${NGINX_IMAGE:?Set NGINX_IMAGE from the verified release bundle}
+    profiles: ["fixture-admin"]
+    restart: unless-stopped
+    init: true
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    volumes:
+      - ./deploy/local-origin/fixtures/admin-api.conf:/etc/nginx/conf.d/default.conf:ro
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/api/admin/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
+    networks:
+      - backend

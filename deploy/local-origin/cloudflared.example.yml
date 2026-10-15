@@ -1,0 +1,12 @@
+# Credential-free FUTURE template only. Do not commit a real tunnel UUID/token/account/zone id.
+tunnel: REPLACE_WITH_TUNNEL_UUID
+credentials-file: C:\\Users\\Orhan\\.cloudflared\\REPLACE_WITH_TUNNEL_UUID.json
+
+ingress:
+  - hostname: oldkoweb.com
+    service: http://127.0.0.1:8088
+  - hostname: play.oldkoweb.com
+    service: http://127.0.0.1:8088
+  - hostname: admin.oldkoweb.com
+    service: http://127.0.0.1:8088
+  - service: http_status:404

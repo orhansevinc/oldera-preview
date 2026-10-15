@@ -1,0 +1,150 @@
+name: WS09 Windows Local Origin
+
+on:
+  push:
+    branches: [ws09-production-infra]
+    paths:
+      - 'deploy/local-origin/**'
+      - 'workstreams/ws09/LOCAL_PC_ORIGIN.json'
+      - '.github/workflows/ws09-local-origin.yml'
+      - 'docker-compose.ws09.yml'
+      - 'infra/nginx/**'
+  pull_request:
+    paths:
+      - 'deploy/local-origin/**'
+      - 'workstreams/ws09/LOCAL_PC_ORIGIN.json'
+      - '.github/workflows/ws09-local-origin.yml'
+      - 'docker-compose.ws09.yml'
+      - 'infra/nginx/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-and-fixture-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate PowerShell syntax
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $errors = @()
+          Get-ChildItem deploy/local-origin -Filter '*.ps1' | ForEach-Object {
+            $tokens = $null; $parseErrors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$parseErrors) | Out-Null
+            if ($parseErrors.Count) {
+              $parseErrors | ForEach-Object { Write-Error "$($_.Extent.File):$($_.Extent.StartLineNumber) $($_.Message)" }
+              $errors += $parseErrors
+            }
+          }
+          if ($errors.Count) { throw "PowerShell parse errors: $($errors.Count)" }
+
+      - name: Validate JSON contracts and pinned migration order
+        shell: python
+        run: |
+          import json, pathlib
+          origin=json.loads(pathlib.Path('workstreams/ws09/LOCAL_PC_ORIGIN.json').read_text())
+          plan=json.loads(pathlib.Path('deploy/local-origin/migration-plan.domain-live-20261015.json').read_text())
+          example=json.loads(pathlib.Path('deploy/local-origin/release-manifest.example.json').read_text())
+          assert origin['user_pc_setup_reduction_ready'] is True
+          assert origin['edge_handoff']['dns_changed'] is False
+          assert plan['backup_before_migrate'] is True and plan['forward_only'] is True
+          assert [m['file'] for m in plan['ws07']['migrations']] == [
+              '0001_init.sql','0002_persistence_hardening.sql','0003_public_account_api.sql','0004_admin_persistence.sql']
+          assert plan['service_owned'][0]['path'] == 'services/account-api/sql/0001_postgres_rate_limit.sql'
+          assert example['schema_version'] == 'oldkoweb-local-release-input/v1'
+          assert 'bundle_sha256' in example
+
+      - name: Prepare CI fixture state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p deploy/local-origin/.state/{secrets,ci-artifacts/site,ci-artifacts/play,ci-artifacts/admin,ci-meta}
+          printf 'LOCAL_ONLY\n' > deploy/local-origin/.state/secrets/postgres_password.txt
+          printf '<!doctype html><title>site fixture</title>\n' > deploy/local-origin/.state/ci-artifacts/site/index.html
+          printf '<!doctype html><title>play fixture</title>\n' > deploy/local-origin/.state/ci-artifacts/play/index.html
+          printf '<!doctype html><title>admin fixture</title>\n' > deploy/local-origin/.state/ci-artifacts/admin/index.html
+          printf '%s\n' '{"release_id":"ci-fixture","production_claim":false}' > deploy/local-origin/.state/ci-meta/release.json
+          cp deploy/local-origin/.env.example deploy/local-origin/.state/ci.env
+          printf 'LOCAL_COMPOSE_PROJECT=oldkoweb-local-origin-ci\n' >> deploy/local-origin/.state/ci.env
+
+      - name: Validate Compose merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import re, subprocess
+          v=subprocess.check_output(['docker','compose','version','--short'], text=True).strip().lstrip('v').split('-')[0]
+          nums=tuple(map(int, (v.split('.')+['0','0'])[:3]))
+          assert nums >= (2,24,4), f'Compose >=2.24.4 required, got {v}'
+          PY
+          docker compose --project-name oldkoweb-local-origin-ci \
+            --env-file deploy/local-origin/.state/ci.env \
+            -f docker-compose.ws09.yml \
+            -f deploy/local-origin/docker-compose.local-origin.yml \
+            -f deploy/local-origin/docker-compose.ci-fixture.yml \
+            --profile fixture-admin config >/tmp/local-origin-compose.yml
+          grep -Fq 'oldkoweb_postgres_data' /tmp/local-origin-compose.yml
+          grep -Fq 'restart: unless-stopped' /tmp/local-origin-compose.yml
+
+      - name: Validate shell and Nginx local edge
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in deploy/*.sh; do sh -n "$f"; done
+          docker run --rm \
+            -e OFFICIAL_HOST=oldkoweb.com -e PLAY_HOST=play.oldkoweb.com -e ADMIN_HOST=admin.oldkoweb.com \
+            -e ACCOUNT_API_PORT=8081 -e ADMIN_API_PORT=8080 -e GATEWAY_INTERNAL_PORT=8080 -e ADMIN_UPSTREAM=admin-api-fixture \
+            -e 'NGINX_ENVSUBST_FILTER=^(OFFICIAL_HOST|PLAY_HOST|ADMIN_HOST|ACCOUNT_API_PORT|ADMIN_API_PORT|GATEWAY_INTERNAL_PORT|ADMIN_UPSTREAM)$' \
+            -v "$PWD/infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" \
+            -v "$PWD/infra/nginx/mime.types:/etc/nginx/oldkoweb-mime.types:ro" \
+            -v "$PWD/deploy/local-origin/local-origin.conf.template:/etc/nginx/templates/default.conf.template:ro" \
+            nginx:stable-alpine nginx -t
+
+      - name: Start CI fixture through WS09 topology
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose --project-name oldkoweb-local-origin-ci \
+            --env-file deploy/local-origin/.state/ci.env \
+            -f docker-compose.ws09.yml \
+            -f deploy/local-origin/docker-compose.local-origin.yml \
+            -f deploy/local-origin/docker-compose.ci-fixture.yml \
+            --profile fixture-admin up -d db account-api session-world gateway-auth gateway-game admin-api-fixture reverse-proxy
+          for i in $(seq 1 60); do
+            if curl -fsS --resolve oldkoweb.com:8088:127.0.0.1 http://oldkoweb.com:8088/ >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+
+      - name: Run PowerShell smoke against CI fixture
+        shell: pwsh
+        run: |
+          ./deploy/local-origin/smoke.ps1 -EnvFile "$PWD/deploy/local-origin/.state/ci.env"
+
+      - name: Secret/static safety gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -R -n -E 'BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|CLOUDFLARE_API_TOKEN=[A-Za-z0-9_-]{16,}|CF_API_TOKEN=[A-Za-z0-9_-]{16,}' deploy/local-origin workstreams/ws09/LOCAL_PC_ORIGIN.json
+          grep -R -n 'NOT_CONFIGURED' deploy/local-origin/.env.example deploy/local-origin/README.md >/dev/null
+
+      - name: Diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          docker compose --project-name oldkoweb-local-origin-ci \
+            --env-file deploy/local-origin/.state/ci.env \
+            -f docker-compose.ws09.yml \
+            -f deploy/local-origin/docker-compose.local-origin.yml \
+            -f deploy/local-origin/docker-compose.ci-fixture.yml \
+            --profile fixture-admin ps || true
+          docker compose --project-name oldkoweb-local-origin-ci \
+            --env-file deploy/local-origin/.state/ci.env \
+            -f docker-compose.ws09.yml \
+            -f deploy/local-origin/docker-compose.local-origin.yml \
+            -f deploy/local-origin/docker-compose.ci-fixture.yml \
+            --profile fixture-admin logs --tail=200 || true

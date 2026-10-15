@@ -1,0 +1,105 @@
+# OldKOWeb local persistent-origin edge. HTTP only; this is NOT production TLS.
+server {
+    listen 80 default_server;
+    server_name _;
+    add_header X-OldKOWeb-Local-Origin "1" always;
+    location = /healthz { access_log off; return 200 'ok\n'; add_header Content-Type text/plain; }
+    location / { return 444; }
+}
+
+server {
+    listen 80;
+    server_name ${OFFICIAL_HOST};
+    add_header X-OldKOWeb-Local-Origin "1" always;
+    root /srv/oldkoweb/site;
+    index index.html;
+
+    location = /healthz { access_log off; return 200 'ok\n'; add_header Content-Type text/plain; }
+    location = /__local/release { alias /srv/oldkoweb-local-meta/release.json; default_type application/json; add_header Cache-Control "no-store"; }
+    location = /__local/account-health {
+        proxy_pass http://account-api:${ACCOUNT_API_PORT}/readyz;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto http;
+    }
+    location = /api/account { return 308 /api/account/; }
+    location /api/account/ {
+        proxy_pass http://account-api:${ACCOUNT_API_PORT}/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto http;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Request-ID $request_id;
+        proxy_buffering off;
+    }
+    location = /index.html { add_header Cache-Control "no-cache, no-store, must-revalidate" always; try_files $uri =404; }
+    location / { try_files $uri $uri/ /index.html; }
+}
+
+server {
+    listen 80;
+    server_name ${PLAY_HOST};
+    add_header X-OldKOWeb-Local-Origin "1" always;
+    root /srv/oldkoweb/play;
+    index index.html;
+
+    location = /healthz { access_log off; return 200 'ok\n'; add_header Content-Type text/plain; }
+    location = /__local/auth-health { proxy_pass http://gateway-auth:${GATEWAY_INTERNAL_PORT}/healthz; }
+    location = /__local/game-health { proxy_pass http://gateway-game:${GATEWAY_INTERNAL_PORT}/healthz; }
+    location = /auth {
+        proxy_pass http://gateway-auth:${GATEWAY_INTERNAL_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto http;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_buffering off;
+    }
+    location = /game {
+        proxy_pass http://gateway-game:${GATEWAY_INTERNAL_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto http;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_buffering off;
+    }
+    location = /index.html { add_header Cache-Control "no-cache, no-store, must-revalidate" always; try_files $uri =404; }
+    location / { try_files $uri $uri/ /index.html; }
+}
+
+server {
+    listen 80;
+    server_name ${ADMIN_HOST};
+    add_header X-OldKOWeb-Local-Origin "1" always;
+    root /srv/oldkoweb/admin;
+    index index.html;
+
+    location = /healthz { access_log off; return 200 'ok\n'; add_header Content-Type text/plain; }
+    location = /__local/admin-health { proxy_pass http://${ADMIN_UPSTREAM}:${ADMIN_API_PORT}/api/admin/health; }
+    location /api/admin/ {
+        proxy_pass http://${ADMIN_UPSTREAM}:${ADMIN_API_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto http;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Request-ID $request_id;
+        proxy_buffering off;
+    }
+    location = /index.html { add_header Cache-Control "no-cache, no-store, must-revalidate" always; try_files $uri =404; }
+    location / { try_files $uri $uri/ /index.html; }
+}

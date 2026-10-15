@@ -1,0 +1,9 @@
+{
+  "schema_version": "oldkoweb-local-release-input/v1",
+  "release_id": "REPLACE_WITH_IMMUTABLE_RELEASE_ID",
+  "bundle_path": "C:\\path\\to\\oldkoweb-release.tar.gz",
+  "bundle_sha256": "REPLACE_WITH_64_HEX_SHA256",
+  "migration_plan": "C:\\Users\\Orhan\\OldKOWeb\\deploy\\local-origin\\migration-plan.domain-live-20261015.json",
+  "mode": "release",
+  "notes": "Use bundle_url instead of bundle_path when desired. Never place credentials in this manifest."
+}

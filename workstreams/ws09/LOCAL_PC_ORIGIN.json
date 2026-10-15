@@ -1,0 +1,144 @@
+{
+  "schema_version": "ws09-local-pc-origin/v1",
+  "release_id": "oldkoweb-domain-live-20261015",
+  "supported_os": {
+    "name": "Windows 11 Pro",
+    "minimum_build": 22000,
+    "wsl": "WSL2 required",
+    "docker": "Docker Desktop with running Linux engine and docker compose >= 2.24.4",
+    "git": "required",
+    "automatic_dependency_install": false
+  },
+  "target_repo_path": "C:\\Users\\Orhan\\OldKOWeb",
+  "paths": {
+    "bootstrap_root": "deploy/local-origin",
+    "state": "deploy/local-origin/.state",
+    "generated_env": "deploy/local-origin/.state/.env.local",
+    "release_cache": "deploy/local-origin/.state/cache/bundles/<sha256>",
+    "release_extract": "deploy/local-origin/.state/releases/sha256-<bundle-sha256>",
+    "backup_dir": "deploy/local-origin/.state/backups",
+    "secret_dir": "deploy/local-origin/.state/secrets"
+  },
+  "commands": {
+    "preflight": ".\\deploy\\local-origin\\preflight.ps1",
+    "bootstrap_fixture_one_command": ".\\deploy\\local-origin\\bootstrap.ps1",
+    "start": ".\\deploy\\local-origin\\up.ps1",
+    "status": ".\\deploy\\local-origin\\status.ps1",
+    "logs": ".\\deploy\\local-origin\\logs.ps1 -Service account-api -Follow",
+    "smoke": ".\\deploy\\local-origin\\smoke.ps1",
+    "doctor": ".\\deploy\\local-origin\\doctor.ps1",
+    "stop": ".\\deploy\\local-origin\\stop.ps1",
+    "rollback": ".\\deploy\\local-origin\\rollback.ps1",
+    "one_command_start": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\deploy\\local-origin\\bootstrap.ps1",
+    "update": ".\\deploy\\local-origin\\update-release.ps1 -ManifestPath C:\\path\\release-input.json"
+  },
+  "topology": {
+    "base": "docker-compose.ws09.yml",
+    "overlay": "deploy/local-origin/docker-compose.local-origin.yml",
+    "second_production_topology_created": false,
+    "restart_policy_reused": "unless-stopped",
+    "log_rotation_reused": {
+      "driver": "json-file",
+      "max_size": "20m",
+      "max_files": 5
+    },
+    "backend_network_reused": "oldkoweb_backend",
+    "edge_network_reused": "oldkoweb_edge"
+  },
+  "volumes": {
+    "postgres": "oldkoweb_postgres_data",
+    "delete_on_stop": false,
+    "stable_release_cache": true
+  },
+  "release_input": {
+    "moving_branch_head_allowed": false,
+    "accepted": [
+      "ReleaseId + immutable bundle/checksum",
+      "bundle path + SHA256 sidecar/ExpectedSha256",
+      "deploy/local-origin/release-manifest.example.json schema"
+    ],
+    "default_fixture_bundle": {
+      "name": "oldkoweb-domain-live-20261015-candidate.tar.gz",
+      "sha256": "9db45d30fe46ca33da7b8c7b6762b7e45ee5ee546c358440ce707f02c8f21b29",
+      "provider_set": "WS50-C5@sha256:7ac3b8a4c06b67e52b8d18518ef8c82209a60c6101c33609a4c16e64d84f119e",
+      "usage": "LOCAL_TEST_FIXTURE_ONLY",
+      "production_persistence_accepted": false,
+      "real_admin_image_present": false
+    },
+    "checksum_before_extract": true,
+    "internal_SHA256SUMS_required": true,
+    "image_identity_receipts_verified": true,
+    "manifest_example": "deploy/local-origin/release-manifest.example.json"
+  },
+  "secret_input": {
+    "generated_locally": [
+      "postgres_password",
+      "admin_session_secret"
+    ],
+    "cryptographically_random": true,
+    "gitignored": true,
+    "never_generated": [
+      "mail webhook/provider credential",
+      "Cloudflare token",
+      "Cloudflare account id",
+      "Cloudflare zone id",
+      "DNS credential"
+    ],
+    "external_missing_state": "NOT_CONFIGURED"
+  },
+  "migration_input": {
+    "manifest": "deploy/local-origin/migration-plan.domain-live-20261015.json",
+    "manifest_driven": true,
+    "backup_before_migrate": true,
+    "forward_only": true,
+    "ws07_handoff_head": "174810e39697f98259aab0432536973dd4ff76f7",
+    "ws07_source_commit": "eaac4700c3535c449f6a2b7d20c925bc61382c35",
+    "ws13_handoff_head": "5731f7accd5839c89a2bb11090715f0345fcaeb1",
+    "ws13_source_commit": "e53966d9f882d98e2a5b4746262f38355dfda848",
+    "order": [
+      "database/migrations/0001_init.sql",
+      "database/migrations/0002_persistence_hardening.sql",
+      "database/migrations/0003_public_account_api.sql",
+      "database/migrations/0004_admin_persistence.sql",
+      "services/account-api/sql/0001_postgres_rate_limit.sql"
+    ]
+  },
+  "health": {
+    "local_edge": "127.0.0.1:8088 HTTP only",
+    "homepage": "Host oldkoweb.com /",
+    "account": "Host oldkoweb.com /__local/account-health",
+    "play": "Host play.oldkoweb.com /",
+    "auth_gateway": "Host play.oldkoweb.com /__local/auth-health",
+    "game_gateway": "Host play.oldkoweb.com /__local/game-health",
+    "admin": "Host admin.oldkoweb.com /__local/admin-health",
+    "postgres": "pg_isready",
+    "release_manifest": "Host oldkoweb.com /__local/release",
+    "gameplay_acceptance_claimed": false
+  },
+  "edge_handoff": {
+    "template": "deploy/local-origin/cloudflared.example.yml",
+    "future_public_mapping": {
+      "oldkoweb.com": "http://127.0.0.1:8088",
+      "play.oldkoweb.com": "http://127.0.0.1:8088",
+      "admin.oldkoweb.com": "http://127.0.0.1:8088"
+    },
+    "tunnel_created": false,
+    "dns_changed": false,
+    "tls_claim": "NONE_LOCAL_HTTP_ONLY"
+  },
+  "rollback": {
+    "application_and_static_release": true,
+    "database_blind_rollback": false,
+    "forward_schema_retained": true,
+    "requires_previous_application_compatibility": true
+  },
+  "external_remaining_steps": [
+    "WS50 must later select an immutable persistent gameplay child; this task does not select one.",
+    "WS10 must accept the exact later release for gameplay/browser production acceptance.",
+    "A real WS08 admin production image/adapters must be present for Mode=release.",
+    "Real mail provider configuration remains NOT_CONFIGURED.",
+    "cloudflared tunnel credentials and authoritative DNS changes remain external future work.",
+    "Production TLS/renewal remains an external edge concern."
+  ],
+  "user_pc_setup_reduction_ready": true
+}

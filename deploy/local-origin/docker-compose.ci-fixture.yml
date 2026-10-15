@@ -1,0 +1,49 @@
+# CI-only service-body substitutions. Service names/topology stay identical to WS09.
+services:
+  account-api:
+    image: ${NGINX_IMAGE}
+    command: ["nginx", "-g", "daemon off;"]
+    volumes: !override
+      - ./deploy/local-origin/fixtures/account-api.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck: !override
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8081/readyz || exit 1"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+      start_period: 1s
+
+  session-world:
+    image: ${NGINX_IMAGE}
+    command: ["nginx", "-g", "daemon off;"]
+    volumes: !override
+      - ./deploy/local-origin/fixtures/session-world.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck: !override
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:15100/ && wget -q -O /dev/null http://127.0.0.1:15001/"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+      start_period: 1s
+
+  gateway-auth:
+    image: ${NGINX_IMAGE}
+    command: ["nginx", "-g", "daemon off;"]
+    volumes: !override
+      - ./deploy/local-origin/fixtures/gateway.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck: !override
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+      start_period: 1s
+
+  gateway-game:
+    image: ${NGINX_IMAGE}
+    command: ["nginx", "-g", "daemon off;"]
+    volumes: !override
+      - ./deploy/local-origin/fixtures/gateway.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck: !override
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+      start_period: 1s
