@@ -1,0 +1,83 @@
+{
+  "workstream": "P2-10",
+  "evidence_scope": "source and contract inspection only; this branch does not publish or run a rebuilt play.oldkoweb.com bundle",
+  "checks": [
+    {
+      "check": "mouse_camera_feel_preserved",
+      "status": "BLOCKED",
+      "evidence": "P2-10 patch does not alter camera equations, mouse deltas, renderer or viewport math.",
+      "blocker": "Fresh P2-00 browser bundle and real pointer/camera run required."
+    },
+    {
+      "check": "left_right_turn",
+      "status": "BLOCKED",
+      "evidence": "No turn bindings are replaced by the P2-10 patch.",
+      "blocker": "Real-browser input replay required after rebuild."
+    },
+    {
+      "check": "focus_loss_clears_held_input",
+      "status": "PASS",
+      "evidence": "Source patch sets engine focus false, deactivates input, calls KeyboardClearInput() and MouseRemoveFlag(); static contract test asserts all four invariants.",
+      "runtime_followup": "Real browser must still prove W/turn/mouse cannot latch after tab switch."
+    },
+    {
+      "check": "focus_gain_reacquires_input",
+      "status": "PASS",
+      "evidence": "Source patch restores engine focus and SetActiveDevices(TRUE).",
+      "runtime_followup": "Real browser smoke required."
+    },
+    {
+      "check": "alt_enter_fullscreen_user_gesture",
+      "status": "PASS",
+      "evidence": "Native SDL key-down path toggles SDL fullscreen only on ALT+RETURN, i.e. inside a physical user gesture.",
+      "runtime_followup": "Browser permission/fullscreen transition must be observed after P2-00 rebuild."
+    },
+    {
+      "check": "escape_pointer_lock_and_native_exit",
+      "status": "BLOCKED",
+      "evidence": "P2-10 does not swallow ESC or introduce an HTML exit control.",
+      "blocker": "Actual browser pointer-lock owner must be identified in the integrated P2-03/P2-00 source before changing ESC behavior."
+    },
+    {
+      "check": "chat_typing_suppresses_movement",
+      "status": "PASS",
+      "evidence": "Pinned GameProcMain movement path is guarded by !IsUIKeyOperated() and CN3UIBase::GetFocusedEdit() == nullptr; P2-10 leaves that native guard intact.",
+      "runtime_followup": "Real browser should type W/A/S/D into chat while verifying no movement packets."
+    },
+    {
+      "check": "ui_click_does_not_leak_to_world",
+      "status": "BLOCKED",
+      "evidence": "P2-10 retains native CUIManager/CGameProcMain mouse path and adds no DOM overlay.",
+      "blocker": "P2-03 viewport-to-game contract is missing and a rebuilt browser run is required."
+    },
+    {
+      "check": "single_viewport_to_game_transform",
+      "status": "BLOCKED",
+      "evidence": "No coordinate transform was duplicated in P2-10.",
+      "blocker": "P2-03 handoff absent; P2-10 will consume its single adapter once published."
+    },
+    {
+      "check": "native_audio_events",
+      "status": "BLOCKED",
+      "evidence": "Town/battle BGM and teardown are source-proven native CN3SndObj paths; no DOM audio graph was added.",
+      "blocker": "WS42 single-thread browser patch deliberately disables sound initialization; audio-capable P2-00 rebuild not yet proven."
+    },
+    {
+      "check": "mute_volume_and_duplicate_audio",
+      "status": "BLOCKED",
+      "evidence": "P2-10 keeps native Option/CN3SndMgr ownership and ReleaseSound teardown.",
+      "blocker": "Cannot prove persistence or no duplicate playback until browser audio is enabled and the client is re-entered twice."
+    }
+  ],
+  "browser_smoke_required_after_integration": [
+    "open/close Map, Inventory, Character, Skill and Command via native key and click paths",
+    "drag a native skill icon to hotbar and invoke its key; confirm cooldown/target/error are server-derived",
+    "open NPC dialog/shop/inn/quest/upgrade and prove every success comes from provider response",
+    "party/clan/chat/trade/loot positive and negative cases",
+    "hold W then lose focus; regain focus with character stationary",
+    "type WASD in chat without movement",
+    "click native UI over world target without target/move leakage",
+    "ALT+ENTER fullscreen, ESC/pointer-lock behavior and camera turn",
+    "town/ambient/footstep/attack/skill/UI audio after first gesture; mute/volume; leave/re-enter twice with no doubled sound"
+  ]
+}
