@@ -1,0 +1,196 @@
+{
+  "schema_version": "oldkoweb-phase2-handoff/v1",
+  "owner": "P2-09",
+  "branch": "phase2/09-social",
+  "source_commit": "2ee4800d476e9a40bad4210e874fbde9fa3adad9",
+  "status": "BLOCKED",
+  "integration_disposition": "BLOCKED",
+  "scope": "Chat/whisper/friend/party/clan runtime authority, social permissions, source-backed 1298 PvP zone policy, combat social outcome accounting, and ranking projection. No live deployment and no integration-owned shared dispatcher/composition edits.",
+  "baseline": {
+    "requested_base_branch": "ws50-integration-rehearsal",
+    "requested_base_commit": "50ecabec15bd358d222a01891ca31359f3a928b0",
+    "coordinator_branch": "phase2/00-integration"
+  },
+  "old_workstreams": [
+    {"id":"WS18","branch":"ws18-social-core","source_commit":"b865246463b3d373510d03e56d8fe6cac5141060","used_for":"verified 0x10 chat, 0x35 private-target and 0x2f party packet family plus party lifecycle baseline"},
+    {"id":"WS21","branch":"ws21-clan-core","source_commit":"cbc1b649eb0e5210e713fbacac2601369a03682d","used_for":"1298 clan domain, duties, permissions, limits and verified 0x3c sub-operation family"},
+    {"id":"WS24","branch":"ws24-pvp-zone-rules","source_commit":"4c95200b7e7eafda5f893bd62034d3727dcb9cbc","used_for":"Moradon/home/Eslant/arena/battle nation, safe-area and NP eligibility decisions"},
+    {"id":"WS32","branch":"ws32-friends-messenger","source_commit":"26a260d41a2870d9b3dc0f454eda5661b59e80d3","used_for":"friend request/block/presence domain and 29-entry source-backed bound"},
+    {"id":"WS37","branch":"ws37-rankings","source_commit":"7176882743fcacf540d41fd7b3a275e0cebe9611","used_for":"stable public competition ranking semantics"}
+  ],
+  "changed_files": [
+    "services/ko1298-clan/CLAN_PROTOCOL.md",
+    "services/ko1298-clan/README.md",
+    "services/ko1298-clan/package.json",
+    "services/ko1298-clan/src/clan-chat-interface.js",
+    "services/ko1298-clan/src/clan-service.js",
+    "services/ko1298-clan/src/constants.js",
+    "services/ko1298-clan/src/errors.js",
+    "services/ko1298-clan/src/index.js",
+    "services/ko1298-clan/src/memory-repository.js",
+    "services/ko1298-clan/src/repository.js",
+    "services/ko1298-clan/src/rules.js",
+    "services/ko1298-friends/FRIENDS_MODEL.md",
+    "services/ko1298-friends/contracts.js",
+    "services/ko1298-friends/friends-service.js",
+    "services/ko1298-friends/index.js",
+    "services/ko1298-friends/memory-repository.js",
+    "services/ko1298-friends/package.json",
+    "services/ko1298-friends/presence.js",
+    "services/ko1298-social/P2_CONTRACTS.md",
+    "services/ko1298-social/combat-ledger.js",
+    "services/ko1298-social/constants.js",
+    "services/ko1298-social/index.js",
+    "services/ko1298-social/locks.js",
+    "services/ko1298-social/package.json",
+    "services/ko1298-social/party-operations.js",
+    "services/ko1298-social/protocol.js",
+    "services/ko1298-social/provider-factory.js",
+    "services/ko1298-social/pvp-policy.js",
+    "services/ko1298-social/runtime-adapter.js",
+    "services/ko1298-social/social-authority.js",
+    "tests/ko1298-social/p2-social.test.js",
+    "coordination/phase2/P2-09/handoff.json"
+  ],
+  "dependencies": [
+    {"owner":"P2-00","contract":"shared dispatcher/composition wiring for p2-09.social-runtime/v1","required":true,"state":"PENDING"},
+    {"owner":"P2-04","contract":"authoritative zone transition + battle/invasion + coordinate safe-area facts","required":true,"state":"HANDOFF_NOT_PUBLISHED_AT_PIN_TIME"},
+    {"owner":"P2-07","contract":"attack validation call + authoritative combat result with eventId and source-backed NP deltas","required":true,"state":"HANDOFF_NOT_PUBLISHED_AT_PIN_TIME"},
+    {"owner":"P2-08","contract":"party loot eligibility/distribution consumer","required":true,"state":"HANDOFF_NOT_PUBLISHED_AT_PIN_TIME"},
+    {"owner":"P2-10","contract":"real C++ client social windows/actions and exact 0x3c/0x49 packet layouts if exposed by accepted client","required":true,"state":"HANDOFF_NOT_PUBLISHED_AT_PIN_TIME"},
+    {"owner":"P2-11","contract":"atomic friend/clan persistence, combat-social idempotency, ranking read model, controlled QA accounts","required":true,"state":"HANDOFF_NOT_PUBLISHED_AT_PIN_TIME"},
+    {"owner":"P2-13","contract":"exact-candidate two-client social/PvP acceptance","required":true,"state":"PUBLISHED_PARTIAL@b82e50ea9cb288392a87bcbed937bb8adcf67cf3"}
+  ],
+  "contracts_provided": [
+    "p2-09.social-runtime/v1",
+    "p2-09.party-share/v1",
+    "p2-09.pvp-policy/v1",
+    "p2-09.combat-social-outcome/v1",
+    "p2-09.ranking/v1",
+    "p2-09.player-command-boundary/v1",
+    "ws21.clan-domain/v1",
+    "ws32.friend-domain/v1"
+  ],
+  "contracts_consumed": [
+    "coordination/phase2/CHARTER.md@phase2/00-integration",
+    "coordination/phase2/OWNERS.json@phase2/00-integration",
+    "coordination/phase2/CONTRACTS.md@phase2/00-integration",
+    "WS18 verified social protocol family",
+    "WS21 source-backed clan domain rules",
+    "WS24 source-backed zone/PvP rules",
+    "WS32 source-backed friend/presence domain",
+    "WS37 competition-ranking semantics"
+  ],
+  "interfaces": {
+    "runtime": [
+      "P2SocialRuntimeAdapter.onSessionReady(session)",
+      "P2SocialRuntimeAdapter.onSessionDisconnect(sessionId, info)",
+      "P2SocialRuntimeAdapter.onSessionLeaseExpired(characterId)",
+      "P2SocialRuntimeAdapter.onZoneChanged(characterId, zoneId)",
+      "P2SocialRuntimeAdapter.routePacket(sessionId, packet)",
+      "P2SocialRuntimeAdapter.validateAttack(context)",
+      "P2SocialRuntimeAdapter.partyCombatShare(characterId,event,eligible)",
+      "P2SocialRuntimeAdapter.partyLootShare(characterId,event,eligible)",
+      "P2SocialRuntimeAdapter.onCombatOutcome(event)",
+      "P2SocialRuntimeAdapter.rankings(query)",
+      "P2SocialRuntimeAdapter.playerCommand(characterId,command,payload)"
+    ],
+    "persistence_factories": [
+      "createFriendRuntimePort({repository,userDirectory,presence})",
+      "createClanRuntimePort({repository,clock})"
+    ]
+  },
+  "feature_state": {
+    "chat_general_private_party_clan_shout_domain": "VERIFIED_UNIT",
+    "whisper_block_policy": "VERIFIED_UNIT",
+    "party_invite_accept_reject_kick_leave_disconnect_reconnect": "VERIFIED_UNIT",
+    "party_concurrent_invite_serialization": "VERIFIED_UNIT",
+    "party_exp_loot_share_snapshot_contract": "VERIFIED_UNIT",
+    "friend_domain_presence_binding": "VERIFIED_UNIT",
+    "clan_domain_role_permission_binding": "VERIFIED_UNIT",
+    "moradon_eslant_home_battle_safe_area_pvp_policy": "VERIFIED_UNIT",
+    "stale_zone_attack_rejection": "VERIFIED_UNIT",
+    "kill_death_np_once_only_from_authoritative_combat": "VERIFIED_UNIT",
+    "ranking_competition_ties_from_persisted_rows": "VERIFIED_UNIT",
+    "player_gm_admin_separation": "VERIFIED_UNIT",
+    "real_client_friend_0x49_codec": "BLOCKED_SOURCE",
+    "real_client_knights_0x3c_codec": "BLOCKED_SOURCE",
+    "source_backed_party_leader_transfer_packet": "BLOCKED_SOURCE",
+    "source_backed_war_event_scheduler_victory_reward_table": "BLOCKED_SOURCE",
+    "two_real_controlled_clients": "NOT_RUN"
+  },
+  "tests": [
+    {"command":"node --check services/ko1298-social/*.js","result":"PASS","evidence":"all P2-09 JavaScript modules parsed successfully in isolated worktree mirror"},
+    {"command":"node --test tests/ko1298-social/p2-social.test.js","result":"PASS","evidence":"10 tests passed, 0 failed; chat/whisper, party/reconnect/concurrency/share, PvP/safe-zone/stale-zone, authoritative combat idempotency, command boundary, ranking, friend/clan presence lifecycle"},
+    {"command":"git compare 50ecabec15bd358d222a01891ca31359f3a928b0..2ee4800d476e9a40bad4210e874fbde9fa3adad9","result":"PASS","evidence":"branch is exactly one commit ahead of requested base; only provider-owned social/clan/friend/tests paths changed"},
+    {"command":"two controlled real C++/WASM client accounts on intended PC/Docker/PostgreSQL","result":"NOT_RUN","evidence":"not available from this GitHub execution session and live deployment was explicitly prohibited"}
+  ],
+  "runtime_evidence": [],
+  "p2_10_client_actions": {
+    "verified_packet_actions": [
+      "general chat 0x10 type 1",
+      "private target 0x35 + whisper 0x10 type 2",
+      "party create/invite/permit/remove/delete 0x2f",
+      "party chat 0x10 type 3",
+      "clan chat 0x10 type 6 through clan membership directory",
+      "shout 0x10 type 5 behind resource authorization"
+    ],
+    "source_domain_actions_waiting_exact_client_codec": [
+      "friend request/report/add/remove 0x49",
+      "clan create/join/withdraw/remove/destroy/admit/reject/punish/chief/vice-chief/officer/member/current 0x3c"
+    ],
+    "never_expose_to_normal_player": ["0x40 operator/GM packets","gm.* commands","admin.* commands"]
+  },
+  "p2_11_persistence_admin_requirements": [
+    "Atomic canonical friendship pairs, directional pending requests and directional blocks with concurrent limit safety",
+    "Persistent clans, memberships, roles/duties, grade/ranking and source-required character fields through WS21 repository contract",
+    "applyCombatSocialOutcome(mutation) with unique event_id so replayed combat results cannot double-count kills/deaths/NP",
+    "readRankingRows(query) from authoritative persisted score state with snapshot updatedAt",
+    "Controlled non-production QA accounts for two-client/relog/admin authority tests",
+    "Admin mutations must use admin authority and must not be reachable through playerCommand()"
+  ],
+  "p2_13_acceptance_scenarios": [
+    "two controlled clients: nearby general chat and whisper delivery/isolation",
+    "friend block prevents whisper; online/offline presence changes on login/disconnect/relog",
+    "party concurrent invitation race, reject, accept, party chat, leader kick and member leave",
+    "member disconnect/reconnect within P2-01 grace preserves membership; lease expiry removes it",
+    "leader disconnect/reconnect within grace preserves party; leader lease expiry dissolves legacy party until source-backed leader transfer exists",
+    "clan permission allow/deny for chief/vice/officer/member plus clan chat recipients",
+    "Moradon neutral/safe, Eslant nation-locked/non-PvP, home-zone invasion gate, battle/CZ gate, local safe-area and friendly-fire denial",
+    "zone transition increments epoch and rejects pre-transition attack intent",
+    "one authoritative PvP kill produces exactly one kill/death/NP mutation; replay is ignored; client score declaration is rejected",
+    "normal player cannot invoke GM/admin/operator commands"
+  ],
+  "shared_file_requests": [
+    {"owner":"P2-00","request":"Instantiate P2SocialRuntimeAdapter in the final production composition with P2-11 friend/clan repositories and combat/ranking persistence ports; wire authenticated 0x10/0x35/0x2f packet routes plus session/lease/zone/combat lifecycle hooks."},
+    {"owner":"P2-00","request":"Do not wire raw 0x3c/0x49 to production until P2-10 or another source-backed provider pins the exact accepted C++ client's byte layouts; current adapter fails these closed."},
+    {"owner":"P2-00","request":"Reject player 0x40 operator packets and keep admin/GM command execution on privileged admin authority only."}
+  ],
+  "migration_entries": [],
+  "source_or_asset_gaps": [
+    "Exact accepted 1298 browser-client request/response byte layouts for 0x49 Friend and 0x3c Knights are not verified by retained WS21/WS32 work; only families/sub-operations and domain behavior are source-backed.",
+    "No source-backed party leader-transfer client packet/flow is pinned for this target; inherited WS18 behavior dissolves the party when leader reconnect grace expires.",
+    "No source-backed war/event scheduler, victory condition or reward table was available to P2-09 beyond WS24 battle/invasion runtime flags; no synthetic event is labeled original.",
+    "P2-04/P2-07/P2-08/P2-10/P2-11 handoffs were not published when this handoff was pinned, so final cross-provider signatures remain for P2-00 reconciliation.",
+    "Two controlled real-client accounts were not executable from this session; fake friend/party lists were not used as completion evidence."
+  ],
+  "blockers": [
+    {"code":"REAL_CLIENT_FRIEND_CLAN_CODEC_UNVERIFIED","owners":["P2-10","P2-00"],"impact":"Friend/clan domain is production-portable but cannot truthfully be claimed end-to-end through raw real-client 0x49/0x3c packets yet."},
+    {"code":"CROSS_PROVIDER_HANDOFFS_PENDING","owners":["P2-04","P2-07","P2-08","P2-10","P2-11","P2-00"],"impact":"Final zone/combat/item/client/persistence wiring cannot be frozen against exact provider SHAs yet."},
+    {"code":"TWO_REAL_CLIENT_ACCEPTANCE_NOT_RUN","owners":["P2-11","P2-13","P2-00"],"impact":"Requirement for two controlled real clients on intended PC/Docker/PostgreSQL remains unverified."},
+    {"code":"SOURCE_BACKED_LEADER_TRANSFER_NOT_FOUND","owners":["P2-09","P2-10"],"impact":"Leader reconnect grace is consistent; after lease expiry the source-backed legacy behavior dissolves the party rather than inventing a transfer flow."}
+  ],
+  "verification_state": {
+    "unit_contract_tests": "PASS",
+    "LOCAL_VERIFIED": false,
+    "DOMAIN_VERIFIED": false,
+    "two_real_clients": "NOT_RUN",
+    "live_deployed": false
+  },
+  "notes": [
+    "No website/account/admin design file was changed.",
+    "No integration-owned dispatcher, production composition, domain-live runtime, deploy workflow or final client binary was changed.",
+    "No live broadcast/invite was sent.",
+    "No mock/fake social list is claimed as production evidence."
+  ]
+}
