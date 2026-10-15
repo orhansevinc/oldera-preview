@@ -3,33 +3,45 @@
 const { startServers } = require('./server');
 const { createProductionPostgresRepository } = require('./postgres-repository');
 const { createProductionProviderComposition } = require('./production-composition');
+const { createP207CombatComposition } = require('./p2-07-combat-composition');
 const { SessionAuthority } = require('./session-authority');
 
 async function startProductionServers({ env = process.env, providerOptions = {}, ...serverOptions } = {}) {
   const repository = await createProductionPostgresRepository({ env });
   try {
+    const { combatOptions = null, ...worldProviderOptions } = providerOptions;
     const providers = createProductionProviderComposition({
       repository,
       env,
-      ...providerOptions,
+      ...worldProviderOptions,
     });
+    const combat = combatOptions
+      ? createP207CombatComposition({ mobService: providers.mobService, ...combatOptions })
+      : null;
     const sessionAuthority = serverOptions.sessionAuthority || new SessionAuthority();
+    const gameOptions = {
+      ...(serverOptions.gameOptions || {}),
+      movementSession: providers.movementSession,
+    };
+    if (!gameOptions.combatAdapter && combat?.combatAdapter) gameOptions.combatAdapter = combat.combatAdapter;
     const servers = startServers({
       ...serverOptions,
       repository,
       worldSession: providers.worldSession,
       sessionAuthority,
-      gameOptions: {
-        ...(serverOptions.gameOptions || {}),
-        movementSession: providers.movementSession,
-      },
+      gameOptions,
     });
     for (const server of [servers.auth, servers.game]) {
       server.on('close', () => {
         if (!servers.auth.listening && !servers.game.listening) void repository.close();
       });
     }
-    return { ...servers, repository, providers, sessionAuthority };
+    return {
+      ...servers,
+      repository,
+      providers: Object.freeze({ ...providers, combatAdapter: combat?.combatAdapter || null, combatService: combat?.service || null }),
+      sessionAuthority,
+    };
   } catch (error) {
     await repository.close().catch(() => {});
     throw error;
