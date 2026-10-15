@@ -20,12 +20,12 @@ const UNSUPPORTED = Object.freeze([
 ]);
 
 function realApplyProven(result) {
-  return result?.status === 'ok' && (result?.applied === true || result?.data?.applied === true);
+  return result?.status === 'ok' && result?.forwarded !== false && (result?.applied === true || result?.data?.applied === true);
 }
 
 function statusFromBus(result) {
+  if (result?.forwarded === false || result?.status === 'pending' || result?.status === 'queued') return 'PENDING';
   if (realApplyProven(result)) return 'SUCCEEDED';
-  if (result?.status === 'pending' || result?.status === 'queued' || result?.forwarded === false) return 'PENDING';
   return 'FAILED';
 }
 
