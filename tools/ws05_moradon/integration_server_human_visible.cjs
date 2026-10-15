@@ -49,20 +49,28 @@ if(mobPopulation.length!==135) throw new Error(`expected 135 Moradon mobs, got $
 
 const runtimeIdOf=(r)=>r?.runtimeId??r?.instanceId??r?.nid??r?.id;
 const posOf=(r)=>r?.position||r?.detailRecord?.position||r;
-const pidOf=(r)=>r?.pid??r?.templateResourceId??r?.detail?.pid??r?.detailRecord?.templateResourceId??0;
-const sidOf=(r)=>r?.detail?.template_id??r?.detailRecord?.templateId??(typeof r?.templateId==='string'&&r.templateId.startsWith('ko1298:monster:')?Number(r.templateId.slice('ko1298:monster:'.length)):r?.templateId)??0;
+const pidOf=(r)=>r?.pid??r?.resourceId??r?.templateResourceId??r?.detail?.pid??r?.detailRecord?.templateResourceId??0;
 const nameOf=(r)=>r?.name??r?.detail?.name??r?.detailRecord?.name??'unknown';
 
-const npcIdSet=new Set(npcPopulation.records.map(runtimeIdOf));
-const mobIdSet=new Set(mobPopulation.map(runtimeIdOf));
+const npcIdSet=new Set(npcPopulation.records.map((record)=>record.runtimeId));
+const mobIdSet=new Set(mobPopulation.map((record)=>record.runtimeId));
 for(const id of npcIdSet) if(mobIdSet.has(id)) throw new Error(`runtime ID collision ${id}`);
 
-const bandicoots=mobPopulation.filter((m)=>sidOf(m)===850 && pidOf(m)===800);
-if(!bandicoots.length) throw new Error('no authoritative Bandicoot SID=850 PID=800 runtime records');
+// Canonical WS25 public semantic contract: visibilitySnapshot().detail exposes
+// template_id='ko1298:monster:<SID>' and pid=<client resource PID>.
+// Do not probe guessed aliases here: this is intentionally fail-closed to that contract.
+const bandicoots=mobPopulation.filter((record)=>
+  record?.detail?.template_id==='ko1298:monster:850' && record?.detail?.pid===800
+);
+if(!bandicoots.length) throw new Error('no authoritative Bandicoot SID=850 PID=800 runtime records via WS25 visibilitySnapshot.detail contract');
+for(const record of bandicoots){
+  if(!Number.isInteger(record.runtimeId)) throw new Error('Bandicoot runtimeId is not an integer');
+  if(record.instanceId!==record.runtimeId||record.nid!==record.runtimeId||record.detail.runtime_id!==record.runtimeId) throw new Error(`Bandicoot runtime identity mismatch ${record.runtimeId}`);
+  if(![record.x,record.y,record.z].every(Number.isFinite)) throw new Error(`Bandicoot ${record.runtimeId} authoritative XYZ missing`);
+}
 console.log(`WS05_AUTH spawn_source=WS14_DEFAULT x=312 y=0 z=402 fake_teleport=0 npc_total=${npcPopulation.records.length} mob_total=${mobPopulation.length}`);
-for(const m of bandicoots){
-  const p=posOf(m);
-  console.log(`WS05_AUTH type=bandicoot id=${runtimeIdOf(m)} sid=850 pid=800 x=${p.x} y=${p.y} z=${p.z} name=${JSON.stringify(nameOf(m))}`);
+for(const record of bandicoots){
+  console.log(`WS05_AUTH type=bandicoot id=${record.runtimeId} sid=850 pid=${record.detail.pid} x=${record.x} y=${record.y} z=${record.z} name=${JSON.stringify(record.detail.name)}`);
 }
 
 function combinedNearby(zoneId,x,z){
@@ -128,7 +136,7 @@ function parseRequestedIds(payload){
 function classify(ids){return{
   npc:ids.filter((id)=>npcIdSet.has(id)),
   mob:ids.filter((id)=>mobIdSet.has(id)),
-  bandicoot:ids.filter((id)=>bandicoots.some((b)=>runtimeIdOf(b)===id)),
+  bandicoot:ids.filter((id)=>bandicoots.some((record)=>record.runtimeId===id)),
   unknown:ids.filter((id)=>!npcIdSet.has(id)&&!mobIdSet.has(id)),
 };}
 function regionKey(p){return `${Math.floor(p.x/48)}:${Math.floor(p.z/48)}`;}
