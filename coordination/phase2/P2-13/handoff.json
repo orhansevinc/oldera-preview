@@ -1,0 +1,135 @@
+{
+  "schema_version": "oldkoweb-phase2-handoff/v1",
+  "owner": "P2-13",
+  "branch": "phase2/13-qa",
+  "source_commit": "b82e50ea9cb288392a87bcbed937bb8adcf67cf3",
+  "status": "PARTIAL",
+  "scope": "Independent exact-candidate real-browser acceptance. No production implementation ownership and no live deployment.",
+  "baseline": {
+    "requested_base_commit": "50ecabec15bd358d222a01891ca31359f3a928b0",
+    "phase2_contract_commit_observed": "8e7410f7458e216fee184749ae8a333e0eb7ab3d",
+    "phase1_ws50_release_id": "oldkoweb-domain-live-20261015",
+    "phase1_ws50_local_origin_verified": true,
+    "phase1_ws50_domain_live_verified": false,
+    "phase1_ws50_handoff_child_candidate": "ffb2b8dc3e2a86a136fb13deddd4ea551c031939",
+    "prior_ws10_branch_head_observed": "a0ae49f05c76c6eab1dd8c60ca17ffec67d50bf2",
+    "prior_ws10_handoff_status": "BLOCKED",
+    "prior_ws49_branch_head_observed": "69bf326dcdf6b9807feb3993936f0b56709bb320",
+    "phase2_final_candidate": null,
+    "phase2_final_candidate_fingerprint": null
+  },
+  "changed_files": [
+    "qa/phase2/README.md",
+    "qa/phase2/baseline.json",
+    "qa/phase2/coverage-plan.json",
+    "qa/phase2/acceptance-scenarios.json",
+    "qa/phase2/build-coverage-matrix.mjs",
+    "qa/phase2/run-acceptance.mjs",
+    "qa/phase2/verify-release-gate.mjs",
+    "qa/phase2/selftest.mjs",
+    "coordination/phase2/P2-13/handoff.json"
+  ],
+  "dependencies": [
+    {"owner":"P2-00","contract":"exact final candidate manifest + immutable identity set + coverage_inventory","required":true},
+    {"owner":"P2-01","contract":"session/movement/sprint disconnect evidence","required":true},
+    {"owner":"P2-02","contract":"load/cache build milestones","required":true},
+    {"owner":"P2-03","contract":"render resolution/pointer/frame metrics authority","required":true},
+    {"owner":"P2-04","contract":"complete zone/map inventory and transition authority","required":true},
+    {"owner":"P2-05","contract":"complete NPC/service/spawn inventory and interaction authority","required":true},
+    {"owner":"P2-06","contract":"complete mob/boss/spawn inventory and visibility authority","required":true},
+    {"owner":"P2-07","contract":"complete class/skill/effect inventory and combat/progression authority","required":true},
+    {"owner":"P2-08","contract":"item/drop/inventory/economy transaction authority","required":true},
+    {"owner":"P2-09","contract":"social/party/clan/PvP/safe-zone authority","required":true},
+    {"owner":"P2-10","contract":"real client UI/input/audio controls","required":true},
+    {"owner":"P2-11","contract":"persistent DB/admin authority and controlled QA account setup","required":true},
+    {"owner":"P2-12","contract":"local PC restart/diagnostics/public-domain hosting evidence path","required":true}
+  ],
+  "contracts_provided": [
+    "p2-13.coverage-matrix/v1",
+    "p2-13.acceptance-scenarios/v1",
+    "p2-13.browser-evidence/v1",
+    "p2-13.release-gate/v1"
+  ],
+  "contracts_consumed": [
+    "coordination/phase2/CHARTER.md@phase2/00-integration",
+    "coordination/phase2/OWNERS.json@phase2/00-integration",
+    "coordination/phase2/CONTRACTS.md@phase2/00-integration",
+    "coordination/handoffs/domain-live/WS50.json@50ecabec15bd358d222a01891ca31359f3a928b0",
+    "WS10 evidence discipline",
+    "WS49 deterministic fixture/scenario discipline"
+  ],
+  "tests": [
+    {"command":"node --check qa/phase2/build-coverage-matrix.mjs && node --check qa/phase2/run-acceptance.mjs && node --check qa/phase2/verify-release-gate.mjs && node --check qa/phase2/selftest.mjs","result":"PASS","evidence":"out-of-tree mirror of committed source parsed successfully with Node"},
+    {"command":"node qa/phase2/selftest.mjs","result":"PASS","evidence":"{result:PASS,static_rows:47,scenarios:12,critical_scenarios:12}"},
+    {"command":"node qa/phase2/build-coverage-matrix.mjs --candidate synthetic-candidate.json --out artifacts/matrix.json","result":"PASS","evidence":"fail-closed dry run: generated 56 rows and exited 3 with 5 intentional inventory discovery blockers; no untested row became PASS"},
+    {"command":"node qa/phase2/verify-release-gate.mjs --candidate synthetic-candidate.json --matrix artifacts/matrix.json --local artifacts/local/run.json --domain artifacts/domain/run.json","result":"PASS","evidence":"negative gate self-check returned RELEASE_BLOCKED_INCOMPLETE with exit 2 as designed"},
+    {"command":"node qa/phase2/run-acceptance.mjs --mode local ...","result":"NOT_RUN","evidence":"P2-00 Phase 2 final candidate not yet provided"},
+    {"command":"node qa/phase2/run-acceptance.mjs --mode domain ...","result":"NOT_RUN","evidence":"P2-00 Phase 2 final candidate not yet provided; DOMAIN_VERIFIED not claimed"}
+  ],
+  "coverage_matrix": {
+    "plan_path": "qa/phase2/coverage-plan.json",
+    "generator": "qa/phase2/build-coverage-matrix.mjs",
+    "evidence_dimensions": ["source_data","implementation","runtime_wiring","browser_proof","persistence"],
+    "static_rows": 47,
+    "baseline_zone_rows_available_from": "services/ko1298-world/data/zones.1298.json",
+    "baseline_zone_count": 16,
+    "final_entity_inventory_status": "BLOCKED_PENDING_FINAL_CANDIDATE_COVERAGE_INVENTORY",
+    "pass_policy": "all required dimensions PASS for exact candidate fingerprint; NOT_RUN/UNKNOWN/BLOCKED never promoted"
+  },
+  "runtime_evidence": [],
+  "expected_evidence_paths": [
+    "artifacts/phase2-qa/coverage-matrix.json",
+    "artifacts/phase2-qa/local/run.json",
+    "artifacts/phase2-qa/local/site.png",
+    "artifacts/phase2-qa/local/play.png",
+    "artifacts/phase2-qa/local/admin.png",
+    "artifacts/phase2-qa/domain/run.json",
+    "artifacts/phase2-qa/domain/site.png",
+    "artifacts/phase2-qa/domain/play.png",
+    "artifacts/phase2-qa/domain/admin.png",
+    "QA_RECEIPTS_DIR/*.json"
+  ],
+  "source_or_asset_gaps": [
+    "P2-00 exact Phase 2 final candidate manifest not available to this session",
+    "Final candidate exhaustive NPC/service/spawn, mob/boss/spawn, class/skill/effect, item, social/PvP and UI inventories are not yet pinned",
+    "No exact-candidate real-browser/gameplay/persistence evidence exists yet for Phase 2"
+  ],
+  "shared_file_requests": [
+    {
+      "owner":"P2-00",
+      "request":"Final release manifest must expose immutable source/image/client/data/DB identities plus coverage_inventory arrays for maps, NPCs, NPC services/spawn groups, mobs, bosses/spawn groups, classes, skills, effects, item operations, social/PvP features and UI controls. P2-13 will regenerate the matrix from that exact manifest."
+    }
+  ],
+  "migration_entries": [],
+  "blockers": [
+    {"owner":"P2-00","code":"FINAL_CANDIDATE_NOT_PROVIDED","impact":"Integrated/local/domain acceptance cannot be attributed to Phase 2 exact identities; publication is blocked."},
+    {"owner":"P2-00","code":"FINAL_COVERAGE_INVENTORY_NOT_PINNED","impact":"Exhaustive every-map/NPC/mob/boss/class/skill/effect matrix cannot be closed; missing categories remain BLOCKED."},
+    {"owner":"P2-11","code":"CONTROLLED_QA_ACCOUNT_SETUP_NOT_EVIDENCED","impact":"Account/admin/persistence destructive-risk scenarios must not use existing player data."},
+    {"owner":"P2-12","code":"PUBLIC_DOMAIN_ACCEPTANCE_NOT_RUN","impact":"oldkoweb.com, play.oldkoweb.com and admin.oldkoweb.com are not DOMAIN_VERIFIED for Phase 2."}
+  ],
+  "regression_scenarios": [
+    {"issue":"6-7 minute loading","scenario":"REG-01","owner":"P2-02","status":"NOT_RUN"},
+    {"issue":"sprint disconnect","scenario":"REG-02","owner":"P2-01","status":"NOT_RUN"},
+    {"issue":"invisible mobs","scenario":"REG-03","owner":"P2-06","status":"NOT_RUN"},
+    {"issue":"nonfunctional NPC","scenario":"REG-04","owner":"P2-05","status":"NOT_RUN"},
+    {"issue":"nonfunctional skill","scenario":"REG-05","owner":"P2-07","status":"NOT_RUN"},
+    {"issue":"command forwarded but not applied","scenario":"REG-06","owner":"P2-11","status":"NOT_RUN"},
+    {"issue":"244p-like blurry render","scenario":"REG-07","owner":"P2-03","status":"NOT_RUN"}
+  ],
+  "verification_state": {
+    "LOCAL_VERIFIED": false,
+    "DOMAIN_VERIFIED": false,
+    "critical_user_flow": "NOT_RUN",
+    "two_real_clients": "NOT_RUN",
+    "restart_persistence": "NOT_RUN",
+    "admin_apply_and_player_denial": "NOT_RUN",
+    "cold_warm_exact_build": "NOT_RUN"
+  },
+  "release_decision_for_p2_00": "RELEASE_BLOCKED_PENDING_FINAL_CANDIDATE_AND_ACCEPTANCE",
+  "notes": [
+    "No production provider file was changed and no live deployment was performed.",
+    "Host-header/localhost evidence can contribute to LOCAL_VERIFIED only and can never imply DOMAIN_VERIFIED.",
+    "Any component identity change invalidates evidence tied to the old candidate fingerprint and affected tests must be rerun.",
+    "Critical failure is recorded with smallest reproducible steps/evidence and owning P2 code; no provider 'done' claim overrides QA evidence."
+  ]
+}
