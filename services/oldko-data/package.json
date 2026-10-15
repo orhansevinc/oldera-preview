@@ -1,0 +1,17 @@
+{
+  "name": "@oldko/data",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "test:integration": "node --test --test-concurrency=1 test/integration/*.test.js",
+    "check": "for f in src/*.js src/adapters/*.js src/scripts/*.js test/*.test.js test/integration/*.test.js; do node --check \"$f\"; done",
+    "migrate": "node src/scripts/migrate.js",
+    "seed:dev": "node src/scripts/seed-dev.js",
+    "verify:schema": "node src/scripts/verify-schema.js",
+    "explain": "node src/scripts/explain.js"
+  },
+  "dependencies": { "pg": "^8.13.3" }
+}

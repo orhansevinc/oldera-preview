@@ -1,0 +1,14 @@
+{
+  "name": "@oldko/ko1298-mobs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Deterministic OldKO 1298 mob lifecycle domain with adapter ports for world, movement and combat.",
+  "type": "commonjs",
+  "main": "index.cjs",
+  "scripts": {
+    "test": "node --test ../../tests/ko1298-mobs/*.test.cjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

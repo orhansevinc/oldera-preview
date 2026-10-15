@@ -1,115 +1,84 @@
+(()=>{
+'use strict';
+const api=window.OldKOLiveApi;
+if(!api)throw new Error('OldKO Admin API client is required');
+const $=(id)=>document.getElementById(id);
+const $$=(selector,root=document)=>[...root.querySelectorAll(selector)];
 const COMMANDS=[
-{name:'INVISIBLE',scope:'self',tr:'Görünmezlik',desc:'Owner/GM karakterinin görünürlüğünü açar veya kapatır.'},
-{name:'CLEAN',scope:'world',tr:'Dünya temizliği',desc:'Orijinal dünya temizleme komutunu çalıştırır.'},
-{name:'RAINING',scope:'world',tr:'Yağmur',desc:'Yağmur hava durumunu kontrol eder.'},
-{name:'SNOWING',scope:'world',tr:'Kar',desc:'Kar hava durumunu kontrol eder.'},
-{name:'TIME',scope:'world',tr:'Dünya saati',desc:'Oyun dünyasının saatini kontrol eder.'},
-{name:'COUNT',scope:'server',tr:'Online sayısı',desc:'Anlık bağlı oyuncu sayısını getirir.'},
-{name:'NOTICE',scope:'zone',tr:'Bölge duyurusu',desc:'Bulunduğun bölgeye yönetici duyurusu gönderir.'},
-{name:'ARREST',scope:'player',tr:'Oyuncuya git / takip',desc:'Orijinal GM arrest/izleme işlemini hedef oyuncu üzerinde uygular.'},
-{name:'FORBIDCONNECT',scope:'player',tr:'Girişi yasakla',desc:'Hedef hesabın tekrar bağlanmasını engeller.'},
-{name:'FORBIDCHAT',scope:'player',tr:'Chat ban',desc:'Hedef oyuncunun sohbet yetkisini kapatır.'},
-{name:'PERMITCHAT',scope:'player',tr:'Chat ban kaldır',desc:'Hedef oyuncunun sohbet yetkisini geri verir.'},
-{name:'NOTICEALL',scope:'global',tr:'Global duyuru',desc:'Tüm bağlı oyunculara duyuru gönderir.'},
-{name:'CUTOFF',scope:'player',tr:'Bağlantıyı kes',desc:'Hedef oyuncunun mevcut oturumunu sonlandırır.'},
-{name:'VIEW',scope:'player',tr:'Oyuncuyu izle',desc:'GM gözlem/izleme işlemini hedef oyuncu için açar.'},
-{name:'UNVIEW',scope:'player',tr:'İzlemeyi bırak',desc:'Aktif GM gözlem işlemini sonlandırır.'},
-{name:'FORBIDUSER',scope:'player',tr:'Kullanıcıyı yasakla',desc:'Orijinal forbid-user işlemini hedef oyuncuya uygular.'},
-{name:'SUMMONUSER',scope:'player',tr:'Oyuncuyu yanına çek',desc:'Hedef oyuncuyu Owner/GM karakterinin bulunduğu yere getirir.'},
-{name:'ATTACKDISABLE',scope:'world',tr:'Saldırıyı kapat',desc:'Dünya genelinde saldırı durumunu devre dışı bırakır.'},
-{name:'ATTACKENABLE',scope:'world',tr:'Saldırıyı aç',desc:'Dünya genelinde saldırı durumunu tekrar etkinleştirir.'},
-{name:'PROGRAMLISTCHECK',scope:'security',tr:'Program kontrolü',desc:'Orijinal PLC/program-list kontrol yüzeyidir.'}
+  {name:'INVISIBLE',scope:'self',tr:'Görünmezlik',desc:'Yetkili karakter görünürlüğü komut isteği.'},
+  {name:'CLEAN',scope:'world',tr:'Dünya temizliği',desc:'Dünya temizleme komut isteği.'},
+  {name:'RAINING',scope:'world',tr:'Yağmur',desc:'Yağmur hava durumu komut isteği.'},
+  {name:'SNOWING',scope:'world',tr:'Kar',desc:'Kar hava durumu komut isteği.'},
+  {name:'TIME',scope:'world',tr:'Dünya saati',desc:'Oyun dünyası saat komut isteği.'},
+  {name:'COUNT',scope:'server',tr:'Online sayısı',desc:'Online sayısı komut isteği.'},
+  {name:'NOTICE',scope:'zone',tr:'Bölge duyurusu',desc:'Bölgesel duyuru komut isteği.'},
+  {name:'ARREST',scope:'player',tr:'Oyuncuya git / takip',desc:'Hedef oyuncu için arrest komut isteği.'},
+  {name:'FORBIDCONNECT',scope:'player',tr:'Girişi yasakla',desc:'Hedef hesap için bağlantı yasağı komut isteği.'},
+  {name:'FORBIDCHAT',scope:'player',tr:'Chat ban',desc:'Hedef oyuncu için sohbet yasağı komut isteği.'},
+  {name:'PERMITCHAT',scope:'player',tr:'Chat ban kaldır',desc:'Hedef oyuncu için sohbet izni komut isteği.'},
+  {name:'NOTICEALL',scope:'global',tr:'Global duyuru',desc:'Tüm oyunculara duyuru komut isteği.'},
+  {name:'CUTOFF',scope:'player',tr:'Bağlantıyı kes',desc:'Hedef oyuncu bağlantısını kesme komut isteği.'},
+  {name:'VIEW',scope:'player',tr:'Oyuncuyu izle',desc:'Hedef oyuncu için gözlem komut isteği.'},
+  {name:'UNVIEW',scope:'player',tr:'İzlemeyi bırak',desc:'Aktif gözlem işlemini sonlandırma komut isteği.'},
+  {name:'FORBIDUSER',scope:'player',tr:'Kullanıcıyı yasakla',desc:'Hedef oyuncu için yasaklama komut isteği.'},
+  {name:'SUMMONUSER',scope:'player',tr:'Oyuncuyu yanına çek',desc:'Hedef oyuncu için summon komut isteği.'},
+  {name:'ATTACKDISABLE',scope:'world',tr:'Saldırıyı kapat',desc:'Dünya saldırı durumunu kapatma komut isteği.'},
+  {name:'ATTACKENABLE',scope:'world',tr:'Saldırıyı aç',desc:'Dünya saldırı durumunu açma komut isteği.'},
+  {name:'PROGRAMLISTCHECK',scope:'security',tr:'Program kontrolü',desc:'Program-list kontrol komut isteği.'}
 ];
-
-const PLAYERS=[
-{name:'osevinc',account:'osevinc',nation:'El Morad',className:'Warrior',level:70,np:48920,coin:37400000,zone:'Moradon',online:true,banned:false,ipBanned:false,last:'Şimdi',ip:'85.104.21.17',initial:'O'},
-{name:'RavenTR',account:'raven01',nation:'Karus',className:'Rogue',level:70,np:112840,coin:98400000,zone:'Colony Zone',online:true,banned:false,ipBanned:false,last:'Şimdi',ip:'78.188.41.54',initial:'R'},
-{name:'ArchMage',account:'mage1298',nation:'El Morad',className:'Mage',level:69,np:88220,coin:24100000,zone:'Moradon',online:true,banned:false,ipBanned:false,last:'Şimdi',ip:'88.247.67.10',initial:'A'},
-{name:'Priestess',account:'healme',nation:'El Morad',className:'Priest',level:68,np:66540,coin:18700000,zone:'El Morad Castle',online:true,banned:false,ipBanned:false,last:'Şimdi',ip:'176.40.83.11',initial:'P'},
-{name:'Berserker',account:'karuswar',nation:'Karus',className:'Warrior',level:70,np:145600,coin:132000000,zone:'Colony Zone',online:true,banned:false,ipBanned:false,last:'Şimdi',ip:'95.70.18.31',initial:'B'},
-{name:'OldSchool',account:'oldschool',nation:'Karus',className:'Priest',level:65,np:32210,coin:9700000,zone:'Luferson',online:false,banned:false,ipBanned:false,last:'18 dk önce',ip:'46.2.18.90',initial:'O'},
-{name:'Shadow',account:'shadowacc',nation:'El Morad',className:'Rogue',level:70,np:99800,coin:43600000,zone:'Moradon',online:false,banned:false,ipBanned:false,last:'42 dk önce',ip:'31.145.11.8',initial:'S'},
-{name:'Suspicious',account:'testdup',nation:'Karus',className:'Warrior',level:62,np:4200,coin:860000000,zone:'Luferson',online:false,banned:true,ipBanned:true,last:'2 saat önce',ip:'185.99.10.44',initial:'S'}
-];
-
-const state={selectedCommand:null,mode:'demo',selectedPlayer:PLAYERS[0],theme:localStorage.getItem('oldkoweb.admin.theme')||localStorage.getItem('oldera.admin.theme')||'dark',liveHealth:null};
 const TITLES={dashboard:'OldKO Control Center',online:'Online Players',players:'Players & Rankings',characters:'Character Control',items:'Items & Economy',world:'World & Zones',gm:'GM Command Center',server:'Server Control',logs:'Audit & Logs'};
-const $=id=>document.getElementById(id);
-const toast=$('toast'),toastTitle=$('toastTitle'),toastText=$('toastText');
+const state={session:null,players:[],selectedPlayer:null,selectedCommand:null,overview:null,theme:localStorage.getItem('oldkoweb.admin.theme')||'dark',ready:false};
+let toastTimer;
+
 document.documentElement.dataset.theme=state.theme;
-let liveApiPromise=null;
+function esc(value){return String(value??'').replace(/[&<>"']/g,(m)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function showToast(title,text){const toast=$('toast');if(!toast)return;$('toastTitle').textContent=title;$('toastText').textContent=text||'';toast.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove('show'),3600);}
+function formatCoin(value){const n=Number(value||0);if(n>=1e9)return`${(n/1e9).toFixed(1)}B`;if(n>=1e6)return`${(n/1e6).toFixed(1)}M`;return n.toLocaleString('tr-TR');}
+function permission(name){return Boolean(state.session?.user?.permissions?.includes(name));}
+function roleText(){const roles=state.session?.user?.roles;return Array.isArray(roles)&&roles.length?roles.join(' · '):'YETKİLİ';}
+function identityText(){return state.session?.user?.username||'—';}
+function errorText(error){if(error?.status===401)return'Oturum gerekli.';if(error?.status===403)return'Bu işlem için sunucu yetkisi yok.';return error?.message||'İşlem tamamlanamadı.';}
+function gateBoot(text,{error=false}={}){$('adminGate').hidden=false;$('adminBootState').hidden=false;$('adminLoginForm').hidden=true;$('adminBootText').textContent=text;$('adminBootText').classList.toggle('error',error);document.body.classList.add('admin-booting');}
+function gateLogin(message=''){$('adminGate').hidden=false;$('adminBootState').hidden=true;$('adminLoginForm').hidden=false;$('adminLoginError').textContent=message;document.body.classList.add('admin-booting');}
+function openApp(){$('adminGate').hidden=true;document.body.classList.remove('admin-booting');state.ready=true;}
+function applyIdentity(){const user=identityText(),roles=roleText();$('sessionUser').textContent=user;$('sessionRole').textContent=roles;$('authorityRole').textContent=roles;$('authorityLabel').textContent=`YETKİ · ${user}`;$('gmRoleBadge').textContent=roles;$('overviewActor').textContent=user;$('apiState').textContent='AUTHENTICATED';$('adminApiHealth').textContent='ONLINE';$('serverAdminApi').textContent='SESSION VERIFIED';}
+function openView(id){if(!state.ready||!TITLES[id])return;$$('.view').forEach((v)=>v.classList.toggle('active',v.id===id));$$('.nav-item').forEach((n)=>n.classList.toggle('active',n.dataset.view===id));$('pageTitle').textContent=TITLES[id];$('crumbTitle').textContent=TITLES[id].toUpperCase();history.replaceState(null,'',`#${id}`);$('sidebar').classList.remove('open');if(id==='characters'&&state.selectedPlayer)window.OldKOCharacterControl?.load(state.selectedPlayer);if(id==='logs')loadAudit();}
+function statusBadge(player){if(player.ipBanned)return'<span class="badge red">IP BANNED</span>';if(player.banned)return'<span class="badge red">BANNED</span>';return player.online?'<span class="badge green">ONLINE</span>':'<span class="badge">OFFLINE</span>';}
+function playerMatches(player,q){const needle=String(q||'').trim().toLowerCase();return!needle||[player.name,player.account,player.nation,player.className,player.zone,player.ip].some((value)=>String(value||'').toLowerCase().includes(needle));}
+function sortPlayers(list,mode){return[...list].sort((a,b)=>{if(mode==='np-desc')return Number(b.np||0)-Number(a.np||0);if(mode==='level-desc')return Number(b.level||0)-Number(a.level||0);if(mode==='coin-desc')return Number(b.coin||0)-Number(a.coin||0);if(mode==='zone-asc')return String(a.zone||'').localeCompare(String(b.zone||''),'tr');return String(a.name||'').localeCompare(String(b.name||''),'tr');});}
+function renderOnline(){const host=$('onlinePlayerGrid');if(!host)return;let list=state.players.filter((p)=>p.online);const q=$('onlineSearch')?.value||'',nation=$('onlineNation')?.value||'all',sort=$('onlineSort')?.value||'np-desc';list=sortPlayers(list.filter((p)=>playerMatches(p,q)&&(nation==='all'||p.nation===nation)),sort);$('onlineCountLabel').textContent=`● ${list.length.toLocaleString('tr-TR')} ONLINE`;host.innerHTML=list.length?list.map((p)=>`<button class="player-tile player-row" data-player="${esc(p.name)}"><div class="player-avatar">${esc(p.initial||String(p.name||'?').slice(0,1))}</div><div class="player-identity"><div class="player-name-line"><h3>${esc(p.name)}</h3>${statusBadge(p)}</div><div class="meta">${Number(p.level||0)} ${esc(p.className||'—')} · ${esc(p.nation||'—')} · ${esc(p.zone||'—')}<br><small>${esc(p.account||'—')} · ${esc(p.ip||'IP yok')}</small></div></div><div class="stats"><span>NP<b>${Number(p.np||0).toLocaleString('tr-TR')}</b></span><span>LEVEL<b>${Number(p.level||0)}</b></span><span>COIN<b>${formatCoin(p.coin)}</b></span><span>ZONE<b>${esc(p.zone||'—')}</b></span></div><span class="row-open">KARAKTERİ AÇ ›</span></button>`).join(''):'<div class="empty-state"><b>Sonuç yok</b><span>Bu filtreyle eşleşen online oyuncu bulunamadı.</span></div>';host.querySelectorAll('[data-player]').forEach((el)=>el.addEventListener('click',()=>selectPlayer(el.dataset.player)));}
+function renderPlayers(){const body=$('playersBody');if(!body)return;const q=$('playerSearch')?.value||'',status=$('playerStatus')?.value||'all',sort=$('playerSort')?.value||'np-desc';let list=state.players.filter((p)=>playerMatches(p,q));if(status==='online')list=list.filter((p)=>p.online);if(status==='offline')list=list.filter((p)=>!p.online&&!p.banned&&!p.ipBanned);if(status==='banned')list=list.filter((p)=>p.banned||p.ipBanned);list=sortPlayers(list,sort);body.innerHTML=list.length?list.map((p)=>`<tr data-player="${esc(p.name)}"><td><div class="table-avatar">${esc(p.initial||String(p.name||'?').slice(0,1))}</div></td><td>${statusBadge(p)}</td><td><b>${esc(p.name)}</b><br><small>${esc(p.account||'—')}</small></td><td>${esc(p.nation||'—')}</td><td>${esc(p.className||'—')}</td><td><b>${Number(p.level||0)}</b></td><td><b>${Number(p.np||0).toLocaleString('tr-TR')}</b></td><td>${formatCoin(p.coin)}</td><td>${esc(p.zone||'—')}</td><td>${esc(p.last||'—')}</td></tr>`).join(''):'<tr><td colspan="10">Sonuç yok.</td></tr>';body.querySelectorAll('[data-player]').forEach((el)=>el.addEventListener('click',()=>selectPlayer(el.dataset.player)));}
+async function selectPlayer(name){try{const data=await api.character(name);const player=data?.character||data;if(!player?.name)throw new Error('Karakter verisi alınamadı.');const existing=state.players.find((p)=>p.name===player.name);if(existing)Object.assign(existing,player);state.selectedPlayer=existing||player;$('gmTarget').value=state.selectedPlayer.name;openView('characters');window.OldKOCharacterControl?.load(state.selectedPlayer);}catch(error){showToast('Karakter açılamadı',errorText(error));}}
+function applyOverview(data){state.overview=data||{};$('metricOnline').textContent=Number(data?.online||0).toLocaleString('tr-TR');$('metricCharacters').textContent=Number(data?.characters||0).toLocaleString('tr-TR');$('metricSanctions').textContent=Number(data?.sanctions||0).toLocaleString('tr-TR');$('metricDuplicates').textContent=Number(data?.duplicateSerials||0).toLocaleString('tr-TR');$('ringOnline').textContent=Number(data?.online||0).toLocaleString('tr-TR');}
+async function refreshCore(){const [overviewData,playersData]=await Promise.all([api.overview(),api.players({limit:5000})]);applyOverview(overviewData);state.players=Array.isArray(playersData?.players)?playersData.players:[];if(state.selectedPlayer){const replacement=state.players.find((p)=>p.name===state.selectedPlayer.name);if(replacement)state.selectedPlayer=replacement;}renderOnline();renderPlayers();}
+function renderCommands(){const host=$('commandList');host.innerHTML='';COMMANDS.forEach((cmd)=>{const button=document.createElement('button');button.className='cmd-card';button.innerHTML=`<code>${esc(cmd.name)}</code><span class="tr">${esc(cmd.tr)}</span><p>${esc(cmd.desc)}</p>`;button.disabled=!permission('commands:execute');button.addEventListener('click',()=>{host.querySelectorAll('.cmd-card').forEach((el)=>el.classList.remove('selected'));button.classList.add('selected');state.selectedCommand=cmd.name;showToast('Komut seçildi',`${cmd.name} · ${cmd.tr}`);});host.appendChild(button);});}
+function commandStatusText(response){const request=response?.game?.request;const status=String(request?.status||(!response?.game?.forwarded?'PENDING':'UNKNOWN')).toUpperCase();return{status,id:request?.id||'—',trace:response?.traceId||'—',forwarded:Boolean(response?.game?.forwarded)};}
+async function execute(command,target='',arg='',reason='OldKOWeb Control Center command'){if(!permission('commands:execute'))throw new Error('commands:execute izni yok.');const response=await api.command(command,target,arg,reason);const info=commandStatusText(response);$('commandBridgeState').textContent=info.status;$('commandResult').innerHTML=`<b>${esc(command)} · ${esc(info.status)}</b><span>Request: ${esc(info.id)} · Trace: ${esc(info.trace)}${info.forwarded?' · bridge forwarded':' · terminal çalışma sonucu henüz doğrulanmadı'}</span>`;showToast('Komut isteği alındı',`${command}: ${info.status}. Çalıştı olarak işaretlenmedi.`);await loadAudit().catch(()=>{});return response;}
+async function mutate(path,method='POST',body={}){const response=await api.request(path,{method,body});await Promise.allSettled([refreshCore(),loadAudit()]);return response;}
+async function banPlayer(character,type='ACCOUNT',reason='OldKOWeb Control Center moderation'){const response=await api.ban(character,type,reason);await Promise.allSettled([refreshCore(),loadAudit()]);return response;}
+async function unbanPlayer(character,type=''){const response=await api.unban(character,type);await Promise.allSettled([refreshCore(),loadAudit()]);return response;}
+async function loadAudit(){const data=await api.audit(150),entries=Array.isArray(data?.entries)?data.entries:[],body=$('auditRows');body.innerHTML=entries.length?entries.map((entry)=>`<tr><td>${entry.createdAt?new Date(entry.createdAt).toLocaleString('tr-TR'):'—'}</td><td>${esc(entry.actor||'—')}</td><td>${esc(entry.action||'—')}</td><td>${esc(entry.target||'—')}</td><td><span class="badge ${entry.result==='SUCCESS'?'green':''}">${esc(entry.result||'—')}</span></td><td>${esc(entry.traceId||'—')}</td></tr>`).join(''):'<tr><td colspan="6">Audit kaydı yok.</td></tr>';return data;}
+function renderItemRows(items){const body=$('itemRows');body.innerHTML=items.length?items.map((item)=>`<tr data-item-serial="${esc(item.serial||'')}"><td>${esc(item.serial||'—')}</td><td>${esc(item.itemId??'—')}</td><td>${esc(item.character||'—')}</td><td>${esc(item.account||'—')}</td><td>${esc(item.scope||'—')}</td><td>${esc(item.slot??'—')}</td></tr>`).join(''):'<tr><td colspan="6">Sonuç yok.</td></tr>';}
+async function itemSearch(){const q=$('itemSearchInput').value.trim();if(!q){showToast('Arama değeri gerekli','Item ID, serial veya owner gir.');return;}try{const data=await api.itemSearch(q);renderItemRows(Array.isArray(data?.items)?data.items:[]);}catch(error){renderItemRows([]);showToast('Item araması başarısız',errorText(error));}}
+async function duplicateSearch(){try{const data=await api.duplicateItems();const rows=[];for(const duplicate of data?.duplicates||[])for(const location of duplicate.locations||[])rows.push({...location,serial:duplicate.serial});renderItemRows(rows);}catch(error){renderItemRows([]);showToast('Duplicate sorgusu başarısız',errorText(error));}}
+async function logout(){try{await api.logout();}catch{}state.session=null;state.ready=false;location.hash='';gateLogin('Oturum kapatıldı.');}
+async function authenticate(user,password){await api.login(user,password);const session=await api.session();if(!session?.ok)throw new Error('Sunucu oturumu doğrulanamadı.');state.session=session;applyIdentity();renderCommands();await refreshCore();openApp();const initial=location.hash.slice(1);openView(TITLES[initial]?initial:'dashboard');}
+async function boot(){gateBoot('Production Admin API bağlantısı kontrol ediliyor…');try{await api.probe();$('apiState').textContent='ONLINE';$('adminApiHealth').textContent='ONLINE';const session=await api.session();if(!session?.ok){gateLogin();return;}state.session=session;applyIdentity();renderCommands();await refreshCore();openApp();const initial=location.hash.slice(1);openView(TITLES[initial]?initial:'dashboard');}catch(error){$('apiState').textContent='UNAVAILABLE';$('adminApiHealth').textContent='UNAVAILABLE';gateBoot(`Admin API kullanılamıyor: ${errorText(error)} Sahte veri gösterilmiyor.`,{error:true});}}
 
-function showToast(title,text){toastTitle.textContent=title;toastText.textContent=text;toast.classList.add('show');clearTimeout(showToast._t);showToast._t=setTimeout(()=>toast.classList.remove('show'),3000)}
-function appendAudit(action,target='—',result='DEMO'){const tbody=$('auditRows');if(!tbody)return;const now=new Date().toLocaleTimeString('tr-TR',{hour12:false});const trace=`OK-${Math.random().toString(36).slice(2,7).toUpperCase()}`;const row=document.createElement('tr');row.innerHTML=`<td>${now}</td><td>ORHAN</td><td>${action}</td><td>${target}</td><td><span class="badge gold">${result}</span></td><td>${trace}</td>`;tbody.prepend(row)}
-function openView(id){document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===id));document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.view===id));$('pageTitle').textContent=TITLES[id]||id;$('crumbTitle').textContent=(TITLES[id]||id).toUpperCase();history.replaceState(null,'',`#${id}`);$('sidebar').classList.remove('open');if(id==='characters')window.OldKOCharacterControl?.load(state.selectedPlayer);if(id==='logs'&&state.mode==='live')loadLiveAudit()}
+$('adminLoginForm').addEventListener('submit',async(event)=>{event.preventDefault();const button=event.submitter;button.disabled=true;$('adminLoginError').textContent='';try{await authenticate($('adminLoginUser').value.trim(),$('adminLoginPassword').value);}catch(error){gateLogin(errorText(error));}finally{button.disabled=false;}});
+$$('.nav-item').forEach((button)=>button.addEventListener('click',()=>openView(button.dataset.view)));
+$$('[data-view-target]').forEach((button)=>button.addEventListener('click',()=>openView(button.dataset.viewTarget)));
+$('menuToggle').addEventListener('click',()=> $('sidebar').classList.toggle('open'));
+$('themeBtn').addEventListener('click',()=>{state.theme=state.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=state.theme;localStorage.setItem('oldkoweb.admin.theme',state.theme);$('themeBtn').textContent=state.theme==='dark'?'☀':'☾';});
+$('themeBtn').textContent=state.theme==='dark'?'☀':'☾';
+$('refreshBtn').addEventListener('click',async()=>{try{await refreshCore();if(location.hash==='#logs')await loadAudit();if(location.hash==='#characters'&&state.selectedPlayer)window.OldKOCharacterControl?.load(state.selectedPlayer);showToast('Canlı veri yenilendi','WS08 verileri yeniden alındı.');}catch(error){showToast('Yenileme başarısız',errorText(error));}});
+$('sessionMenu').addEventListener('click',()=>{if(confirm('Yönetici oturumunu kapatmak istiyor musun?'))logout();});
+['onlineSearch'].forEach((id)=>$(id).addEventListener('input',renderOnline));['onlineSort','onlineNation'].forEach((id)=>$(id).addEventListener('change',renderOnline));$('playerSearch').addEventListener('input',renderPlayers);['playerSort','playerStatus'].forEach((id)=>$(id).addEventListener('change',renderPlayers));
+$('globalSearch').addEventListener('keydown',(event)=>{if(event.key!=='Enter')return;event.preventDefault();$('playerSearch').value=$('globalSearch').value;openView('players');renderPlayers();});
+$('dryRunBtn').addEventListener('click',async()=>{if(!state.selectedCommand){showToast('Komut seç','Önce aşağıdaki GM komutlarından birini seç.');return;}try{await execute(state.selectedCommand,$('gmTarget').value.trim(),$('gmArg').value.trim());}catch(error){showToast('Komut isteği başarısız',errorText(error));}});
+document.addEventListener('click',async(event)=>{const button=event.target.closest('[data-command]');if(!button)return;try{await execute(button.dataset.command,$('gmTarget')?.value?.trim()||state.selectedPlayer?.name||'','');}catch(error){showToast('Komut isteği başarısız',errorText(error));}});
+$('itemSearchBtn').addEventListener('click',itemSearch);$('itemSearchInput').addEventListener('keydown',(event)=>{if(event.key==='Enter'){event.preventDefault();itemSearch();}});$('duplicateSearchBtn').addEventListener('click',duplicateSearch);
 
-function ensureLiveApi(){
-  if(window.OldKOLiveApi)return Promise.resolve(window.OldKOLiveApi);
-  if(liveApiPromise)return liveApiPromise;
-  liveApiPromise=new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='./live-api.js';s.async=false;s.onload=()=>window.OldKOLiveApi?resolve(window.OldKOLiveApi):reject(new Error('Live API client unavailable'));s.onerror=()=>reject(new Error('Live API client load failed'));document.head.appendChild(s)});
-  return liveApiPromise;
-}
-function integrationStatus(text,tone='gold'){
-  const el=document.querySelector('.owner-card small');if(el)el.textContent=`AKTİF YETKİ · ${text}`;
-  const alert=document.querySelector('#dashboard .alert-bar b');if(alert){alert.textContent=text;alert.className=tone==='green'?'ok':''}
-}
-function loginOverlay(){
-  let back=$('liveLoginBackdrop');if(back)return back;
-  back=document.createElement('div');back.id='liveLoginBackdrop';back.className='modal-backdrop';back.innerHTML=`<form class="modal" id="liveLoginForm"><small>OLDKO LIVE CONNECTION</small><h2>ROOT OWNER Girişi</h2><p>Canlı OldKO API bulundu. SQL / oyuncu / inventory verisini açmak için Owner oturumu gerekli.</p><label class="field"><span>Kullanıcı</span><input id="liveLoginUser" value="ORHAN" autocomplete="username"></label><label class="field" style="margin-top:10px"><span>Şifre</span><input id="liveLoginPassword" type="password" autocomplete="current-password"></label><div class="modal-actions"><button type="button" id="liveLoginDemo">DEMO İLE DEVAM</button><button type="submit">CANLI BAĞLAN</button></div><p id="liveLoginError" style="color:var(--red)"></p></form>`;document.body.appendChild(back);
-  $('liveLoginDemo').onclick=()=>{back.remove();integrationStatus('DEMO MODE')};
-  $('liveLoginForm').onsubmit=async e=>{e.preventDefault();const err=$('liveLoginError');err.textContent='';try{const api=await ensureLiveApi();await api.login($('liveLoginUser').value.trim(),$('liveLoginPassword').value);back.remove();await activateLive(api)}catch(ex){err.textContent=ex.message==='INVALID_CREDENTIALS'?'Kullanıcı adı veya şifre yanlış.':ex.message}};
-  return back;
-}
-async function activateLive(api){
-  state.mode='live';integrationStatus('LIVE API','green');await refreshLiveData(api);showToast('Canlı bağlantı aktif','Online oyuncular, karakter ve item verileri artık OldKO API üzerinden okunuyor.')
-}
-async function bootLive(){
-  try{const api=await ensureLiveApi();const health=await api.probe();state.liveHealth=health;if(!health){integrationStatus('DEMO MODE');return}const session=await api.session();if(!session){integrationStatus('LOGIN REQUIRED');loginOverlay();return}await activateLive(api)}catch(e){console.warn('OldKO live API unavailable',e);integrationStatus('DEMO MODE')}
-}
-async function refreshLiveData(api=window.OldKOLiveApi){
-  if(!api||state.mode!=='live')return;
-  const [{players=[]},overview]=await Promise.all([api.players({limit:2000}),api.overview()]);
-  if(players.length){const selectedName=state.selectedPlayer?.name;PLAYERS.splice(0,PLAYERS.length,...players);state.selectedPlayer=PLAYERS.find(x=>x.name===selectedName)||PLAYERS[0]||null}
-  renderOnline();renderPlayers();applyOverview(overview);if(location.hash==='#characters'&&state.selectedPlayer)window.OldKOCharacterControl?.load(state.selectedPlayer)
-}
-function applyOverview(o){
-  if(!o)return;const cards=document.querySelectorAll('#dashboard .metric-card strong');if(cards[0])cards[0].textContent=Number(o.online||0).toLocaleString('tr-TR');if(cards[2])cards[2].textContent=Number(o.characters||0).toLocaleString('tr-TR');
-  const ring=document.querySelector('#dashboard .server-ring strong');if(ring)ring.textContent=Number(o.online||0).toLocaleString('tr-TR');
-  const onlineHead=document.querySelector('#online .panel-head .live');if(onlineHead)onlineHead.textContent=`● ${Number(o.online||0).toLocaleString('tr-TR')} ONLINE`;
-}
-async function loadLiveAudit(){try{const d=await window.OldKOLiveApi?.audit(150);if(!d?.entries)return;const body=$('auditRows');body.innerHTML=d.entries.map(x=>`<tr><td>${new Date(x.createdAt).toLocaleTimeString('tr-TR',{hour12:false})}</td><td>${x.actor}</td><td>${x.action}</td><td>${x.target||'—'}</td><td><span class="badge ${x.result==='SUCCESS'?'green':'gold'}">${x.result}</span></td><td>${x.traceId}</td></tr>`).join('')}catch(e){showToast('Audit yüklenemedi',e.message)}}
-
-async function dispatchAdminCommand(name,{target='',arg=''}={}){const payload={command:name,target,arg,actor:'ORHAN',authority:'ROOT_OWNER',source:'oldko-web-control-center'};if(state.mode==='live'){return (await ensureLiveApi()).command(name,target,arg,'ROOT OWNER command')}console.info('[OldKO Admin Demo]',payload);appendAudit(name,target||'GLOBAL','DEMO');return{ok:true,demo:true,payload}}
-async function execute(name,target='',arg=''){try{const r=await dispatchAdminCommand(name,{target,arg});const staged=state.mode==='live'&&r?.game&&!r.game.forwarded;showToast(`${name} ${staged?'hazırlandı':'çalıştı'}`,state.mode==='demo'?'Demo modunda audit işlendi.':staged?'API komutu aldı; gerçek game-command bridge bağlanınca oyun sürecine anında iletilecek.':'Komut OldKO sunucusuna iletildi.')}catch(err){showToast('Komut başarısız',err.message)}}
-async function mutate(path,method='POST',body={},auditAction='ADMIN_MUTATION',target='—'){const payload={...body,actor:'ORHAN',authority:'ROOT_OWNER',source:'oldko-web-control-center'};if(state.mode==='live'){const api=await ensureLiveApi();const data=await api.request(path,{method,body:method==='GET'?undefined:payload});appendAudit(auditAction,target,'SUCCESS');return data}console.info('[OldKO Admin Mutation Demo]',method,path,payload);appendAudit(auditAction,target,'DEMO');return{ok:true,demo:true,path,method,payload}}
-async function banPlayer(character,type='ACCOUNT',reason='ROOT OWNER moderation action'){if(state.mode==='live')return (await ensureLiveApi()).ban(character,type,reason);appendAudit(type==='IP'?'IP_BAN':'ACCOUNT_BAN',character,'DEMO');return{ok:true,demo:true}}
-async function unbanPlayer(character,type=''){if(state.mode==='live')return (await ensureLiveApi()).unban(character,type);appendAudit('BAN_REMOVE',character,'DEMO');return{ok:true,demo:true}}
-async function liveInventory(name){if(state.mode!=='live')return null;return (await ensureLiveApi()).inventory(name)}
-async function liveInn(name){if(state.mode!=='live')return null;return (await ensureLiveApi()).inn(name)}
-
-function renderCommands(){const host=$('commandList');host.innerHTML='';COMMANDS.forEach(cmd=>{const card=document.createElement('button');card.className='cmd-card';card.innerHTML=`<code>${cmd.name}</code><span class="tr">${cmd.tr}</span><p>${cmd.desc}</p>`;card.onclick=()=>{host.querySelectorAll('.cmd-card').forEach(x=>x.classList.remove('selected'));card.classList.add('selected');state.selectedCommand=cmd.name;showToast('Komut seçildi',`${cmd.name} · ${cmd.tr}`)};host.appendChild(card)})}
-function formatCoin(v){v=Number(v||0);if(v>=1e9)return`${(v/1e9).toFixed(1)}B`;if(v>=1e6)return`${(v/1e6).toFixed(1)}M`;return v.toLocaleString('tr-TR')}
-function statusBadge(p){if(p.ipBanned)return'<span class="badge red">IP BANNED</span>';if(p.banned)return'<span class="badge red">BANNED</span>';return p.online?'<span class="badge green">ONLINE</span>':'<span class="badge">OFFLINE</span>'}
-function playerMatches(p,q){q=q.trim().toLowerCase();return!q||[p.name,p.account,p.nation,p.className,p.zone,p.ip].some(x=>String(x||'').toLowerCase().includes(q))}
-function sortPlayers(list,mode){return [...list].sort((a,b)=>{if(mode==='np-desc')return Number(b.np)-Number(a.np);if(mode==='level-desc')return Number(b.level)-Number(a.level);if(mode==='coin-desc')return Number(b.coin)-Number(a.coin);if(mode==='zone-asc')return String(a.zone).localeCompare(String(b.zone),'tr');return String(a.name).localeCompare(String(b.name),'tr')})}
-async function selectPlayer(name){let p=PLAYERS.find(x=>x.name===name);if(!p)return;if(state.mode==='live'){try{const d=await (await ensureLiveApi()).character(name);if(d?.character){Object.assign(p,d.character)}}catch(e){console.warn('live character detail',e)}}state.selectedPlayer=p;const gm=$('gmTarget');if(gm)gm.value=p.name;openView('characters')}
-function setPlayerBanState(name,{banned,ipBanned}={}){const p=PLAYERS.find(x=>x.name===name);if(!p)return null;if(typeof banned==='boolean')p.banned=banned;if(typeof ipBanned==='boolean')p.ipBanned=ipBanned;if(!p.banned)p.ipBanned=false;state.selectedPlayer=p;renderOnline();renderPlayers();return p}
-function renderOnline(){const host=$('onlinePlayerGrid');if(!host)return;let list=PLAYERS.filter(p=>p.online);const q=$('onlineSearch')?.value||'',nation=$('onlineNation')?.value||'all',sort=$('onlineSort')?.value||'np-desc';list=list.filter(p=>playerMatches(p,q)&&(nation==='all'||p.nation===nation));list=sortPlayers(list,sort);host.innerHTML=list.map(p=>`<button class="player-tile player-row" data-player="${p.name}"><div class="player-avatar">${p.initial||String(p.name).slice(0,1)}</div><div class="player-identity"><div class="player-name-line"><h3>${p.name}</h3>${statusBadge(p)}</div><div class="meta">${p.level} ${p.className} · ${p.nation} · ${p.zone}<br><small>${p.account||'—'} · ${p.ip||'IP yok'}</small></div></div><div class="stats"><span>NP<b>${Number(p.np||0).toLocaleString('tr-TR')}</b></span><span>LEVEL<b>${p.level}</b></span><span>COIN<b>${formatCoin(p.coin)}</b></span><span>ZONE<b>${p.zone}</b></span></div><span class="row-open">KARAKTERİ AÇ ›</span></button>`).join('')||'<div class="empty-state"><b>Sonuç yok</b><span>Bu filtreyle eşleşen online oyuncu bulunamadı.</span></div>';host.querySelectorAll('[data-player]').forEach(x=>x.onclick=()=>selectPlayer(x.dataset.player))}
-function renderPlayers(){const body=$('playersBody');if(!body)return;const q=$('playerSearch')?.value||'',status=$('playerStatus')?.value||'all',sort=$('playerSort')?.value||'np-desc';let list=PLAYERS.filter(p=>playerMatches(p,q));if(status==='online')list=list.filter(p=>p.online);if(status==='offline')list=list.filter(p=>!p.online&&!p.banned);if(status==='banned')list=list.filter(p=>p.banned);list=sortPlayers(list,sort);body.innerHTML=list.map(p=>`<tr data-player="${p.name}"><td><div class="table-avatar">${p.initial||String(p.name).slice(0,1)}</div></td><td>${statusBadge(p)}</td><td><b>${p.name}</b><br><small>${p.account||'—'}</small></td><td>${p.nation}</td><td>${p.className}</td><td><b>${p.level}</b></td><td><b>${Number(p.np||0).toLocaleString('tr-TR')}</b></td><td>${formatCoin(p.coin)}</td><td>${p.zone}</td><td>${p.last||'—'}</td></tr>`).join('');body.querySelectorAll('[data-player]').forEach(x=>x.onclick=()=>selectPlayer(x.dataset.player))}
-
-let pendingCritical=null;function openCritical(action,title,text,target='SERVER'){pendingCritical={action,target};$('modalTitle').textContent=title;$('modalText').textContent=text;$('modalReason').value='ROOT OWNER manual action';$('modalBackdrop').hidden=false}
-function closeModal(){pendingCritical=null;$('modalBackdrop').hidden=true}
-
-const api={state,COMMANDS,PLAYERS,openView,showToast,appendAudit,dispatchAdminCommand,execute,mutate,selectPlayer,setPlayerBanState,requestCritical:openCritical,renderOnline,renderPlayers,banPlayer,unbanPlayer,liveInventory,liveInn,refreshLiveData};
-window.OldKOAdmin=api;window.OldERAAdmin=api;
-
-document.querySelectorAll('.nav-item').forEach(btn=>btn.onclick=()=>openView(btn.dataset.view));document.querySelectorAll('[data-view-target]').forEach(btn=>btn.onclick=()=>openView(btn.dataset.viewTarget));
-$('menuToggle').onclick=()=>$('sidebar').classList.toggle('open');
-$('themeBtn').onclick=()=>{state.theme=state.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=state.theme;localStorage.setItem('oldkoweb.admin.theme',state.theme);$('themeBtn').textContent=state.theme==='dark'?'☀':'☾';showToast('Tema değiştirildi',state.theme==='dark'?'Karanlık mod aktif.':'Aydınlık mod aktif.')};$('themeBtn').textContent=state.theme==='dark'?'☀':'☾';
-$('refreshBtn').onclick=async()=>{if(state.mode==='live'){try{await refreshLiveData();showToast('Canlı veri yenilendi','OldKO online oyuncu ve server özeti yeniden çekildi.')}catch(e){showToast('Yenileme başarısız',e.message)}}else showToast('Demo yenilendi','Canlı API bulunmadığı için demo verisi gösteriliyor.')};
-$('globalSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){const q=e.currentTarget.value.trim();openView('players');$('playerSearch').value=q;renderPlayers()}});
-['onlineSearch','onlineSort','onlineNation'].forEach(id=>$(id)?.addEventListener(id.includes('Search')?'input':'change',renderOnline));['playerSearch','playerSort','playerStatus'].forEach(id=>$(id)?.addEventListener(id.includes('Search')?'input':'change',renderPlayers));
-$('dryRunBtn').onclick=()=>{if(!state.selectedCommand)return showToast('Komut seç','Önce aşağıdaki GM komutlarından birini seç.');execute(state.selectedCommand,$('gmTarget').value.trim(),$('gmArg').value.trim())};
-document.addEventListener('click',e=>{const cmd=e.target.closest('[data-command]');if(cmd)execute(cmd.dataset.command,$('gmTarget')?.value?.trim()||state.selectedPlayer?.name||'','');const demo=e.target.closest('[data-demo-action]');if(demo)showToast(demo.dataset.demoAction,state.mode==='live'?'Bu ekranın canlı endpointi sıradaki entegrasyon bloğunda bağlanacak.':'Demo modunda. Canlı API bağlandığında gerçek veriye geçecek.');const critical=e.target.closest('[data-critical]');if(critical)openCritical(critical.dataset.critical,critical.textContent.trim().split('\n')[0],`Bu kritik işlem canlı OldKO sunucusunda ikinci onay ve audit nedeni ile çalıştırılacak.`)});
-$('modalCancel').onclick=closeModal;$('modalBackdrop').addEventListener('click',e=>{if(e.target===$('modalBackdrop'))closeModal()});$('modalConfirm').onclick=async()=>{if(!pendingCritical)return;const {action,target}=pendingCritical,reason=$('modalReason').value.trim();await mutate('/server/critical','POST',{action,reason},action,target);showToast('İşlem hazırlandı',`${action} işlemi audit kaydıyla hazırlandı.`);closeModal()};
-renderCommands();renderOnline();renderPlayers();const initial=location.hash.slice(1);if(TITLES[initial])openView(initial);bootLive();
+window.OldKOAdmin={state,COMMANDS,api,permission,showToast,openView,selectPlayer,execute,mutate,banPlayer,unbanPlayer,refreshCore,loadAudit,errorText,esc};
+boot();
+})();

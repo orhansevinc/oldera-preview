@@ -1,0 +1,355 @@
+openapi: 3.1.0
+info:
+  title: OldKOWeb Admin API
+  version: 0.1.0
+  description: Server-authoritative API for the existing OldKOWeb admin control center.
+servers:
+  - url: /api/admin
+security:
+  - adminSession: []
+paths:
+  /health:
+    get:
+      security: []
+      operationId: health
+      responses:
+        '200': { description: Service health }
+  /session/login:
+    post:
+      security: []
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user, password]
+              properties:
+                user: { type: string }
+                password: { type: string, format: password }
+      responses:
+        '200': { description: Authenticated; sets HttpOnly session cookie }
+        '401': { $ref: '#/components/responses/Error' }
+  /session/logout:
+    post:
+      operationId: logout
+      responses:
+        '200': { description: Session cookie cleared }
+  /session:
+    get:
+      operationId: session
+      responses:
+        '200': { description: Current server-resolved identity and permissions }
+        '401': { $ref: '#/components/responses/Error' }
+  /overview:
+    get:
+      operationId: overview
+      responses:
+        '200':
+          description: Control-center counters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  online: { type: integer }
+                  characters: { type: integer }
+                  sanctions: { type: integer }
+                  duplicateSerials: { type: integer }
+  /players:
+    get:
+      operationId: players
+      parameters:
+        - { name: online, in: query, schema: { type: string, enum: ['1'] } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 5000, default: 1000 } }
+      responses:
+        '200':
+          description: Player search result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, players]
+                properties:
+                  ok: { type: boolean, const: true }
+                  players:
+                    type: array
+                    items: { $ref: '#/components/schemas/Player' }
+  /characters/{name}:
+    parameters:
+      - $ref: '#/components/parameters/CharacterName'
+    get:
+      operationId: characterDetails
+      responses:
+        '200': { description: Character details }
+        '404': { $ref: '#/components/responses/Error' }
+    patch:
+      operationId: editCharacter
+      description: Server validates fields and ignores client-supplied actor/authority labels.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                level: { type: integer, minimum: 1, maximum: 83 }
+                np: { type: integer, minimum: 0, maximum: 2147483647 }
+                coin: { type: integer, minimum: 0, maximum: 2147483647 }
+                zone: { type: string, enum: [Moradon, Colony Zone, El Morad Castle, Luferson] }
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        '200': { description: Updated and audited }
+        '422': { $ref: '#/components/responses/Error' }
+  /characters/{name}/stats:
+    parameters:
+      - $ref: '#/components/parameters/CharacterName'
+    patch:
+      operationId: editCharacterStats
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                str: { type: integer, minimum: 0, maximum: 255 }
+                hp: { type: integer, minimum: 0, maximum: 255 }
+                dex: { type: integer, minimum: 0, maximum: 255 }
+                int: { type: integer, minimum: 0, maximum: 255 }
+                mp: { type: integer, minimum: 0, maximum: 255 }
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        '200': { description: Stats updated and audited }
+  /characters/{name}/skills:
+    parameters:
+      - $ref: '#/components/parameters/CharacterName'
+    patch:
+      operationId: editCharacterSkills
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              additionalProperties: true
+              properties:
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        '200': { description: Skills updated and audited }
+  /characters/{name}/inventory:
+    parameters:
+      - $ref: '#/components/parameters/CharacterName'
+    get:
+      operationId: characterInventory
+      responses:
+        '200':
+          description: 1298 inventory slot model
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  equipment: { type: array, minItems: 14, maxItems: 14, items: { $ref: '#/components/schemas/ItemSlot' } }
+                  inventory: { type: array, minItems: 28, maxItems: 28, items: { $ref: '#/components/schemas/ItemSlot' } }
+  /characters/{name}/inn:
+    parameters:
+      - $ref: '#/components/parameters/CharacterName'
+    get:
+      operationId: characterInn
+      responses:
+        '200':
+          description: 8x24 warehouse slot model
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  slots: { type: array, minItems: 192, maxItems: 192, items: { $ref: '#/components/schemas/ItemSlot' } }
+  /characters/{name}/transactions:
+    parameters:
+      - $ref: '#/components/parameters/CharacterName'
+    get:
+      operationId: characterTransactions
+      responses:
+        '200': { description: Character transaction history }
+  /characters/{name}/sanctions:
+    parameters:
+      - $ref: '#/components/parameters/CharacterName'
+    get:
+      operationId: characterSanctions
+      responses:
+        '200': { description: Character/account/IP sanctions }
+  /items/search:
+    get:
+      operationId: itemSearch
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Item serial/id/owner search }
+  /items/duplicates:
+    get:
+      operationId: duplicateSerials
+      responses:
+        '200': { description: Serial values present in more than one location }
+  /items/{serial}/history:
+    parameters:
+      - $ref: '#/components/parameters/ItemSerial'
+    get:
+      operationId: itemSerialTrace
+      responses:
+        '200': { description: Item serial location/history trace }
+  /items/{serial}:
+    parameters:
+      - $ref: '#/components/parameters/ItemSerial'
+    post:
+      operationId: itemAction
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, reason]
+              properties:
+                action: { type: string, enum: [FLAG, QUARANTINE, CLEAR_FLAG] }
+                note: { type: string, maxLength: 500 }
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        '200': { description: Transactional item moderation action }
+  /sanctions:
+    post:
+      operationId: createSanction
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [character, type, reason]
+              properties:
+                character: { type: string }
+                type: { type: string, enum: [ACCOUNT, IP] }
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        '201': { description: Ban created and audited }
+  /sanctions/{character}:
+    parameters:
+      - { name: character, in: path, required: true, schema: { type: string } }
+      - { name: type, in: query, schema: { type: string, enum: [ACCOUNT, IP] } }
+    delete:
+      operationId: removeSanction
+      description: Compatible with current frontend, which sends no reason body; backend writes a non-empty compatibility audit reason when omitted.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200': { description: Matching ban(s) removed and audited }
+  /audit:
+    get:
+      operationId: auditLog
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 100 } }
+      responses:
+        '200': { description: Append-only admin audit log }
+  /commands:
+    post:
+      operationId: gmCommandRequest
+      description: Creates a server-authorized command request/outbox entry. The browser never executes GM authority directly.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [command, reason]
+              properties:
+                command: { type: string }
+                target: { type: string }
+                arg: { type: string, maxLength: 500 }
+                reason: { type: string, minLength: 1, maxLength: 500 }
+                source: { type: string, maxLength: 80 }
+      responses:
+        '202': { description: Command accepted into authoritative server-side request queue }
+        '403': { $ref: '#/components/responses/Error' }
+components:
+  securitySchemes:
+    adminSession:
+      type: apiKey
+      in: cookie
+      name: oldko_admin_session
+  parameters:
+    CharacterName:
+      name: name
+      in: path
+      required: true
+      schema: { type: string }
+    ItemSerial:
+      name: serial
+      in: path
+      required: true
+      schema: { type: string }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, maxLength: 200 }
+  schemas:
+    Player:
+      type: object
+      required: [name, account, level, np, coin, zone, online, banned, ipBanned]
+      properties:
+        name: { type: string }
+        account: { type: string }
+        nation: { type: string }
+        className: { type: string }
+        level: { type: integer }
+        np: { type: integer }
+        coin: { type: integer }
+        zone: { type: string }
+        online: { type: boolean }
+        banned: { type: boolean }
+        ipBanned: { type: boolean }
+        last: { type: string }
+        ip: { type: string }
+        initial: { type: string }
+    ItemSlot:
+      type: object
+      properties:
+        slot: { type: integer }
+        empty: { type: boolean }
+        itemId: { type: integer }
+        serial: { type: string }
+        count: { type: integer }
+        duration: { type: integer }
+    Error:
+      type: object
+      required: [ok, error]
+      properties:
+        ok: { type: boolean, const: false }
+        error: { type: string }
+        detail: { type: string }
+  responses:
+    Error:
+      description: Error response
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }

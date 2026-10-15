@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "dataClass": "fixture",
+  "zoneId": "fixture:moradon",
+  "note": "WS25 lifecycle fixture only. Names, positions, HP and ranges are synthetic test data and are not claimed to match Knight Online 1298 live data.",
+  "templates": [
+    {
+      "templateId": "fixture:training-mob",
+      "displayName": "Fixture Training Mob",
+      "dataClass": "fixture",
+      "sourceRef": "ws25-test-fixture",
+      "modelRef": null,
+      "maxHp": 120,
+      "aggroRange": 8,
+      "leashRange": 18,
+      "attackRange": 2,
+      "attackDelayMs": 1000,
+      "returnTolerance": 0.5,
+      "corpseDespawnMs": 3000,
+      "respawnDelayMs": 10000,
+      "stuckThreshold": 2
+    }
+  ],
+  "spawnGroups": [
+    {
+      "groupId": "fixture:moradon-training-group-a",
+      "templateId": "fixture:training-mob",
+      "spawns": [
+        { "spawnId": "a1", "x": 100, "y": 0, "z": 100, "heading": 0 },
+        { "spawnId": "a2", "x": 104, "y": 0, "z": 100, "heading": 180 }
+      ]
+    }
+  ]
+}

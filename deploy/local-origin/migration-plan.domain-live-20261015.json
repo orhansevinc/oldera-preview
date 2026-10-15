@@ -1,0 +1,27 @@
+{
+  "schema_version": "oldkoweb-local-migrations/v1",
+  "release_id": "oldkoweb-domain-live-20261015",
+  "generated_from": {
+    "ws07_handoff_head": "174810e39697f98259aab0432536973dd4ff76f7",
+    "ws07_source_commit": "eaac4700c3535c449f6a2b7d20c925bc61382c35",
+    "ws13_handoff_head": "5731f7accd5839c89a2bb11090715f0345fcaeb1",
+    "ws13_source_commit": "e53966d9f882d98e2a5b4746262f38355dfda848"
+  },
+  "backup_before_migrate": true,
+  "forward_only": true,
+  "rollback_compatible_with_previous_application": true,
+  "ws07": {
+    "runner_service": "account-api",
+    "runner_prefix": "/opt/oldkoweb/ws07/services/oldko-data",
+    "mount_target": "/opt/oldkoweb/ws07/database/migrations",
+    "target": "0004_admin_persistence.sql",
+    "ledger": "public._oldko_migrations",
+    "migrations": [
+      {"order":1,"path":"database/migrations/0001_init.sql","file":"0001_init.sql","sha256":"88f0c4c4d92f8dd5602a87707d689f9364b793274b58eb68372483a333a3ef8a","url":"https://raw.githubusercontent.com/orhansevinc/oldera-preview/eaac4700c3535c449f6a2b7d20c925bc61382c35/database/migrations/0001_init.sql"},
+      {"order":2,"path":"database/migrations/0002_persistence_hardening.sql","file":"0002_persistence_hardening.sql","sha256":"86ee8d6bbd83bf7be4134030f2967874902f13de5a4eb1c5d1c14ed04ba17314","url":"https://raw.githubusercontent.com/orhansevinc/oldera-preview/eaac4700c3535c449f6a2b7d20c925bc61382c35/database/migrations/0002_persistence_hardening.sql"},
+      {"order":3,"path":"database/migrations/0003_public_account_api.sql","file":"0003_public_account_api.sql","sha256":"24c3e52086e6197d1a998cdd4604531418af92b7f6dd37f5d5a1c725939f590f","url":"https://raw.githubusercontent.com/orhansevinc/oldera-preview/eaac4700c3535c449f6a2b7d20c925bc61382c35/database/migrations/0003_public_account_api.sql"},
+      {"order":4,"path":"database/migrations/0004_admin_persistence.sql","file":"0004_admin_persistence.sql","sha256":"66ac0374b0373f7ae7b064c0254762425da1b7da3e1c2073e5ce566f4d817b45","url":"https://raw.githubusercontent.com/orhansevinc/oldera-preview/eaac4700c3535c449f6a2b7d20c925bc61382c35/database/migrations/0004_admin_persistence.sql"}
+    ]
+  },
+  "service_owned": [{"owner":"WS13","runner_service":"account-api","path":"services/account-api/sql/0001_postgres_rate_limit.sql","container_path":"/opt/oldkoweb/ws13/services/account-api/sql/0001_postgres_rate_limit.sql","sha256":"c7319604db165e2aa75280612e1da7912966b6d78c579c362b80ea145923026c","command":["npm","run","migrate:rate-limit","--prefix","/opt/oldkoweb/ws13/services/account-api"]}]
+}

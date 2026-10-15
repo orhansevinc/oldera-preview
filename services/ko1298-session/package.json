@@ -1,0 +1,11 @@
+{
+  "name": "@oldko/ko1298-session",
+  "private": true,
+  "version": "0.4.0",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test ../../tests/ko1298-session/*.test.js",
+    "start": "node production-server.js"
+  },
+  "engines": {"node": ">=20"}
+}

@@ -1,0 +1,13 @@
+{
+  "name": "@oldkoweb/ko1298-world",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Protocol-evidenced KO 1298 world-session and fail-closed multi-zone lifecycle layer.",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test ../../tests/ko1298-world/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
