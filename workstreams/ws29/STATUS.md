@@ -4,42 +4,32 @@
 
 - Workstream: WS29
 - Branch: `ws29-observability`
-- Base: `main`
-- Scope: production observability / metrics / structured logging / health-readiness common layer
+- Base/current task input: `d26f5af7aae0892576af5f35599a9d6076daf129`
+- Scope: production observability / domain-live diagnostics contracts and tooling only
+- Release: `oldkoweb-domain-live-20261015`
 
 ## Completed
 
-- Backend-independent `@oldko/observability` package created for Node 20+ with zero external runtime dependencies.
-- JSONL structured logger with service name/version and standard log levels.
-- AsyncLocalStorage request context with correlation/request/session IDs and safe propagation helpers.
-- Recursive sensitive-data redaction for credentials, tokens, cookies, bodies/payloads/packets and binary buffers.
-- Metric naming/cardinality contract and standard instruments for active sessions, WebSockets, packets, errors, DB latency, command latency, login outcomes, world sessions and process uptime.
-- In-memory metric registry and Prometheus text adapter added without coupling instrumentation to Prometheus.
-- Liveness and readiness contracts implemented with critical/non-critical checks, timeouts and draining state.
-- Graceful shutdown controller and SIGTERM/SIGINT installer implemented with idempotent execution and timeout handling.
-- Production standard document and integration patch guide added.
-- CI workflow scoped only to WS29 paths added.
+- Existing backend-independent `@oldko/observability` package preserved and extended; no provider product branch was modified.
+- Domain-live release identity reader added for exact `release_id`, WS50 provider set, exact coordinator source commit, client artifact/digest/build, service versions and migration head. Moving branch HEAD is not treated as a version.
+- Diagnostic correlation contract added: request/trace IDs, opaque session ref, release-scoped account hash, character ID, game connection ID, runtime target ID and admin command ID.
+- Canonical account-to-game, combat and admin-command flow stage contracts added.
+- Redaction strengthened for nested JSON, headers, query/assignment strings, Bearer values and credential URLs. Passwords, Authorization, Cookie/Set-Cookie, CSRF, verification/reset tokens, webhook/tunnel/admin secrets, DATABASE_URL credentials and private keys are covered.
+- Reusable compose/endpoint health collector added for container state, restart count, health, HTTP readiness, PostgreSQL connectivity, migration metadata, disk free, gateway ports and bounded sanitized logs.
+- One-shot `incident bundle` CLI added with summary/release/health/migrations/containers/signatures/browser-evidence/sanitized-logs output and explicit no-DB-dump/no-secret boundary.
+- Evidence-only failure classification added for account API, DB, migrations, auth/game gateways, world readiness, WebSocket, client assets/entities/models and admin repository/runtime bridge; no evidence returns `UNKNOWN`.
+- Generic WS10/WS05 browser evidence reference schema added; WS29 does not create screenshots.
+- PowerShell-friendly invocation and future WS09 wrapper contract documented without changing WS09.
+- Bundle/log growth bounded by log tail/window/truncation and default 10-bundle/7-day retention. Docker rotation ownership remains with deployment infrastructure.
+- Machine-readable contract: `workstreams/ws29/DOMAIN_LIVE_OBSERVABILITY.json`.
 
 ## Verification
 
-Local Node test command:
-
-```text
-node --test tests/observability/*.test.mjs
-```
-
-Result at completion: 9 tests passed, 0 failed.
-
-Syntax checks cover every package source file. Tests cover context propagation, ID validation, logger fields/levels, redaction, metric recording/rendering/cardinality protection, health/readiness state transitions, and graceful shutdown idempotency/failure reporting.
+- Existing WS29 test glob remains authoritative: `node --test tests/observability/*.test.mjs`.
+- New domain-live diagnostics test file covers redaction golden cases, exact-byte secret leakage, release identity, correlation, deterministic classification, broken-service evidence, healthy bundle fixture, restart count and cross-platform path handling.
+- Local isolated verification of the new domain-live test file: 7 passed, 0 failed.
+- CI workflow remains `.github/workflows/ws29-observability.yml`; package `check` now syntax-checks the diagnostic modules and CLI.
 
 ## Scope compliance
 
-Changed paths are limited to:
-
-- `observability/**`
-- `packages/oldko-observability/**`
-- `tests/observability/**`
-- `workstreams/ws29/**`
-- `.github/workflows/ws29-observability.yml`
-
-No product service, infra, admin/site/client, DB migration, or main-branch merge is part of WS29.
+Changed paths remain limited to WS29-owned observability/package/test/workstream paths. No WS03, WS05, WS07, WS08, WS09, WS10, WS13 product logic or branch content is modified.
