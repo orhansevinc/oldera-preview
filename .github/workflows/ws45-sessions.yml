@@ -22,7 +22,26 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: ws45
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ws45"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: postgres
+      PGDATABASE: ws45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,5 +49,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Run session ownership tests
-        run: node --test tests/session-ownership/*.test.js
+      - name: Install WS45 PostgreSQL dependency
+        run: npm install --prefix services/session-ownership --ignore-scripts --no-audit --no-fund
+      - name: Run existing session ownership tests
+        run: node --test tests/session-ownership/session-ownership.test.js
+      - name: Apply WS45 service migration
+        run: npm run --prefix services/session-ownership migrate:postgres
+      - name: Run real PostgreSQL multi-instance tests
+        run: npm run --prefix services/session-ownership test:postgres
