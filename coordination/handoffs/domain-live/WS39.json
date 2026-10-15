@@ -1,0 +1,50 @@
+{
+  "schema_version": "ws39-domain-live-tooling-handoff/v1",
+  "release_id": "oldkoweb-domain-live-20261015",
+  "workstream": "WS39",
+  "owner": "WS39",
+  "branch": "ws39-contract-compatibility",
+  "status": "TOOLING_READY",
+  "source_commit": "59ba1864832e467689633283a8350d58d1057ef6",
+  "tooling_state": "READY_TO_FREEZE_AFTER_OWNER_COMPLETION",
+  "final_set_frozen": false,
+  "final_provider_pins": {},
+  "provided_contracts": {
+    "validator": "tools/ws39_contracts/domain_live.cjs",
+    "documentation": "tools/ws39_contracts/README.md",
+    "tests": "contract-tests/domain-live.test.cjs",
+    "fixtures": "contract-tests/fixtures/domain-live/scenarios.json",
+    "output_schema": "ws39.domain-live-validation/v1"
+  },
+  "contracts": [
+    "Normalize multiple owner handoff schema versions while preserving exact authority fields and surfacing missing authority as errors/warnings.",
+    "Validate handoff source_commit reachability and ancestry within the declared owner branch without using moving branch HEAD as a pin.",
+    "Machine-check domain-live website/account/credential/database/admin/runtime/deployment/acceptance compatibility boundaries.",
+    "Preserve stale blockers as SUPERSEDED_BY_PROVIDER_EVIDENCE and require RECONCILIATION_REQUIRED until the consumer proves the newer exact provider pin.",
+    "Classify blockers into PRODUCT_IMPLEMENTATION, CONTRACT_RECONCILIATION, LIVE_DEPLOYMENT, EXTERNAL_SECRET, DNS_TLS or REAL_BROWSER_ACCEPTANCE.",
+    "Produce deterministic SHA256 pin digest from sorted owner + exact source_commit + contract digest records.",
+    "Keep WS07 numbered migrations distinct from service-owned migrations and fail duplicate numbered/ledger collisions.",
+    "Report READY_TO_FREEZE_AFTER_OWNER_COMPLETION only; never select a WS50 child candidate or freeze a final provider set."
+  ],
+  "command": "node tools/ws39_contracts/domain_live.cjs --release oldkoweb-domain-live-20261015 --root coordination/handoffs/domain-live --out artifacts/ws39-domain-live.json",
+  "tested_ci_evidence": {
+    "workflow": ".github/workflows/ws39-contracts.yml",
+    "run_id": 38667608328,
+    "head_sha": "59ba1864832e467689633283a8350d58d1057ef6",
+    "conclusion": "success",
+    "scope": "Existing C3 pilot contract tests plus new domain-live generic schema/stale-blocker/credential/migration/pin-digest/source-validation/classification tests."
+  },
+  "blockers": [],
+  "consumer_requirements": [
+    "Morning coordinator supplies the completed exact owner handoff files for the target release_id.",
+    "The coordinator treats validator source_commit pins and pin_digest as the candidate input identity; observed moving branch heads are evidence only.",
+    "Any SUPERSEDED_BY_PROVIDER_EVIDENCE blocker with RECONCILIATION_REQUIRED remains a gate until the consumer handoff is retested against the exact provider source commit.",
+    "External deployment, secret, DNS/TLS and real-browser acceptance gates remain explicit and cannot be converted into implementation success by this tooling."
+  ],
+  "notes": [
+    "No WS50 child candidate was created by WS39.",
+    "No final provider set was selected or frozen.",
+    "Fixture commits and fixture contract data are test-only and are not provider authority.",
+    "Current moving owner branch heads inspected during development are not recorded as final provider pins."
+  ]
+}
