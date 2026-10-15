@@ -24,6 +24,21 @@ python3 tools/p2_03_patch_openko_render.py openko
 python3 client-src/p2_10/apply_browser_input_lifecycle.py openko
 python3 client-src/p2_00/enable_browser_audio_pthreads.py openko
 
+# The accepted WS05 browser patch predates the exact P2-10 toolchain and adds
+# GL_ENABLE_GET_PROC_ADDRESS. Emscripten 3.1.50 removed that setting. OpenKO's
+# Emscripten GLLoader already binds GLES3 symbols directly, so this legacy
+# proc-address compatibility switch is both unnecessary and invalid here.
+python3 - <<'PY'
+from pathlib import Path
+p=Path('openko/src/Client/WarFare/CMakeLists.txt')
+s=p.read_text(encoding='utf-8')
+legacy='    "-sGL_ENABLE_GET_PROC_ADDRESS=1"\n'
+if s.count(legacy) != 1:
+    raise SystemExit(f'expected exactly one legacy GL_ENABLE_GET_PROC_ADDRESS flag, got {s.count(legacy)}')
+p.write_text(s.replace(legacy,'',1),encoding='utf-8')
+print('PASS: removed obsolete GL_ENABLE_GET_PROC_ADDRESS for emsdk 3.1.50')
+PY
+
 # The accepted C5 build required this exact escaped-GLSL normalization after
 # the canonical WS05 browser patch. Keep it source deterministic.
 python3 - <<'PY'
