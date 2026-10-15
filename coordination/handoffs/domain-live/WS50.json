@@ -5,7 +5,7 @@
   "branch": "ws50-integration-rehearsal",
   "source_commit": "ffb2b8dc3e2a86a136fb13deddd4ea551c031939",
   "child_candidate": "ffb2b8dc3e2a86a136fb13deddd4ea551c031939",
-  "status": "LOCAL_ORIGIN_VERIFIED_PACKAGE_PUBLICATION_PENDING",
+  "status": "LOCAL_ORIGIN_VERIFIED_PC_PACKAGE_PUBLISHED",
   "domain_live_verified": false,
   "local_origin_verified": true,
   "input_pins": {
@@ -35,23 +35,27 @@
   },
   "verification": {
     "workflow": "WS50 domain-live PC package",
-    "pre_package_run_id": 38739645560,
-    "pre_package_run_head": "ffb2b8dc3e2a86a136fb13deddd4ea551c031939",
-    "pre_package_result": "success",
+    "verified_run_id": 38740793896,
+    "verified_run_head": "ef63d54e64c03c482f0a9348ecfad70148180e2a",
+    "result": "success through verify and powershell51",
     "real_account_game_admin_cutoff": "PASS",
     "service_restart_persistence": "PASS",
     "postgres_one_db_contract": "PASS",
     "owner_test_suites": "PASS",
-    "powershell_5_1": "pending package-enabled rerun",
-    "package_checksum": "pending package-enabled rerun"
+    "powershell_5_1": "PASS",
+    "internal_sha256": "PASS"
   },
   "package": {
-    "workflow": ".github/workflows/ws50-domain-live-pc-package.yml",
+    "artifact_id": 11975732795,
+    "artifact_digest": "sha256:e96ffa4296b6d6a02835c73159fa015ae7896225ab90bb77bef9723c50d63ebc",
+    "release_tag": "oldkoweb-domain-live-20261015",
+    "release_id": 413833415,
+    "release_asset": "oldkoweb-domain-live-20261015-pc.zip",
+    "release_asset_digest": "sha256:608b5dc6d5b449030ddd80e4a29b38f5dd4ca0e8b1c4d46ad3b01e063ccef03d",
+    "release_checksum_asset": "oldkoweb-domain-live-20261015-pc.zip.sha256",
+    "publish_run_id": 38741406418,
     "bootstrap": "deploy/domain-live/bootstrap.ps1",
     "compose": "deploy/domain-live/docker-compose.yml",
-    "release_tag": "oldkoweb-domain-live-20261015",
-    "artifact_name": "oldkoweb-domain-live-20261015-pc",
-    "checksummed": true,
     "contains_real_admin": true,
     "test_fixture_default": false
   },
@@ -59,5 +63,5 @@
     "DNS/tunnel/host authorization and real public-domain reachability",
     "fresh WS10 live-domain acceptance against this exact child candidate"
   ],
-  "claim": "The immutable local-origin child candidate is pinned and its real account/game/admin integration plus restart persistence passed. Public oldkoweb.com/play.oldkoweb.com/admin.oldkoweb.com reachability is not claimed until DNS/tunnel acceptance passes."
+  "claim": "The immutable local-origin child candidate is pinned. Real account/game/admin integration, CUTOFF command application, PostgreSQL restart persistence, package checksums and Windows PowerShell 5.1 validation passed. The checksum-verified PC package is published. Public oldkoweb.com/play.oldkoweb.com/admin.oldkoweb.com reachability is not claimed until DNS/tunnel acceptance passes."
 }
