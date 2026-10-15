@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "owner": "P2-05",
+  "consumer": "P2-10",
+  "protocolSource": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5",
+  "events": [
+    {"direction":"client_to_server","name":"WIZ_NPC_EVENT","opcode":32,"payload":"u16 runtimeNpcId"},
+    {"direction":"server_to_client","name":"WIZ_TRADE_NPC","opcode":37,"payload":"u32 sellingGroup"},
+    {"direction":"server_to_client","name":"WIZ_REPAIR_NPC","opcode":58,"payload":"u32 sellingGroup"},
+    {"direction":"server_to_client","name":"WIZ_WAREHOUSE/N3_SP_WARE_INN","opcode":69,"payload":"u8 0x10"},
+    {"direction":"server_to_client","name":"WIZ_SELECT_MSG","opcode":85,"payload":"i16 npcId + u32 talkId + quest menu ids from existing 1298 tables"},
+    {"direction":"client_to_server","name":"WIZ_SELECT_MSG","opcode":85,"payload":"u8 offeredOptionIndex","serverRule":"index must match P2-05 OfferedOptionLedger"}
+  ],
+  "requiredClientAssets": ["UIQuestMenu", "QUEST_TALK table", "QUEST_MENU table"],
+  "noNewEndpoint": true
+}
