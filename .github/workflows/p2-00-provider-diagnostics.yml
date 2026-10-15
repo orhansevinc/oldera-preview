@@ -1,0 +1,86 @@
+name: P2-00 provider diagnostics
+
+on:
+  push:
+    branches: [phase2/00-integration]
+    paths:
+      - '.github/workflows/p2-00-provider-diagnostics.yml'
+      - 'services/**'
+      - 'tests/ko-gateway/**'
+      - 'tests/ko1298-session/**'
+      - 'tests/ko1298-combat/**'
+      - 'tests/ko1298-progression/**'
+      - 'tests/ko1298-social/**'
+      - 'tests/ko1298-items*/**'
+      - 'tests/client/test_p2_10_contracts.py'
+      - 'qa/phase2/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  provider-contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install provider dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix services/oldko-data install --omit=dev --ignore-scripts
+          npm --prefix services/account-api install --omit=dev --ignore-scripts
+          npm --prefix services/ko-gateway install --omit=dev --ignore-scripts
+
+      - name: Gateway contracts
+        run: node --test tests/ko-gateway/*.test.js
+
+      - name: Session async repository
+        run: node --test tests/ko1298-session/async-repository.test.js
+      - name: Session combat routing
+        run: node --test tests/ko1298-session/combat-routing.test.js
+      - name: Session domain live production
+        run: node --test tests/ko1298-session/domain-live-production.test.js
+      - name: Session P2-01 network
+        run: node --test tests/ko1298-session/p2-01-network.test.js
+      - name: Session P2-07 combat composition
+        run: node --test tests/ko1298-session/p2-07-combat-composition.test.js
+      - name: Session production lifecycle
+        run: node --test tests/ko1298-session/production-lifecycle.test.js
+      - name: Session production routing
+        run: node --test tests/ko1298-session/production-routing.test.js
+      - name: Session production transport
+        run: node --test tests/ko1298-session/production-transport.test.js
+      - name: Session core
+        run: node --test tests/ko1298-session/session.test.js
+
+      - name: Combat contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          if compgen -G 'tests/ko1298-combat/*.test.js' >/dev/null; then node --test tests/ko1298-combat/*.test.js; fi
+      - name: Progression contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          if compgen -G 'tests/ko1298-progression/*.test.js' >/dev/null; then node --test tests/ko1298-progression/*.test.js; fi
+      - name: Social contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          if compgen -G 'tests/ko1298-social/*.test.js' >/dev/null; then node --test tests/ko1298-social/*.test.js; fi
+      - name: Item/economy contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          if compgen -G 'tests/ko1298-items*/*.test.*' >/dev/null; then node --test tests/ko1298-items*/*.test.*; fi
+
+      - name: P2-10 client contracts
+        run: python3 -m unittest tests/client/test_p2_10_contracts.py
+      - name: Phase2 QA selftest
+        run: node qa/phase2/selftest.mjs
