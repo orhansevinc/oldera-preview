@@ -7,7 +7,10 @@
     {"path": "real1298/index.html", "sha256": "REPLACE_WITH_SHA256"},
     {"path": "real1298/KnightOnLine.js", "sha256": "REPLACE_WITH_SHA256"},
     {"path": "real1298/KnightOnLine.wasm", "sha256": "REPLACE_WITH_SHA256"},
-    {"path": "real1298/KnightOnLine.data", "sha256": "REPLACE_WITH_SHA256"}
+    {"path": "real1298/KnightOnLine.data", "sha256": "REPLACE_WITH_SHA256"},
+    {"path": "coordination/phase2/migration-plan.json", "sha256": "REPLACE_WITH_SHA256"},
+    {"path": "hosting/p2-12/Run-Migrations.ps1", "sha256": "REPLACE_WITH_SHA256"},
+    {"path": "database/migrations/0001_example.sql", "sha256": "REPLACE_WITH_SHA256"}
   ],
   "compose": {
     "project_name": "oldkoweb-domain-live",
