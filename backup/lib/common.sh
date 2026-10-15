@@ -69,7 +69,7 @@ schema_inventory() {
       FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
       WHERE c.relkind='r' AND (n.nspname='oldko' OR (n.nspname='public' AND c.relname='_oldko_migrations'))
       UNION ALL
-      SELECT 'CONSTRAINT|' || n.nspname || '|' || c.relname || '|' || con.conname || '|' || con.contype || '|' || replace(pg_get_constraintdef(con.oid,true), E'\\n', ' ')
+      SELECT 'CONSTRAINT|' || n.nspname || '|' || c.relname || '|' || con.conname || '|' || con.contype::text || '|' || replace(pg_get_constraintdef(con.oid,true), E'\\n', ' ')
       FROM pg_constraint con JOIN pg_class c ON c.oid=con.conrelid JOIN pg_namespace n ON n.oid=c.relnamespace
       WHERE n.nspname='oldko' OR (n.nspname='public' AND c.relname='_oldko_migrations')
       UNION ALL
