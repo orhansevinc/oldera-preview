@@ -1,0 +1,39 @@
+{
+  "schema": "oldkoweb/p2-02-asset-pack-plan/v1",
+  "source_authority": {
+    "ws38_branch": "ws38-client-content-pipeline",
+    "ws38_head": "683f6d55471d1b101371e5766ecf0ef21c8bf1e9",
+    "manifest": "workstreams/ws38/MORADON_PLAYABLE_COMBAT_ASSET_MANIFEST.json",
+    "policy": "exact-case /data VFS; no guessed or placeholder assets"
+  },
+  "blocked_required_groups": [],
+  "packs": [
+    {
+      "name": "moradon-combat-verified",
+      "startup": true,
+      "virtual_paths": [
+        "/data/chr/mob_bandicoot.n3chr",
+        "/data/chr/mob_bandicoot.n3joint",
+        "/data/chr/mob_bandicoot.n3anim",
+        "/data/item/mob_bandicoot_upper.n3cpart",
+        "/data/item/mob_bandicoot_upper.n3cskins",
+        "/data/item/mob_bandicoot_lower.n3cpart",
+        "/data/item/mob_bandicoot_lower.n3cskins",
+        "/data/item/mob_bandicoot_head.n3cpart",
+        "/data/item/mob_bandicoot_head.n3cskins",
+        "/data/item/mob_bandicoot_tail.n3cpart",
+        "/data/item/mob_bandicoot_tail.n3cskins",
+        "/data/item/bandicootbody.dxt",
+        "/data/item/bandicootleg.dxt",
+        "/data/item/bandicootface.dxt",
+        "/data/UI/skillicon_03_1010.dxt"
+      ]
+    }
+  ],
+  "map_policy": {
+    "startup_may_include": ["Moradon only after exact VFS authority is published"],
+    "startup_must_exclude": ["EMC", "Luferson", "Eslant", "Ronark/CZ", "all unrelated maps"],
+    "status": "BLOCKED_MORADON_MAP_VFS_AUTHORITY_NOT_PRESENT_IN_PINNED_WS38_MANIFEST"
+  },
+  "missing_asset_policy": "fail build; never substitute black model/placeholder"
+}
