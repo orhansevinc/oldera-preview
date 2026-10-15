@@ -1,0 +1,79 @@
+name: ws07-database
+
+on:
+  push:
+    branches: [ws07-database]
+    paths:
+      - 'services/oldko-data/**'
+      - 'database/**'
+      - 'workstreams/ws07/**'
+      - '.github/workflows/ws07-database.yml'
+  pull_request:
+    paths:
+      - 'services/oldko-data/**'
+      - 'database/**'
+      - 'workstreams/ws07/**'
+      - '.github/workflows/ws07-database.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: oldko_test
+          POSTGRES_USER: oldko
+          POSTGRES_PASSWORD: oldko_test_password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U oldko -d oldko_test"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://oldko:oldko_test_password@127.0.0.1:5432/oldko_test
+    defaults:
+      run:
+        working-directory: services/oldko-data
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: npm install --ignore-scripts
+      - run: npm run check
+      - run: npm test
+
+      - name: Fresh database migration and idempotency
+        run: |
+          npm run migrate
+          npm run migrate
+
+      - name: Deterministic development fixture
+        env:
+          OLDKO_ENV: test
+          OLDKO_DEV_SEED_PASSWORD: ci-development-password
+        run: npm run seed:dev
+
+      - run: npm run verify:schema
+      - run: npm run test:integration
+      - run: npm run explain
+
+      - name: Upgrade 0001 database to current schema
+        run: |
+          node --input-type=module <<'NODE'
+          import pg from 'pg';
+          const url = new URL(process.env.DATABASE_URL);
+          url.pathname = '/postgres';
+          const pool = new pg.Pool({ connectionString: url.toString() });
+          await pool.query('DROP DATABASE IF EXISTS oldko_upgrade WITH (FORCE)');
+          await pool.query('CREATE DATABASE oldko_upgrade');
+          await pool.end();
+          NODE
+          export DATABASE_URL=postgres://oldko:oldko_test_password@127.0.0.1:5432/oldko_upgrade
+          export OLDKO_MIGRATION_TARGET=0001_init.sql
+          npm run migrate
+          unset OLDKO_MIGRATION_TARGET
+          npm run migrate
+          npm run migrate
+          npm run verify:schema
