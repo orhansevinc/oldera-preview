@@ -55,10 +55,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node --test tests/gm-command-bus/*.test.js
+          node --test tests/gm-command-bus/*.test.cjs
           node --test tests/ko-gateway/*.test.js
           node --test tests/admin-api/*.test.js
-          node --test tests/account-api/*.test.js
+          node --test tests/account-api/account-api.test.mjs tests/account-api/frontend-contract.test.mjs tests/account-api/production.test.mjs tests/account-api/session.test.mjs
           node --test tests/ko1298-session/async-repository.test.js tests/ko1298-session/production-lifecycle.test.js tests/ko1298-session/production-routing.test.js tests/ko1298-session/production-transport.test.js tests/ko1298-session/domain-live-provider.contract.js
 
       - name: Build real runtime and approved edge
