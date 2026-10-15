@@ -50,7 +50,7 @@ if (-not $status.child_candidate) { throw 'BUNDLE_STATUS child_candidate is miss
 if (-not $status.images.runtime.tag -or -not $status.images.edge.tag -or -not $status.images.postgres.tag) { throw 'Image receipts are incomplete' }
 
 $scriptBytes = [System.IO.File]::ReadAllBytes((Join-Path $PackageRoot 'deploy\domain-live\bootstrap.ps1'))
-if (($scriptBytes | Where-Object { $_ -gt 127 }).Count -gt 0) { throw 'bootstrap.ps1 must remain ASCII-safe for Windows PowerShell 5.1' }
+if (@($scriptBytes | Where-Object { $_ -gt 127 }).Count -gt 0) { throw 'bootstrap.ps1 must remain ASCII-safe for Windows PowerShell 5.1' }
 [void][scriptblock]::Create((Get-Content -Raw -LiteralPath (Join-Path $PackageRoot 'deploy\domain-live\bootstrap.ps1')))
 if ($ValidateOnly) {
     Write-Host 'Windows PowerShell 5.1 parse/path validation: PASS' -ForegroundColor Green
