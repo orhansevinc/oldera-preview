@@ -19,13 +19,20 @@ const UNSUPPORTED = Object.freeze([
   'ATTACKDISABLE', 'ATTACKENABLE', 'PROGRAMLISTCHECK'
 ]);
 
+function realApplyProven(result) {
+  return result?.status === 'ok' && (result?.applied === true || result?.data?.applied === true);
+}
+
 function statusFromBus(result) {
-  if (result?.status === 'ok' || result?.status === 'dry-run') return 'SUCCEEDED';
+  if (realApplyProven(result)) return 'SUCCEEDED';
+  if (result?.status === 'pending' || result?.status === 'queued' || result?.forwarded === false) return 'PENDING';
   return 'FAILED';
 }
 
 function httpStatusFromBus(result) {
-  if (result?.status === 'ok' || result?.status === 'dry-run') return 200;
+  const status = statusFromBus(result);
+  if (status === 'SUCCEEDED') return 200;
+  if (status === 'PENDING') return 202;
   if (['VALIDATION_ERROR', 'DRY_RUN_UNSUPPORTED', 'COMMAND_NOT_ALLOWED'].includes(result?.code)) return 422;
   if (result?.code === 'FORBIDDEN') return 403;
   if (result?.code === 'TIMEOUT') return 504;
@@ -63,11 +70,11 @@ function createWs28CommandExecutor({ repository, commandBus } = {}) {
       result = { status: 'failed', code: 'COMMAND_BUS_THROW', message: 'Command bus execution failed before a semantic result was returned' };
     }
     const status = statusFromBus(result);
-    const updated = await repository.updateCommand(outbox.id, { status, result, completedAt: new Date().toISOString() });
+    const updated = await repository.updateCommand(outbox.id, { status, result, completedAt: status === 'PENDING' ? null : new Date().toISOString() });
     return { httpStatus: httpStatusFromBus(result), command: updated, result: { ...result, status } };
   }
 
   return { executeLegacy, supportedLegacyCommands: Object.keys(LEGACY_COMMANDS), unsupportedLegacyCommands: UNSUPPORTED };
 }
 
-module.exports = { LEGACY_COMMANDS, UNSUPPORTED, createWs28CommandExecutor, httpStatusFromBus, statusFromBus };
+module.exports = { LEGACY_COMMANDS, UNSUPPORTED, createWs28CommandExecutor, httpStatusFromBus, statusFromBus, realApplyProven };
