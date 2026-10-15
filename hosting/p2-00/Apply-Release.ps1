@@ -14,9 +14,9 @@ $manifestPath=Join-Path $package 'release-manifest.json'
 $manifest=Read-P212JsonFile $manifestPath
 
 # Validate all staged release files before loading any image or mutating the
-# existing stack. This is the same validator the P2-12 switch uses again.
+# existing stack. PowerShell scripts signal failure with terminating errors;
+# $LASTEXITCODE is intentionally not consulted for script-to-script calls.
 & (Join-Path $p212 'Test-ReleasePackage.ps1') -PackageRoot $package -ManifestPath $manifestPath | Out-Null
-if($LASTEXITCODE -ne 0){throw "Release package validation failed with exit code $LASTEXITCODE"}
 
 if(@($manifest.image_archives).Count -lt 2){throw 'Final P2 release must carry immutable runtime and edge image archives.'}
 foreach($image in @($manifest.image_archives)){
@@ -37,7 +37,12 @@ foreach($image in @($manifest.image_archives)){
 # verifies the persistent volume contract, backs up PostgreSQL, rehearses a
 # restore, applies only the declared forward migrations, switches the same
 # Compose project and rolls code back automatically on a failed health gate.
-& (Join-Path $p212 'Update-Release.ps1') -PackageRoot $package -ManifestPath $manifestPath -InstallRoot $InstallRoot -Apply
-if($LASTEXITCODE -ne 0){throw "OldKOWeb Phase 2 update failed with exit code $LASTEXITCODE"}
+$updateArgs=@{
+    PackageRoot=$package
+    ManifestPath=$manifestPath
+    Apply=$true
+}
+if($InstallRoot){$updateArgs.InstallRoot=$InstallRoot}
+& (Join-Path $p212 'Update-Release.ps1') @updateArgs | Out-Host
 
 Write-Host ('OLDKOWEB_P2_APPLY_PASS release='+[string]$manifest.release_id+' source='+[string]$manifest.source_sha)
