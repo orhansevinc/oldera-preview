@@ -1,0 +1,111 @@
+{
+  "schema_version": "oldkoweb/local-first-handoff/v1",
+  "created_from_branch": "phase2/00-integration",
+  "code_source_sha": "99c6571be82644436b83b7ccca299d384126f0ee",
+  "development_handoff_status": "READY_FOR_LOCAL_DEVELOPMENT",
+  "release_readiness": "NOT_READY",
+  "live_apply_allowed": false,
+  "last_ci": {
+    "run_id": 38804986660,
+    "job_id": 116663394632,
+    "head_sha": "99c6571be82644436b83b7ccca299d384126f0ee",
+    "failed_step": "Local one-stack PostgreSQL/runtime/edge smoke",
+    "failed_step_number": 15,
+    "conclusion": "FAIL",
+    "job_log": "https://github.com/orhansevinc/oldera-preview/actions/runs/38804986660/job/116663394632",
+    "candidate_generation": "SKIPPED",
+    "windows_package_check": "SKIPPED",
+    "publish": "SKIPPED",
+    "uploaded_artifacts": 0,
+    "reproduce_after_local_images_exist": "bash tools/p2-00/local-release-gate.sh smoke"
+  },
+  "phase2_integrated_providers": [
+    {"id":"P2-01","integrated_sha":"2db93fed6afb099595b8224877159ac76e318070","handoff_path":"coordination/phase2/P2-01/handoff.json","handoff_blob_sha":"ad3db8c960b9bc649864e6ddc72fdc3d218b3e67"},
+    {"id":"P2-02","integrated_sha":"52a2f75190ee9e2f4e00869432f008ca2e15d510","handoff_path":"coordination/phase2/P2-02/handoff.json","handoff_blob_sha":"7d1dc5e731d287d657f26bc94a14627ed6ca0501"},
+    {"id":"P2-03","integrated_sha":"75561d63cdc91333a849af0a3de18a99806f7934","handoff_path":"coordination/phase2/P2-03/handoff.json","handoff_blob_sha":"82331521894466574a42f176b222fd3c83b8972e"},
+    {"id":"P2-04","integrated_sha":"41102fd152cf30501cfbcd1a087ecfc4683ad839","handoff_path":"coordination/phase2/P2-04/handoff.json","handoff_blob_sha":"3a0347d6f2146cc7a2384d199416c14253e7faac"},
+    {"id":"P2-05","integrated_sha":"8509147a899ab56a66715ad0256b20d396c12360","handoff_path":"coordination/phase2/P2-05/handoff.json","handoff_blob_sha":"ff2da685adc9939154879817417f0705609fb248"},
+    {"id":"P2-06","integrated_sha":"70e8199d1576523093ed870debb094f1a177ef0e","handoff_path":"coordination/phase2/P2-06/handoff.json","handoff_blob_sha":"5b924755b84d6611cd163c95022e49ff173ea4af"},
+    {"id":"P2-07","integrated_sha":"c9f799e697f687181bc09c2caea557164e117527","handoff_path":"coordination/phase2/P2-07/handoff.json","handoff_blob_sha":"fb39cad60d16f1ac79f2cbcbade9059a1bae2d40"},
+    {"id":"P2-08","integrated_sha":"014b30862911cfc5da891cf9582c9871193ac4dc","handoff_path":"coordination/phase2/P2-08/handoff.json","handoff_blob_sha":"d7cf755fb85aad086c860a44637011564f297896"},
+    {"id":"P2-09","integrated_sha":"22d265508556b89b864b696f686e676e027850a7","handoff_path":"coordination/phase2/P2-09/handoff.json","handoff_blob_sha":"5c65ba7606d8108c005fa8bc71800d9d974ac717"},
+    {"id":"P2-10","integrated_sha":"eb5eb4ffd8441c24a1ab11640825e7565f5db9bb","handoff_path":"coordination/phase2/P2-10/handoff.json","handoff_blob_sha":"60de5d594822516221d675924b2a32ddeb753542"},
+    {"id":"P2-11","integrated_sha":"8c03b019f0240a98e4ba0b0fc5020f22cde808eb","handoff_path":"coordination/phase2/P2-11/handoff.json","handoff_blob_sha":"cf812578b9b46ff9a173739a439b5ba2e145f62f"},
+    {"id":"P2-12","integrated_sha":"57fadd5a148a0b2443b3b758bf869608c2b20549","handoff_path":"coordination/phase2/P2-12/handoff.json","handoff_blob_sha":"ddd3e23d48a83d1f6ed29d206ef0c43e946c1701"},
+    {"id":"P2-13","integrated_sha":"bf8017e1257ec79093b9471ba7d2523c89a93084","handoff_path":"coordination/phase2/P2-13/handoff.json","handoff_blob_sha":"efdfe8fce9f0ef4901f7d45b2e7a0d63ebe60c3c"}
+  ],
+  "client_inputs": {
+    "openko_repository": "https://github.com/luisfelipe18/old-school-openko.git",
+    "openko_sha": "97eb0ea20207afc0c360bfed6915113572711be3",
+    "ko_assets_repository": "https://github.com/ko4life-net/ko-assets.git",
+    "ko_assets_sha": "2055ee6ed77f1b5cfef23832dd5bc31909e14a66",
+    "ko_assets_sparse_paths": ["Data","UI_US","Snd/Intro_Sound.mp3","Server.ini","Chr","DTex","Item","Misc","Object","Zones","fx"],
+    "emscripten_version": "3.1.50",
+    "ws05_sha": "0537c481383a69c534799b43810f35e7279c5578",
+    "ws10_sha": "163f2ebf81e750bf746fdaa277695329a0682e22",
+    "builder": "tools/p2-00/build-client.sh",
+    "patch_order": [
+      "WS05 tools/patch_openko_browser.py",
+      "WS05 tools/patch_openko_browser_gateway.py",
+      "WS05 tools/fix_browser_server_ini_case.py",
+      "WS05 tools/patch_openko_browser_serverlist_probe.py",
+      "WS05 tools/patch_openko_browser_auth_probe.py",
+      "WS05 tools/ws04_character/patch_character_client.py",
+      "WS05 tools/ws04_character/patch_frame_capture.py",
+      "WS05 tools/ws05_moradon/patch_moradon_client.py",
+      "WS10 qa/moradon/patch_visibility_observability.py",
+      "tools/p2_03_patch_openko_render.py",
+      "client-src/p2_10/apply_browser_input_lifecycle.py",
+      "client-src/p2_00/enable_browser_audio_pthreads.py"
+    ],
+    "moradon_map_authority": {
+      "repository_commit": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5",
+      "path": "assets/Server/MAP/moradon_0826.smd",
+      "git_blob_sha1": "cf47772b8e42a8bad71032419f47978c8bbd6142",
+      "bytes": 786000
+    },
+    "ready_client_reuse": "ONLY_IF runtime manifest source/input identity and JS/WASM/DATA SHA-256 match the same inputs; run 38804986660 did not persist an artifact, so the default local path is rebuild",
+    "old_c5_binary_may_be_relabelled": false
+  },
+  "repository_dependency_model": {
+    "gitmodules_present": false,
+    "git_lfs_attributes_present": false,
+    "openko_is_external_source": true,
+    "ko_assets_are_external_source": true,
+    "ci_checkout_or_pointer_is_not_full_source": true,
+    "workflow_blob_sha": "51b7e83c8761f37362d41b85c61377e2afd9fb95",
+    "local_gate": "tools/p2-00/local-release-gate.sh"
+  },
+  "database": {
+    "migration_runner": "node services/oldko-data/src/scripts/migrate.js",
+    "account_rate_limit_schema_runner": "node services/account-api/src/scripts/apply-rate-limit-schema.js",
+    "migration_order": [
+      "0001_init.sql",
+      "0002_persistence_hardening.sql",
+      "0003_public_account_api.sql",
+      "0004_admin_persistence.sql",
+      "0005_phase2_data_admin.sql"
+    ],
+    "production_migration_allowed_by_this_handoff": false
+  },
+  "local_paths": {
+    "existing_live_root": "C:\\Users\\Orhan\\OldKOWeb",
+    "development_root": "C:\\Users\\Orhan\\OldKOWeb-Dev",
+    "transfer_script": "coordination/local-first/Transfer-LocalFirst.ps1"
+  },
+  "preserve": [
+    "running live Compose project",
+    "PostgreSQL database and volumes",
+    "existing .env files and secrets",
+    "tunnel configuration",
+    "live ports",
+    "approved website/account design",
+    "admin v10 design and behavior"
+  ],
+  "remaining_real_work": [
+    "Reproduce and fix the Local one-stack PostgreSQL/runtime/edge smoke failure from run 38804986660.",
+    "Only after smoke passes, run the PowerShell 5.1 package/token checks that were skipped in run 38804986660.",
+    "Regenerate candidate evidence and coverage matrix from the fixed local source.",
+    "Keep release/publish blocked until local gates pass; do not invoke hosting/p2-00/Apply-Release.ps1 against the live system during development."
+  ]
+}
