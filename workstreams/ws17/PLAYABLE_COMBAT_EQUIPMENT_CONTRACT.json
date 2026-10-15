@@ -1,0 +1,176 @@
+{
+  "schemaVersion": 1,
+  "contractId": "WS17_PLAYABLE_COMBAT_EQUIPMENT",
+  "authority": "NORMAL_ATTACK_EQUIPMENT_UNIT_AUTHORITY",
+  "status": "RESOLVED",
+  "taskStartLocks": {
+    "ws17": "fbfc13f9c123ebeb6dd38c32fc95ef26d917a777",
+    "ws31": "56ada741532c8f6cabfc83b129a8e87e645db055",
+    "ws19": "28eb4f38753ffbc54c60abbd2a32832301284c06",
+    "ws03": "607f0079bd2daca28e94ec9ba88a9c8b60f0cd34",
+    "openKoKnightOnline": "7d6cf81093e142c928c2ac9510512b2b182178b5",
+    "openKoClientAssets": "b4636332c7cd818b0ce171eccc973dd3d6b2e56d"
+  },
+  "unitAuthority": {
+    "attackDelay": {
+      "sourceField": "__TABLE_ITEM_BASIC.siAttackInterval",
+      "rawUnit": "1/100 second",
+      "conversion": "raw * 10",
+      "normalizedUnit": "milliseconds",
+      "sourceRef": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:src/Client/WarFare/GameDef.h#__TABLE_ITEM_BASIC.siAttackInterval"
+    },
+    "weaponRange": {
+      "sourceField": "__TABLE_ITEM_BASIC.siAttackRange",
+      "rawUnit": "0.1 meter",
+      "conversion": "raw / 10",
+      "normalizedUnit": "meters",
+      "sourceRef": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:src/Client/WarFare/GameDef.h#__TABLE_ITEM_BASIC.siAttackRange"
+    }
+  },
+  "authorityRules": {
+    "equippedRightHandSource": "WS17 authoritative inventory/equipment state",
+    "clientAttackInterval": "NON_AUTHORITATIVE_OBSERVATION",
+    "clientAttackDistance": "NON_AUTHORITATIVE_OBSERVATION",
+    "missingRightHand": "FAIL_CLOSED",
+    "unsupportedRightHand": "FAIL_CLOSED",
+    "unverifiedRightHandSource": "FAIL_CLOSED",
+    "missingUnitFields": "FAIL_CLOSED",
+    "brokenRightHand": "FAIL_CLOSED"
+  },
+  "publicSnapshot": {
+    "method": "ItemDomainService.getCombatItemSnapshot(ownerId)",
+    "rightHandRequiredFields": [
+      "itemId",
+      "name",
+      "weaponType",
+      "weaponTypeId",
+      "damage",
+      "weaponRange",
+      "weaponRangeMeters",
+      "attackDelayMs",
+      "durability",
+      "requirements",
+      "modelResourceId",
+      "iconResourceId",
+      "sourceRef"
+    ],
+    "auditFields": [
+      "rawRange",
+      "rawDelay"
+    ],
+    "ws19DirectFields": [
+      "weaponRange",
+      "attackDelayMs"
+    ]
+  },
+  "canonicalStarterWeapon": {
+    "itemId": 120010000,
+    "name": "Short Sword",
+    "weaponType": "SWORD",
+    "weaponTypeId": 21,
+    "damage": 4,
+    "rawRange": 10,
+    "weaponRange": 1.0,
+    "weaponRangeMeters": 1.0,
+    "rawDelay": 114,
+    "attackDelayMs": 1140,
+    "durability": 5000,
+    "modelResourceId": 12011000,
+    "iconResourceId": 12011000,
+    "requirements": {
+      "class": 0,
+      "level": 1,
+      "STR": 0,
+      "DEX": 0,
+      "INT": 0
+    },
+    "sourceRow": {
+      "Num": 120010000,
+      "strName": "Short Sword",
+      "Countable": 0,
+      "dwIDResrc": 12011000,
+      "dwIDIcon": 12011000,
+      "byAttachPoint": 0,
+      "byClass": 21,
+      "siDamage": 4,
+      "siAttackInterval": 114,
+      "siAttackRange": 10,
+      "siWeight": 30,
+      "siMaxDurability": 5000,
+      "ReqLevel": 1,
+      "ReqStr": 0,
+      "ReqDex": 0,
+      "ReqIntel": 0
+    },
+    "rawItemOrgUsRow": [
+      120010000,
+      22,
+      "Short Sword",
+      "Basic Warrior Item",
+      0,
+      0,
+      12011000,
+      12011000,
+      14,
+      301,
+      21,
+      0,
+      0,
+      0,
+      0,
+      4,
+      114,
+      10,
+      30,
+      5000,
+      50,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      99,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "sourceRefs": [
+      "Open-KO/ko-client-assets@b4636332c7cd818b0ce171eccc973dd3d6b2e56d:Data/Item_Org_us.tbl.csv#120010000",
+      "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:src/Client/WarFare/GameDef.h#__TABLE_ITEM_BASIC",
+      "orhansevinc/oldera-preview@56ada741532c8f6cabfc83b129a8e87e645db055:data-catalog/generated/MORADON_PLAYABLE_COMBAT_SLICE.json#starter_equipment.right_hand"
+    ]
+  },
+  "sourceEvidence": [
+    {
+      "claim": "Item_Org table is loaded into the client basic item table.",
+      "ref": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:src/Client/WarFare/GameBase.cpp#s_pTbl_Items_Basic.LoadFromFile"
+    },
+    {
+      "claim": "siAttackInterval uses 100 units per second.",
+      "ref": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:src/Client/WarFare/GameDef.h#__TABLE_ITEM_BASIC.siAttackInterval"
+    },
+    {
+      "claim": "Normal attack timing converts siAttackInterval with /100.0f before sending the attack interval.",
+      "ref": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:src/Client/WarFare/PlayerMySelf.cpp#siAttackInterval"
+    },
+    {
+      "claim": "siAttackRange is stored in 0.1 meter units and normal attack range use converts it with /10.0f.",
+      "ref": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:src/Client/WarFare/PlayerMySelf.cpp#siAttackRange"
+    },
+    {
+      "claim": "Client MsgSend_Attack serializes interval*100 and distance*10; these client-supplied values are observations, not WS17 authority.",
+      "ref": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:src/Client/WarFare/GameProcMain.cpp#MsgSend_Attack"
+    },
+    {
+      "claim": "Server-side AI attack path resolves the target in CUser::Attack; WS17 does not own combat formula or target logic.",
+      "ref": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:src/Server/AIServer/User.cpp#CUser::Attack"
+    }
+  ]
+}
