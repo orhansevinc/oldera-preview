@@ -1,4 +1,5 @@
 import json
+import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -84,3 +85,11 @@ def test_audio_stays_native_and_browser_claim_is_fail_closed():
     names = {event["event"] for event in audio["events"]}
     assert {"town_music", "battle_music", "world_ambient", "footstep", "attack", "skill", "ui"} <= names
     assert "second browser audio graph" in audio["duplicate_prevention"]
+
+
+def load_tests(loader, tests, pattern):
+    suite = unittest.TestSuite()
+    for name, value in sorted(globals().items()):
+        if name.startswith("test_") and callable(value):
+            suite.addTest(unittest.FunctionTestCase(value, description=name))
+    return suite
