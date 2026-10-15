@@ -1,0 +1,138 @@
+{
+  "schema_version": "oldkoweb-phase2-handoff/v1",
+  "owner": "P2-08",
+  "branch": "phase2/08-items",
+  "source_commit": "4c2bd9d5fdb49df98a2273b6b159c87330660ed8",
+  "status": "BLOCKED",
+  "base": {
+    "branch": "ws50-integration-rehearsal",
+    "sha": "50ecabec15bd358d222a01891ca31359f3a928b0",
+    "ws50_handoff": "coordination/handoffs/domain-live/WS50.json"
+  },
+  "coordination_pins": {
+    "OWNERS": "022dae3604cb781fcae1968e2e91f61b36f34f6d",
+    "CONTRACTS": "8b6f59366c1bf1c7e92b7d38aa8cae8c33b18cfb"
+  },
+  "inherited": [
+    {"owner":"WS17","branch":"ws17-item-inventory","sha":"eb3e9fce63b71fa68682d81d9227e6ed7ae905bf"},
+    {"owner":"WS22","branch":"ws22-merchant-economy","sha":"4d45e46f78127931dd25b088009a4ecda98812a4"},
+    {"owner":"WS26","branch":"ws26-drop-loot","sha":"3cbb71fd57693e1f5be5eb922bd736c493d4baeb"},
+    {"owner":"WS33","branch":"ws33-inn-storage","sha":"cfe305f23e0541de050adee7cd0f830811be5d50"}
+  ],
+  "changed_files": [
+    "services/ko1298-items/**",
+    "services/ko1298-economy/**",
+    "services/ko1298-loot/**",
+    "services/ko1298-inn/**",
+    "services/ko1298-items-p2/**",
+    "tests/ko1298-items/**",
+    "tests/ko1298-economy/**",
+    "tests/ko1298-loot/**",
+    "tests/ko1298-inn/**",
+    "tests/phase2/p2-08-items/**",
+    "workstreams/p2-08/**",
+    "coordination/phase2/P2-08/handoff.json"
+  ],
+  "dependencies": [
+    {"owner":"P2-05","contract":"npc-interaction/v1","required":true,"state":"HANDOFF_PENDING"},
+    {"owner":"P2-07","contract":"equipment-effect/v1","required":true,"state":"HANDOFF_PENDING"},
+    {"owner":"P2-09","contract":"party-loot/v1","required":true,"state":"HANDOFF_PENDING"},
+    {"owner":"P2-11","contract":"postgres-shared-transaction/v1","required":true,"state":"HANDOFF_PENDING"},
+    {"owner":"P2-00","contract":"shared-runtime-composition/v1","required":true,"state":"INTEGRATION_OWNER"}
+  ],
+  "contracts_provided": [
+    {
+      "name": "p2-08-item-economy-command/v1",
+      "entry": "services/ko1298-items-p2/authority.cjs",
+      "operations": ["merchantBuy","merchantSell","repair","upgrade","innTransfer","lootPickup","tradeCommit","playerMerchantCommit","equip","useItem"],
+      "semantics": "All mutations execute through runOnce; client price/gold/drop/repair/upgrade authority fields are rejected; unresolved source rules fail closed."
+    },
+    {
+      "name": "p2-08-postgres-run-once/v1",
+      "entry": "services/ko1298-items-p2/postgres.cjs",
+      "semantics": "SERIALIZABLE, sorted advisory locks, durable operation replay via existing oldko.server_state."
+    },
+    {
+      "name": "p2-08-item-placement/v1",
+      "entry": "services/ko1298-items-p2/postgres.cjs",
+      "semantics": "Existing item serial UNIQUE and cross-placement trigger remain final DB guard; inventory 0..27, equipment 0..13, Inn 7x28."
+    }
+  ],
+  "contracts_consumed": [
+    "WS17 item/template/capacity/serial semantics",
+    "WS22 merchant/coin/trade semantics",
+    "WS26 drop/ground-loot semantics",
+    "WS33 Inn semantics",
+    "Phase2 database/composition contracts"
+  ],
+  "source_pins": [
+    "Open-KO/ko-client-assets@b4636332c7cd818b0ce171eccc973dd3d6b2e56d:Data/Item_Org_us.tbl.csv",
+    "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:src/Client/WarFare/GameDef.h",
+    "Open-KO/OpenKO-db@bec619466938d278339c30e5b1a4bff3c9413bab:ManualSetup/6_InsertData_K_NPC.sql",
+    "Open-KO/OpenKO-db@bec619466938d278339c30e5b1a4bff3c9413bab:ManualSetup/6_InsertData_K_MONSTER.sql",
+    "Open-KO/OpenKO-db@bec619466938d278339c30e5b1a4bff3c9413bab:ManualSetup/6_InsertData_K_MONSTER_ITEM.sql",
+    "Open-KO/OpenKO-db@bec619466938d278339c30e5b1a4bff3c9413bab:ManualSetup/6_InsertData_MAKE_ITEM_GROUP.sql",
+    "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:src/Server/AIServer/Npc.cpp",
+    "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:src/Client/WarFare/UITransactionDlg.cpp"
+  ],
+  "verified_examples": {
+    "merchant": {"npc_template_id":13001,"zone_id":21,"selling_group":203002},
+    "drop_probability_scale": 10000,
+    "inn": {"pages":7,"slots_per_page":28,"total":196},
+    "inventory_slots": 28,
+    "coin_transport_max": "4294967295"
+  },
+  "tests": [
+    {
+      "command": "node --check services/ko1298-items-p2/authority.cjs && node --check services/ko1298-items-p2/postgres.cjs && node --check tests/phase2/p2-08-items/postgres.integration.test.cjs",
+      "result": "PASS",
+      "evidence": "Exact committed content executed in repo-relative layout."
+    },
+    {
+      "command": "node --test tests/phase2/p2-08-items/authority.test.cjs",
+      "result": "PASS",
+      "evidence": "5/5: client authority rejection, idempotent buy, fail-closed upgrade, replay-safe loot, repair ordering."
+    },
+    {
+      "command": "P2_08_REAL_POSTGRES=1 DATABASE_URL=... node --test tests/phase2/p2-08-items/postgres.integration.test.cjs",
+      "result": "NOT_RUN",
+      "evidence": "Current execution environment has no target DATABASE_URL, psql or Docker."
+    },
+    {
+      "command": "real C++/WASM client: mob death->drop->pickup->inventory/equip/use->relog",
+      "result": "NOT_RUN",
+      "evidence": "Requires P2-00 composition and target PC/client."
+    },
+    {
+      "command": "two real clients trade + real NPC shopping + full-bag/failure/DC/relog matrix",
+      "result": "NOT_RUN",
+      "evidence": "Requires target PC/client and pending provider contracts."
+    }
+  ],
+  "runtime_evidence": [],
+  "source_or_asset_gaps": [
+    "Complete production binding of item/drop/merchant tables into final runtime is not composed on this provider branch.",
+    "Exact upgrade recipes/rates and unresolved ItemProdution behavior remain fail-closed; no values were fabricated.",
+    "Real client packet/UI composition is not owned by P2-08."
+  ],
+  "shared_file_requests": [
+    {"owner":"P2-00","request":"Wire P2-08 command authority into shared dispatcher/production composition after P2-05 routing; do not pass client-supplied price/drop/upgrade authority into mutations."},
+    {"owner":"P2-00","request":"Bind real packet request/response mapping only from verified protocol ownership; no guessed opcode."},
+    {"owner":"P2-11","request":"Pin or replace p2-08-postgres-run-once/v1 with final shared transaction/journal adapter without weakening SERIALIZABLE/idempotent semantics."}
+  ],
+  "migration_entries": [],
+  "migration_needs": [
+    "P2-08 adds no shared migration. P2-11 may add a dedicated operation journal and durable trade/merchant/loot state; current compatibility uses oldko.server_state plus baseline item/coin tables."
+  ],
+  "blockers": [
+    {"id":"P2_DEPENDENCY_HANDOFFS_PENDING","detail":"P2-05, P2-07, P2-09 and P2-11 branches were rechecked and had no provider handoff to pin."},
+    {"id":"FULL_PRODUCTION_DATA_BINDING_UNRESOLVED","detail":"Complete runtime table binding and verified upgrade resolver are not yet composed; missing values intentionally fail closed."},
+    {"id":"REAL_RUNTIME_ACCEPTANCE_UNRUN","detail":"Real PostgreSQL restart, real NPC transactions, two-client trade, full-bag/failure/DC/relog and mob-death-to-equip/use chain have not been evidenced on target PC/client."}
+  ],
+  "notes": [
+    "Inherited reported suites are not relabeled as P2-08 runtime evidence: WS17 97/97, WS22 33/33, WS26 32/32 plus stress, WS33 rollback/concurrency coverage.",
+    "No GitHub Actions run exists for source_commit; provider did not add a Phase2 workflow because workflows are P2-00-owned.",
+    "Real-client acceptance matrix: workstreams/p2-08/acceptance.md. Dependency proposal: workstreams/p2-08/dependency-proposal.md.",
+    "P2-00 must not mark this provider READY/VERIFIED until required contracts are pinned and real runtime gates pass."
+  ]
+}

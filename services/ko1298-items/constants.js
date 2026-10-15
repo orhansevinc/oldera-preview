@@ -1,0 +1,80 @@
+'use strict';
+
+const EQUIPMENT_SLOTS = Object.freeze({
+  RIGHT_EAR: 0,
+  HEAD: 1,
+  LEFT_EAR: 2,
+  NECK: 3,
+  BREAST: 4,
+  SHOULDER: 5,
+  RIGHT_HAND: 6,
+  WAIST: 7,
+  LEFT_HAND: 8,
+  RIGHT_RING: 9,
+  LEG: 10,
+  LEFT_RING: 11,
+  GLOVE: 12,
+  FOOT: 13,
+});
+
+// Open-KO 1298 client e_ItemPosition values (GameDef.h @ 7d6cf810...).
+const LEGACY_ATTACH_POINTS = Object.freeze({
+  DUAL: 0,
+  RIGHT_HAND: 1,
+  LEFT_HAND: 2,
+  TWO_HAND_RIGHT: 3,
+  TWO_HAND_LEFT: 4,
+  UPPER: 5,
+  LOWER: 6,
+  HEAD: 7,
+  GLOVES: 8,
+  SHOES: 9,
+  EAR: 10,
+  NECK: 11,
+  FINGER: 12,
+  SHOULDER: 13,
+  BELT: 14,
+  INVENTORY: 15,
+});
+
+const HAND_POLICY = Object.freeze({
+  NONE: 'none',
+  DUAL: 'dual',
+  RIGHT: 'right',
+  LEFT: 'left',
+  TWO_HAND_RIGHT: 'two-hand-right',
+  TWO_HAND_LEFT: 'two-hand-left',
+});
+
+const ITEM_CLASS_IDS = Object.freeze({
+  DAGGER: 11, SWORD: 21, SWORD_2H: 22, AXE: 31, AXE_2H: 32,
+  MACE: 41, MACE_2H: 42, SPEAR: 51, POLEARM: 52, SHIELD: 60,
+  BOW: 70, CROSSBOW: 71, LONGBOW: 80, EARRING: 91, AMULET: 92,
+  RING: 93, BELT: 94, CHARM: 95, JEWEL: 96, POTION: 97, SCROLL: 98,
+  LAUNCHER: 100, STAFF: 110, ARROW: 120, JAVELIN: 130,
+  ARMOR_WARRIOR: 210, ARMOR_ROGUE: 220, ARMOR_MAGE: 230, ARMOR_PRIEST: 240,
+  ETC: 251, CONSUMABLE: 255,
+});
+
+const EQUIPMENT_SLOT_COUNT = 14;
+const INVENTORY_SLOT_COUNT = 28;
+const INN_SLOT_COUNT = 196;
+const LEGACY_STACK_LIMIT = 9999;
+
+const CONTAINER_TYPES = Object.freeze({
+  EQUIPMENT: 'equipment',
+  INVENTORY: 'inventory',
+  INN: 'inn',
+});
+
+module.exports = {
+  EQUIPMENT_SLOTS,
+  LEGACY_ATTACH_POINTS,
+  HAND_POLICY,
+  ITEM_CLASS_IDS,
+  EQUIPMENT_SLOT_COUNT,
+  INVENTORY_SLOT_COUNT,
+  INN_SLOT_COUNT,
+  LEGACY_STACK_LIMIT,
+  CONTAINER_TYPES,
+};
