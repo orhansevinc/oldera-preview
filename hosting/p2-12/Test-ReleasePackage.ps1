@@ -34,6 +34,7 @@ if($manifest.migration -and $manifest.migration.plan_path){
     if(-not (Test-Path -LiteralPath $planPath)){throw "Migration plan missing: $planPath"}
     $plan=Read-P212JsonFile $planPath
     if(-not $plan.backup_before_migrate){throw 'Migration plan must set backup_before_migrate=true.'}
+    if(-not $plan.runner -or [string]$plan.runner.mode -ne 'compose-run' -or -not $plan.runner.service -or @($plan.runner.command).Count -eq 0){throw 'Migration plan must declare the canonical compose-run runner service and command.'}
     $migration.rollback_compatible=[bool]$plan.rollback_compatible_with_previous_application
     if($manifest.migration.PSObject.Properties['rollback_compatible_with_previous_application'] -and [bool]$manifest.migration.rollback_compatible_with_previous_application -ne [bool]$plan.rollback_compatible_with_previous_application){throw 'Manifest migration rollback compatibility disagrees with migration plan.'}
     $seen=@{};$last=0
