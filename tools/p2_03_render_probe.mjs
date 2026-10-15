@@ -9,9 +9,12 @@ const label = process.env.P2_03_LABEL || 'candidate';
 const outRoot = process.env.P2_03_OUT || 'artifacts/p2-03';
 const quality = process.env.P2_03_QUALITY || 'sharp';
 const timeout = Number(process.env.P2_03_TIMEOUT_MS || 90000);
+const headless = process.env.P2_03_HEADLESS === '1';
+const requestedModes = (process.env.P2_03_MODES || 'windowed,fullscreen').split(',').map(v => v.trim()).filter(Boolean);
+const modes = requestedModes.filter(v => v === 'windowed' || v === 'fullscreen');
+if (!modes.length) throw new Error('P2_03_MODES must contain windowed and/or fullscreen');
 const resolutions = [[1366, 768], [1920, 1080]];
 const scales = [1.0, 1.25, 1.5];
-const modes = ['windowed', 'fullscreen'];
 
 await fs.mkdir(path.join(outRoot, label), { recursive: true });
 const results = [];
@@ -21,7 +24,7 @@ for (const [physicalW, physicalH] of resolutions) {
     for (const mode of modes) {
       const cssW = Math.max(640, Math.round(physicalW / osScale));
       const cssH = Math.max(480, Math.round(physicalH / osScale));
-      const browser = await chromium.launch({ headless: true });
+      const browser = await chromium.launch({ headless });
       const context = await browser.newContext({
         viewport: { width: cssW, height: cssH },
         deviceScaleFactor: osScale,
@@ -57,10 +60,17 @@ for (const [physicalW, physicalH] of resolutions) {
         const canvas = (typeof Module !== 'undefined' && Module.canvas) || document.querySelector('#canvas');
         const r = canvas.getBoundingClientRect();
         const m = structuredClone(window.__OLDKO_RENDER_METRICS__ || {});
+        const centerX = r.left + r.width / 2;
+        const centerY = r.top + r.height / 2;
+        const logicalCenter = {
+          x: (centerX - r.left) * m.logicalWidth / r.width,
+          y: (centerY - r.top) * m.logicalHeight / r.height,
+        };
         return {
           metrics: m,
           canvas: { left: r.left, top: r.top, width: r.width, height: r.height, backingWidth: canvas.width, backingHeight: canvas.height },
           viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio },
+          logicalCenter,
           fullscreen: !!document.fullscreenElement,
         };
       });
@@ -68,11 +78,13 @@ for (const [physicalW, physicalH] of resolutions) {
       const m = observed.metrics;
       const epsilon = 2;
       const checks = {
+        logicalMatchesViewport: Math.abs(m.logicalWidth - m.viewportWidth) <= epsilon && Math.abs(m.logicalHeight - m.viewportHeight) <= epsilon,
         cssLogicalAligned: Math.abs(m.logicalWidth - observed.canvas.width) <= epsilon && Math.abs(m.logicalHeight - observed.canvas.height) <= epsilon,
         backingMatchesCanvas: m.backingWidth === observed.canvas.backingWidth && m.backingHeight === observed.canvas.backingHeight,
         drawingBufferMatchesBacking: Math.abs(m.drawingBufferWidth - m.backingWidth) <= epsilon && Math.abs(m.drawingBufferHeight - m.backingHeight) <= epsilon,
         noHiddenDownscale: m.renderScale >= 1.0,
         dprBounded: m.renderScale <= Math.min(Math.max(1, observed.viewport.dpr), 2.0) + 0.01,
+        pointerCenterLogical: Math.abs(observed.logicalCenter.x - m.logicalWidth / 2) <= 1 && Math.abs(observed.logicalCenter.y - m.logicalHeight / 2) <= 1,
         modeApplied: mode === 'windowed' ? !observed.fullscreen : observed.fullscreen,
         canvasNotClipped: observed.canvas.left >= -epsilon && observed.canvas.top >= -epsilon && observed.canvas.left + observed.canvas.width <= observed.viewport.width + epsilon && observed.canvas.top + observed.canvas.height <= observed.viewport.height + epsilon,
       };
@@ -80,7 +92,7 @@ for (const [physicalW, physicalH] of resolutions) {
       const id = `${physicalW}x${physicalH}-scale${String(osScale).replace('.', '_')}-${mode}`;
       const screenshot = path.join(outRoot, label, `${id}.png`);
       await page.screenshot({ path: screenshot, fullPage: false });
-      const record = { id, label, quality, requested: { physicalW, physicalH, osScale, cssW, cssH, mode }, observed, checks, pass, screenshot };
+      const record = { id, label, quality, headless, requested: { physicalW, physicalH, osScale, cssW, cssH, mode }, observed, checks, pass, screenshot };
       results.push(record);
       await fs.writeFile(path.join(outRoot, label, `${id}.json`), JSON.stringify(record, null, 2));
       await fs.writeFile(path.join(outRoot, label, `${id}.console.log`), consoleLines.join('\n'));
@@ -94,6 +106,7 @@ const summary = {
   target,
   label,
   quality,
+  headless,
   generatedAt: new Date().toISOString(),
   cases: results.length,
   passed: results.filter(r => r.pass).length,
