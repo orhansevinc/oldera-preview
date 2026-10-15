@@ -4,6 +4,7 @@ set -euo pipefail
 : "${OPENKO_SHA:=97eb0ea20207afc0c360bfed6915113572711be3}"
 : "${KO_ASSETS_SHA:=2055ee6ed77f1b5cfef23832dd5bc31909e14a66}"
 : "${WS05_ROOT:=.providers/ws05}"
+: "${WS10_ROOT:=}"
 
 [[ "$(git -C openko rev-parse HEAD)" == "$OPENKO_SHA" ]]
 [[ "$(git -C ko-assets rev-parse HEAD)" == "$KO_ASSETS_SHA" ]]
@@ -16,6 +17,9 @@ python3 "$WS05_ROOT/tools/patch_openko_browser_auth_probe.py"
 python3 "$WS05_ROOT/tools/ws04_character/patch_character_client.py"
 python3 "$WS05_ROOT/tools/ws04_character/patch_frame_capture.py"
 python3 "$WS05_ROOT/tools/ws05_moradon/patch_moradon_client.py"
+if [[ -n "$WS10_ROOT" ]]; then
+  python3 "$WS10_ROOT/qa/moradon/patch_visibility_observability.py"
+fi
 python3 tools/p2_03_patch_openko_render.py openko
 python3 client-src/p2_10/apply_browser_input_lifecycle.py openko
 python3 client-src/p2_00/enable_browser_audio_pthreads.py openko
@@ -40,6 +44,7 @@ python3 client-src/p2_10/verify_browser_source.py openko
 grep -q 'P2-03 browser render surface' openko/src/Client/WarFare/WarFareMainSDL.cpp
 grep -q 'P2-10 browser input lifecycle' openko/src/Client/WarFare/WarFareMainSDL.cpp
 grep -q 'P2-00 pthread browser audio' openko/src/N3Base/N3SndMgr.cpp
+if [[ -n "$WS10_ROOT" ]]; then grep -q 'WS10_VISIBILITY RENDERED' openko/src/Client/WarFare/PlayerBase.cpp; fi
 if grep -q 'browser audio unavailable: native audio workers require pthreads' openko/src/N3Base/N3SndMgr.cpp; then
   echo 'single-thread browser audio guard survived P2-00 patch' >&2
   exit 1
