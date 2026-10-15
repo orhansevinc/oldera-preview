@@ -31,9 +31,23 @@
     "current_aoi_contract": "48-unit regions, current region plus one neighbor each axis",
     "initial_spawn_observation": "All verified mob slots are outside the initial player's 3x3 region window; zero mobs at the Moradon login coordinate is therefore data/AOI-consistent rather than a missing K_MONSTER/K_NPCPOS seed. Moving toward the source-backed monster fields or widening AOI must remain P2-04/world policy, not a P2-06 coordinate fabrication."
   },
+  "client_asset_authority": {
+    "pid_800_bandicoot": {
+      "status": "SOURCE_VERIFIED",
+      "authority": "ws38-client-content-pipeline manifest verified_commit 13a8094f35e0d5b205c71fd2f7b4a8b387709555 / ko4life-net/ko-assets@2055ee6ed77f1b5cfef23832dd5bc31909e14a66",
+      "model": "Chr/mob_bandicoot.n3chr",
+      "joint": "Chr/mob_bandicoot.n3joint",
+      "animation_asset": "Chr/mob_bandicoot.n3anim",
+      "parts_and_textures": "source-verified in workstreams/ws38/MORADON_PLAYABLE_COMBAT_ASSET_MANIFEST.json"
+    },
+    "pid_700_worm_family": {
+      "status": "BLOCKED_ASSET",
+      "reason": "The current P2-06/WS25 authority proves PID 700 in K_MONSTER but the inspected source-backed asset manifest only closes PID 800 Bandicoot. P2-06 does not infer a worm filename."
+    }
+  },
   "animation_authority": {
-    "status": "UNRESOLVED",
-    "reason": "The pinned K_MONSTER/K_NPCPOS rows establish monster resource IDs and behavior/stat fields but do not establish an exact client animation-id-to-binary mapping for these rows. P2-06 does not invent animation IDs."
+    "status": "PARTIAL",
+    "reason": "PID 800 has a source-verified n3anim binary, but no exact server behavior-state/animation-id mapping is established here for all ten monster rows. PID 700 client animation assets are not source-closed by the inspected manifest. No numeric animation IDs are invented."
   },
   "boss_authority": {
     "status": "BLOCKED_SOURCE",
