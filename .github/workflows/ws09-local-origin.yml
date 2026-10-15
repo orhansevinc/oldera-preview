@@ -97,6 +97,10 @@ jobs:
           set -euo pipefail
           for f in deploy/*.sh; do sh -n "$f"; done
           docker run --rm \
+            --add-host account-api:127.0.0.1 \
+            --add-host gateway-auth:127.0.0.1 \
+            --add-host gateway-game:127.0.0.1 \
+            --add-host admin-api-fixture:127.0.0.1 \
             -e OFFICIAL_HOST=oldkoweb.com -e PLAY_HOST=play.oldkoweb.com -e ADMIN_HOST=admin.oldkoweb.com \
             -e ACCOUNT_API_PORT=8081 -e ADMIN_API_PORT=8080 -e GATEWAY_INTERNAL_PORT=8080 -e ADMIN_UPSTREAM=admin-api-fixture \
             -e 'NGINX_ENVSUBST_FILTER=^(OFFICIAL_HOST|PLAY_HOST|ADMIN_HOST|ACCOUNT_API_PORT|ADMIN_API_PORT|GATEWAY_INTERNAL_PORT|ADMIN_UPSTREAM)$' \
