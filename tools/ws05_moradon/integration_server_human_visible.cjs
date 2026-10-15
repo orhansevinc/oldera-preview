@@ -156,6 +156,7 @@ function listen(port,kind){
           worldSession,movementSession,socketId,
           onWorldBroadcast:({packet,snapshot})=>console.log(`WS05_COMPOSE event=world-broadcast opcode=0x${packet[0].toString(16).padStart(2,'0')} state=${snapshot?.state||'unknown'}`),
           onGameplayBroadcast:({owner,packet})=>console.log(`WS05_COMPOSE event=gameplay-broadcast owner=${owner} opcode=0x${packet[0].toString(16).padStart(2,'0')}`),
+          logger:(event,detail)=>console.log(`WS05_COMPOSE event=session-${event} detail=${JSON.stringify(detail)}`),
         });
     const decoder=new FrameDecoder();let queue=Promise.resolve(),lastRegion=null;
     console.log(`WS05_COMPOSE event=${kind}-connected socketId=${socketId}`);
@@ -180,7 +181,10 @@ function listen(port,kind){
           }
           if(kind==='game'&&payload[0]===0x06){
             const state=movementSession.getState(session.sessionId);
-            if(!state) throw new Error('movement packet accepted without WS15 state');
+            if(!state){
+              console.log(`WS05_AUTH event=browser-movement accepted=0 reason=ws15-not-registered phase=${session.phase}`);
+              continue;
+            }
             const p=state.targetPosition||state.position;
             console.log(`WS05_AUTH event=browser-movement accepted=1 x=${p.x} y=${p.y} z=${p.z} heading=${state.headingRaw} region=${regionKey(p)}`);
             const key=regionKey(p);
