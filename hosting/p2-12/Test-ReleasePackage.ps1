@@ -11,6 +11,9 @@ $manifest=Read-P212JsonFile $ManifestPath
 if([string]$manifest.schema_version -ne 'oldkoweb-p2-release/v1'){throw 'Unsupported release manifest schema.'}
 if(-not $manifest.release_id){throw 'release_id is required.'}
 if(-not $manifest.source_sha -or ([string]$manifest.source_sha -notmatch '^[0-9a-fA-F]{40}$')){throw 'source_sha must be an exact 40-character Git commit SHA.'}
+if(-not $manifest.compose -or -not $manifest.compose.project_name -or @($manifest.compose.files).Count -eq 0){throw 'compose.project_name and compose.files are required.'}
+if(@($manifest.required_persistent_volumes).Count -eq 0){throw 'required_persistent_volumes must declare the persistent DB mount contract.'}
+if(@($manifest.health_checks).Count -eq 0){throw 'health_checks must declare mandatory post-switch checks.'}
 $checks=@();$failed=$false
 foreach($file in @($manifest.files)){
     $rel=[string]$file.path
@@ -32,6 +35,7 @@ if($manifest.migration -and $manifest.migration.plan_path){
     $plan=Read-P212JsonFile $planPath
     if(-not $plan.backup_before_migrate){throw 'Migration plan must set backup_before_migrate=true.'}
     $migration.rollback_compatible=[bool]$plan.rollback_compatible_with_previous_application
+    if($manifest.migration.PSObject.Properties['rollback_compatible_with_previous_application'] -and [bool]$manifest.migration.rollback_compatible_with_previous_application -ne [bool]$plan.rollback_compatible_with_previous_application){throw 'Manifest migration rollback compatibility disagrees with migration plan.'}
     $seen=@{};$last=0
     foreach($entry in @($plan.migrations | Sort-Object order)){
         $order=[int]$entry.order;if($order -le $last){throw 'Migration order must be strictly increasing.'};$last=$order
