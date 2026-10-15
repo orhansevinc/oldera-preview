@@ -1,0 +1,122 @@
+{
+  "schema": "oldkoweb/phase2-handoff/v1",
+  "workstream": "P2-02",
+  "status": "BLOCKED",
+  "base": {
+    "branch": "ws50-integration-rehearsal",
+    "commit": "50ecabec15bd358d222a01891ca31359f3a928b0"
+  },
+  "branch": "phase2/02-loading",
+  "code_sha_before_handoff": "729f9029d563f72728a7251869d2633fb1bdd5e3",
+  "live_deploy_performed": false,
+  "continued_sources": [
+    {"workstream": "WS01", "branch": "ws01-runtime-build", "commit": "886dc9322dd3556a69e3ac3143e925620b8dfc20"},
+    {"workstream": "WS12", "branch": "ws12-browser-launcher", "commit": "359bde1aff0d63d80d57eb8320f88d346a2f6918"},
+    {"workstream": "WS38", "branch": "ws38-client-content-pipeline", "commit": "683f6d55471d1b101371e5766ecf0ef21c8bf1e9"}
+  ],
+  "production_hotfix_authority": {
+    "workflow_run": "38604174659",
+    "artifact_id": "11915666463",
+    "artifact_name": "ws10-c5-visibility-passing-client-4",
+    "artifact_zip_bytes": 624650811,
+    "artifact_digest": "sha256:f749750fc5bb0249a67b712bd4e1a03847773d8845fd209508b8c95f6c447a83",
+    "source_commit": "b2434e568779d23cb4a8f8a00aec771d95679021",
+    "hotfix_commit": "729ee9a6aa2559a05d58e0b22bcc432ad90477ac",
+    "provider_set": "WS50-C5@sha256:7ac3ebb53850bc367593f6695adfb25f78b86e0125fbeea1674e8770285f119e",
+    "note": "This is the production authority; the small repository real1298 snapshot must not be treated as equivalent."
+  },
+  "repository_snapshot_not_production": {
+    "KnightOnLine.js_bytes": 441194,
+    "KnightOnLine.wasm_bytes": 5608024,
+    "KnightOnLine.data_bytes": 87302597,
+    "total_bytes": 93351815,
+    "production_artifact_zip_bytes": 624650811
+  },
+  "changed_files": [
+    "deploy/domain-live/play-production-index.html",
+    "deploy/domain-live/runtime-manifest.schema.json",
+    "play-loading-v2.js",
+    "play-cache-worker.js",
+    "play-cache-recovery.js",
+    "tools/p2-02/New-OldKOWebRuntimeManifest.ps1",
+    "tools/p2-02/Build-OldKOWebAssetPacks.py",
+    "tools/p2-02/Verify-LoadingContracts.py",
+    "coordination/phase2/P2-02/asset-pack-plan.json",
+    "coordination/phase2/P2-02/MEASUREMENT_PROTOCOL.md",
+    "coordination/phase2/P2-02/dependency-proposal.md"
+  ],
+  "implementation": {
+    "real_progress": "Manifest/download bytes, WASM compile, Emscripten dependency preparation, auth/game socket open, runtime init and first-controllable world-ready are separately recorded. No timer-driven progress bar is used.",
+    "world_ready_gate": "Overlay closes only on oldkoweb:world-ready / oldkowebWorldReady, not on onRuntimeInitialized.",
+    "cache": "Exact sha256+bytes+content-version URLs; Cache Storage retains active + previous versions; Range/206 is excluded; failures fall back to network; retry invalidates suspect current-version cache.",
+    "sensitive_data": "Runtime worker explicitly bypasses /api/, /auth, /game, /admin and /account. No credentials, API responses or socket payloads are persisted.",
+    "wasm": "instantiateStreaming is attempted and measured; ArrayBuffer fallback is explicit. No generated JS/WASM/data binary is manually patched.",
+    "asset_packaging": "Exact-case /data VFS inputs; missing/case-mismatched asset fails the pack build. No black-model/placeholder substitution.",
+    "map_scope": "Only verified startup assets are planned. Unrelated maps are excluded; full Moradon map split waits for authoritative VFS closure."
+  },
+  "build_recipe": [
+    "Extract the exact pinned production hotfix artifact without altering KnightOnLine.js/.wasm/.data.",
+    "Run PowerShell: tools/p2-02/New-OldKOWebRuntimeManifest.ps1 -RuntimeRoot <artifact-runtime-dir> -Output <staging>/real1298/runtime-manifest.json -ReleaseId oldkoweb-domain-live-20261015 -ContentVersion <immutable-content-version> -SourceCommit b2434e568779d23cb4a8f8a00aec771d95679021 -ArtifactId 11915666463 -ArtifactDigest sha256:f749750fc5bb0249a67b712bd4e1a03847773d8845fd209508b8c95f6c447a83",
+    "For verified VFS packs run: python tools/p2-02/Build-OldKOWebAssetPacks.py --asset-root <data-root> --plan coordination/phase2/P2-02/asset-pack-plan.json --file-packager <emscripten/file_packager.py> --out <pack-out> --execute",
+    "Run: python tools/p2-02/Verify-LoadingContracts.py",
+    "P2-00/P2-12 compose the resulting shell/runtime/headers; P2-02 does not edit the shared build workflow or nginx."
+  ],
+  "measurements": {
+    "reported_prechange_wait": "6-7 minutes (user observation; not a controlled benchmark)",
+    "production_artifact_zip_bytes": 624650811,
+    "repository_snapshot_total_bytes": 93351815,
+    "live_exact_runtime_files": {
+      "KnightOnLine.js": {"bytes": null, "sha256": null},
+      "KnightOnLine.wasm": {"bytes": null, "sha256": null},
+      "KnightOnLine.data": {"bytes": null, "sha256": null}
+    },
+    "cold_ms": null,
+    "warm_ms": null,
+    "reason_not_fabricated": "The execution environment cannot resolve/read play.oldkoweb.com and the connector will not download the >512 MiB artifact; the user also prohibited a live deploy. Exact per-file identity will be generated from the extracted pinned artifact by New-OldKOWebRuntimeManifest.ps1. Controlled timing must run on the target PC/browser/network after integration."
+  },
+  "tests": {
+    "source_compare": "PASS: branch is 19 commits ahead / 0 behind the pinned base before handoff and contains 11 intended changed files.",
+    "contract_verifier": "ADDED_NOT_EXECUTED_IN_CONNECTOR_ONLY_ENVIRONMENT: tools/p2-02/Verify-LoadingContracts.py",
+    "live_browser_benchmark": "NOT_RUN: no live deploy and target browser/device are outside this execution environment",
+    "artifact_download": "BLOCKED_BY_CONNECTOR_SIZE_LIMIT: 624650811-byte artifact exceeds connector download limit"
+  },
+  "dependencies": [
+    "P2-00: extract pinned hotfix, generate/publish runtime-manifest, reconcile phase2 coordination records, agree cold/warm byte/time budget after baseline",
+    "P2-03/P2-10: emit oldkoweb:world-ready only at first visibly rendered AND controllable frame",
+    "P2-12: apply no-store/revalidation/immutable, MIME, Vary and measured compression rules from dependency-proposal.md",
+    "P2-13: capture same-device/network/version before-after cold+warm evidence using MEASUREMENT_PROTOCOL.md",
+    "Phase-2 content authority / WS38 continuation: publish complete exact-case Moradon startup/map VFS closure"
+  ],
+  "blockers": [
+    {
+      "id": "LIVE_RUNTIME_PER_FILE_IDENTITY_UNVERIFIED",
+      "owner": "P2-00 / target-PC integration",
+      "detail": "Exact live JS/WASM/data byte sizes and SHA256 cannot be read from this environment. The production artifact identity is pinned, and manifest generation is implemented, but integration must run it against the extracted 624650811-byte hotfix artifact before release."
+    },
+    {
+      "id": "CONTROLLED_COLD_WARM_BASELINE_NOT_RUN",
+      "owner": "P2-13 with P2-00",
+      "detail": "No comparable target-PC/browser/network baseline exists yet; instrumentation and protocol are now provided."
+    },
+    {
+      "id": "WORLD_READY_SIGNAL_NOT_YET_WIRED",
+      "owner": "P2-03 / P2-10",
+      "detail": "Launcher intentionally remains visible until renderer/input emits the first-controllable-frame readiness event."
+    },
+    {
+      "id": "MORADON_MAP_VFS_CLOSURE_MISSING",
+      "owner": "Phase-2 content authority",
+      "detail": "Pinned WS38 manifest verifies combat assets but not the complete Moradon startup/map file closure, so P2-02 refuses to guess a map pack."
+    },
+    {
+      "id": "ACCEPTED_ORIGINAL_LAUNCHER_ARTWORK_NOT_PINNED",
+      "owner": "P2-00 / product reference owner",
+      "detail": "WS12 contains hero-1299-hd.jpg and moradon-1299.jpg but no authoritative record that identifies the accepted original launcher artwork. moradon-1299.jpg is used only as an existing fallback."
+    },
+    {
+      "id": "EDGE_HEADER_POLICY_NOT_APPLIED",
+      "owner": "P2-12",
+      "detail": "Required MIME/cache/compression header contract is documented, but nginx is outside P2-02 ownership."
+    }
+  ]
+}

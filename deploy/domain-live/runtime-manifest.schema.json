@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "oldkoweb/runtime-manifest/v1",
+  "type": "object",
+  "required": ["schema", "release_id", "content_version", "source", "files"],
+  "properties": {
+    "schema": {"const": "oldkoweb/runtime-manifest/v1"},
+    "release_id": {"type": "string", "minLength": 1},
+    "content_version": {"type": "string", "minLength": 1},
+    "generated_at": {"type": "string"},
+    "source": {
+      "type": "object",
+      "required": ["source_commit", "artifact_id", "artifact_digest"],
+      "properties": {
+        "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "artifact_id": {"type": "string", "minLength": 1},
+        "artifact_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      },
+      "additionalProperties": false
+    },
+    "files": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["role", "name", "url", "bytes", "sha256", "mime", "startup"],
+        "properties": {
+          "role": {"enum": ["js", "wasm", "data"]},
+          "name": {"type": "string", "minLength": 1},
+          "url": {"type": "string", "pattern": "^/real1298/"},
+          "bytes": {"type": "integer", "minimum": 1},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "mime": {"type": "string", "minLength": 1},
+          "startup": {"type": "boolean"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "cache_policy": {"type": "object"}
+  },
+  "additionalProperties": false
+}
