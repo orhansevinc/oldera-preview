@@ -1,0 +1,46 @@
+name: WS50 publish verified PC package
+
+on:
+  push:
+    branches: [ws50-integration-rehearsal]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download already verified package artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download 38740793896 -n oldkoweb-domain-live-20261015-pc -R "$GH_REPO"
+          test -s oldkoweb-domain-live-20261015-pc.zip
+          test -s oldkoweb-domain-live-20261015-pc.zip.sha256
+          expected="$(awk '{print $1}' oldkoweb-domain-live-20261015-pc.zip.sha256)"
+          actual="$(sha256sum oldkoweb-domain-live-20261015-pc.zip | awk '{print $1}')"
+          test "$expected" = "$actual"
+
+      - name: Publish checksum-verified release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=oldkoweb-domain-live-20261015
+          if gh release view "$tag" -R "$GH_REPO" >/dev/null 2>&1; then
+            gh release upload "$tag" oldkoweb-domain-live-20261015-pc.zip oldkoweb-domain-live-20261015-pc.zip.sha256 --clobber -R "$GH_REPO"
+          else
+            gh release create "$tag" oldkoweb-domain-live-20261015-pc.zip oldkoweb-domain-live-20261015-pc.zip.sha256 \
+              --target ffb2b8dc3e2a86a136fb13deddd4ea551c031939 \
+              --title 'OldKOWeb domain-live PC package 2026-10-15' \
+              --notes 'Checksum-verified local-origin package. Windows PowerShell 5.1 validation passed in run 38740793896. Real public domain reachability is not claimed until DNS/tunnel acceptance passes.' \
+              -R "$GH_REPO"
+          fi
