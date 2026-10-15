@@ -5,14 +5,20 @@ on:
     branches: [ws08-admin-api]
     paths:
       - 'services/admin-api/**'
+      - 'services/oldko-data/**'
+      - 'database/**'
       - 'tests/admin-api/**'
       - 'workstreams/ws08/**'
+      - 'coordination/handoffs/domain-live/WS08.json'
       - '.github/workflows/ws08-admin-api.yml'
   pull_request:
     paths:
       - 'services/admin-api/**'
+      - 'services/oldko-data/**'
+      - 'database/**'
       - 'tests/admin-api/**'
       - 'workstreams/ws08/**'
+      - 'coordination/handoffs/domain-live/WS08.json'
       - '.github/workflows/ws08-admin-api.yml'
 
 permissions:
@@ -21,13 +27,39 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: oldko
+          POSTGRES_PASSWORD: oldko
+          POSTGRES_DB: oldko_ws08
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U oldko -d oldko_ws08"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      DATABASE_URL: postgresql://oldko:oldko@127.0.0.1:5432/oldko_ws08
+      NODE_ENV: test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Test admin API
+      - name: Install PostgreSQL adapter dependency
+        working-directory: services/oldko-data
+        run: npm install --ignore-scripts
+      - name: Apply migrations 0001-0004
+        working-directory: services/oldko-data
+        run: npm run migrate
+      - name: Verify pinned WS07 adapter integration
+        working-directory: services/oldko-data
+        run: npm run test:integration
+      - name: Test admin API including PostgreSQL restart E2E
         working-directory: services/admin-api
         shell: bash
         run: |
