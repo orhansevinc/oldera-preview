@@ -1,0 +1,250 @@
+name: WS50 domain-live PC package
+
+on:
+  push:
+    branches: [ws50-integration-rehearsal]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    outputs:
+      child_candidate: ${{ steps.meta.outputs.child_candidate }}
+      package_ready: ${{ steps.meta.outputs.package_ready }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Resolve release metadata
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          child="$(jq -r '.child_candidate // empty' coordination/handoffs/domain-live/WS50.json 2>/dev/null || true)"
+          if [[ -n "$child" && "$child" != "null" ]]; then
+            echo "child_candidate=$child" >> "$GITHUB_OUTPUT"
+            echo "package_ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "child_candidate=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            echo "package_ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fetch exact Moradon SMD authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p runtime
+          curl --fail --location --retry 4 \
+            https://raw.githubusercontent.com/Open-KO/KnightOnline/7d6cf81093e142c928c2ac9510512b2b182178b5/assets/Server/MAP/moradon_0826.smd \
+            --output runtime/moradon_0826.smd
+          test -s runtime/moradon_0826.smd
+          sha256sum runtime/moradon_0826.smd | tee runtime/moradon_0826.smd.sha256
+
+      - name: Install owner test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix services/oldko-data install --ignore-scripts
+          npm --prefix services/account-api install --ignore-scripts
+
+      - name: Run pinned owner verification suites
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test tests/gm-command-bus/*.test.js
+          node --test tests/ko-gateway/*.test.js
+          node --test tests/admin-api/*.test.js
+          node --test tests/account-api/*.test.js
+          node --test tests/ko1298-session/async-repository.test.js tests/ko1298-session/production-lifecycle.test.js tests/ko1298-session/production-routing.test.js tests/ko1298-session/production-transport.test.js tests/ko1298-session/domain-live-provider.contract.js
+
+      - name: Build real runtime and approved edge
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build -t oldkoweb/domain-runtime:${GITHUB_SHA} -f deploy/domain-live/runtime.Dockerfile .
+          docker build -t oldkoweb/edge:${GITHUB_SHA} -f deploy/domain-live/edge.Dockerfile .
+          docker pull postgres:16-alpine
+          docker tag postgres:16-alpine oldkoweb/postgres:16-alpine
+
+      - name: Prepare real compose secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ws50-secrets"
+          ADMIN_PASSWORD='OwnerCiPass!'
+          HASH="$(docker run --rm -e ADMIN_BOOTSTRAP_PASSWORD="$ADMIN_PASSWORD" oldkoweb/domain-runtime:${GITHUB_SHA} node -e "const s=require('./services/admin-api/src/security');process.stdout.write(s.hashPassword(process.env.ADMIN_BOOTSTRAP_PASSWORD));")"
+          jq -nc --arg h "$HASH" '[{id:"local-owner",username:"owner",passwordHash:$h,roles:["OWNER"]}]' > "$RUNNER_TEMP/ws50-secrets/admin-users.json"
+          printf '%064d\n' 1 > "$RUNNER_TEMP/ws50-secrets/admin-session-secret.txt"
+          cat > "$RUNNER_TEMP/ws50.env" <<EOF
+          POSTGRES_IMAGE=oldkoweb/postgres:16-alpine
+          RUNTIME_IMAGE=oldkoweb/domain-runtime:${GITHUB_SHA}
+          EDGE_IMAGE=oldkoweb/edge:${GITHUB_SHA}
+          POSTGRES_PASSWORD=ws50-ci-password
+          DATABASE_URL=postgresql://oldkoweb:ws50-ci-password@db:5432/oldkoweb
+          ADMIN_USERS_JSON_FILE=$RUNNER_TEMP/ws50-secrets/admin-users.json
+          ADMIN_SESSION_SECRET_FILE=$RUNNER_TEMP/ws50-secrets/admin-session-secret.txt
+          ADMIN_ALLOWED_ORIGINS=http://localhost:18088,https://admin.oldkoweb.com
+          ACCOUNT_ALLOWED_ORIGINS=http://localhost:18088,https://oldkoweb.com
+          PLAY_ALLOWED_ORIGINS=http://localhost:18088,https://play.oldkoweb.com
+          PLAY_ALLOWED_HOSTS=localhost,localhost:18088,play.oldkoweb.com
+          EDGE_PORT=18088
+          EOF
+          echo "CI_ADMIN_PASSWORD=$ADMIN_PASSWORD" >> "$GITHUB_ENV"
+          echo "COMPOSE_ENV=$RUNNER_TEMP/ws50.env" >> "$GITHUB_ENV"
+
+      - name: Start PostgreSQL and apply exact migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          compose=(docker compose --project-name ws50-domain-live-ci --env-file "$COMPOSE_ENV" -f deploy/domain-live/docker-compose.yml)
+          "${compose[@]}" config --quiet
+          "${compose[@]}" up -d --wait db
+          "${compose[@]}" run --rm --no-deps runtime node services/oldko-data/src/scripts/migrate.js
+          "${compose[@]}" run --rm --no-deps account-api node services/account-api/src/scripts/apply-rate-limit-schema.js
+
+      - name: Verify one PostgreSQL account/game/restart contract
+        shell: bash
+        env:
+          DATABASE_URL: postgresql://oldkoweb:ws50-ci-password@127.0.0.1:55432/oldkoweb
+        run: |
+          set -euo pipefail
+          docker rm -f ws50-pg-test >/dev/null 2>&1 || true
+          docker run -d --name ws50-pg-test -e POSTGRES_DB=oldkoweb -e POSTGRES_USER=oldkoweb -e POSTGRES_PASSWORD=ws50-ci-password -p 55432:5432 postgres:16-alpine >/dev/null
+          for i in $(seq 1 40); do docker exec ws50-pg-test pg_isready -U oldkoweb -d oldkoweb >/dev/null 2>&1 && break; sleep 1; done
+          DATABASE_URL="$DATABASE_URL" node services/oldko-data/src/scripts/migrate.js
+          DATABASE_URL="$DATABASE_URL" node services/account-api/src/scripts/apply-rate-limit-schema.js
+          DATABASE_URL="$DATABASE_URL" node --test tests/ko1298-session/postgres-composition.test.mjs
+          docker rm -f ws50-pg-test >/dev/null
+
+      - name: Start unified real services
+        shell: bash
+        run: |
+          set -euo pipefail
+          compose=(docker compose --project-name ws50-domain-live-ci --env-file "$COMPOSE_ENV" -f deploy/domain-live/docker-compose.yml)
+          "${compose[@]}" up -d --wait
+          curl --fail --header 'Host: oldkoweb.com' http://127.0.0.1:18088/ >/dev/null
+          curl --fail --header 'Host: admin.oldkoweb.com' http://127.0.0.1:18088/api/admin/health >/dev/null
+
+      - name: Real account + game + admin + CUTOFF integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          compose=(docker compose --project-name ws50-domain-live-ci --env-file "$COMPOSE_ENV" -f deploy/domain-live/docker-compose.yml)
+          "${compose[@]}" exec -T \
+            -e CI_ADMIN_PASSWORD="$CI_ADMIN_PASSWORD" \
+            -e CI_ADMIN_ORIGIN=http://localhost:18088 \
+            -e CI_ACCOUNT_ORIGIN=http://localhost:18088 \
+            runtime node services/domain-live-runtime/ci-real-smoke.mjs pre
+
+      - name: Restart services and prove persistence
+        shell: bash
+        run: |
+          set -euo pipefail
+          compose=(docker compose --project-name ws50-domain-live-ci --env-file "$COMPOSE_ENV" -f deploy/domain-live/docker-compose.yml)
+          "${compose[@]}" restart db
+          "${compose[@]}" restart runtime account-api gateway-auth gateway-game edge
+          "${compose[@]}" up -d --wait
+          "${compose[@]}" exec -T \
+            -e CI_ADMIN_PASSWORD="$CI_ADMIN_PASSWORD" \
+            -e CI_ADMIN_ORIGIN=http://localhost:18088 \
+            -e CI_ACCOUNT_ORIGIN=http://localhost:18088 \
+            runtime node services/domain-live-runtime/ci-real-smoke.mjs post
+
+      - name: Export package payload
+        if: steps.meta.outputs.package_ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="$RUNNER_TEMP/oldkoweb-domain-live-20261015-pc"
+          mkdir -p "$bundle/deploy/domain-live" "$bundle/images"
+          cp deploy/domain-live/docker-compose.yml deploy/domain-live/bootstrap.ps1 "$bundle/deploy/domain-live/"
+          cp coordination/ws50-domain-live-owner-pins.json "$bundle/SOURCE_PINS.json"
+          cp runtime/moradon_0826.smd.sha256 "$bundle/MORADON_SMD.sha256"
+          docker save oldkoweb/domain-runtime:${GITHUB_SHA} | gzip -9 > "$bundle/images/runtime.tar.gz"
+          docker save oldkoweb/edge:${GITHUB_SHA} | gzip -9 > "$bundle/images/edge.tar.gz"
+          docker save oldkoweb/postgres:16-alpine | gzip -9 > "$bundle/images/postgres.tar.gz"
+          runtime_id="$(docker image inspect oldkoweb/domain-runtime:${GITHUB_SHA} --format '{{.Id}}')"
+          edge_id="$(docker image inspect oldkoweb/edge:${GITHUB_SHA} --format '{{.Id}}')"
+          pg_id="$(docker image inspect oldkoweb/postgres:16-alpine --format '{{.Id}}')"
+          jq -n \
+            --arg release_id oldkoweb-domain-live-20261015 \
+            --arg child_candidate '${{ steps.meta.outputs.child_candidate }}' \
+            --arg package_commit "$GITHUB_SHA" \
+            --arg runtime_tag "oldkoweb/domain-runtime:${GITHUB_SHA}" --arg runtime_id "$runtime_id" \
+            --arg edge_tag "oldkoweb/edge:${GITHUB_SHA}" --arg edge_id "$edge_id" \
+            --arg pg_tag 'oldkoweb/postgres:16-alpine' --arg pg_id "$pg_id" \
+            '{release_id:$release_id,child_candidate:$child_candidate,package_commit:$package_commit,domain_live_verified:false,local_origin_verified:true,images:{runtime:{tag:$runtime_tag,image_id:$runtime_id},edge:{tag:$edge_tag,image_id:$edge_id},postgres:{tag:$pg_tag,image_id:$pg_id}}}' \
+            > "$bundle/BUNDLE_STATUS.json"
+          (cd "$bundle" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum | sed 's#  \./#  #' > SHA256SUMS)
+          cd "$RUNNER_TEMP"
+          zip -qr oldkoweb-domain-live-20261015-pc.zip oldkoweb-domain-live-20261015-pc
+          sha256sum oldkoweb-domain-live-20261015-pc.zip > oldkoweb-domain-live-20261015-pc.zip.sha256
+          cp oldkoweb-domain-live-20261015-pc.zip oldkoweb-domain-live-20261015-pc.zip.sha256 "$GITHUB_WORKSPACE/"
+
+      - name: Upload PC package
+        if: steps.meta.outputs.package_ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: oldkoweb-domain-live-20261015-pc
+          path: |
+            oldkoweb-domain-live-20261015-pc.zip
+            oldkoweb-domain-live-20261015-pc.zip.sha256
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Dump service logs on failure
+        if: failure()
+        shell: bash
+        run: |
+          if [[ -n "${COMPOSE_ENV:-}" && -f "$COMPOSE_ENV" ]]; then
+            docker compose --project-name ws50-domain-live-ci --env-file "$COMPOSE_ENV" -f deploy/domain-live/docker-compose.yml ps || true
+            docker compose --project-name ws50-domain-live-ci --env-file "$COMPOSE_ENV" -f deploy/domain-live/docker-compose.yml logs --no-color --tail=300 || true
+          fi
+
+  powershell51:
+    if: needs.verify.outputs.package_ready == 'true'
+    needs: verify
+    runs-on: windows-2022
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: oldkoweb-domain-live-20261015-pc
+      - name: Verify ZIP checksum and Windows PowerShell 5.1 package
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $line = Get-Content -Raw .\oldkoweb-domain-live-20261015-pc.zip.sha256
+          if ($line -notmatch '^([0-9a-fA-F]{64})') { throw 'Invalid outer checksum file' }
+          $actual = (Get-FileHash -Algorithm SHA256 .\oldkoweb-domain-live-20261015-pc.zip).Hash
+          if ($actual.ToLowerInvariant() -ne $matches[1].ToLowerInvariant()) { throw 'Outer ZIP checksum mismatch' }
+          Expand-Archive -Force .\oldkoweb-domain-live-20261015-pc.zip .\expanded
+          $root = (Resolve-Path .\expanded\oldkoweb-domain-live-20261015-pc).Path
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'deploy\domain-live\bootstrap.ps1') -PackageRoot $root -ValidateOnly
+          if ($LASTEXITCODE -ne 0) { throw "Windows PowerShell 5.1 validation failed: $LASTEXITCODE" }
+
+  publish:
+    if: needs.verify.outputs.package_ready == 'true'
+    needs: [verify, powershell51]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: oldkoweb-domain-live-20261015-pc
+      - name: Publish immutable PC package release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=oldkoweb-domain-live-20261015
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" oldkoweb-domain-live-20261015-pc.zip oldkoweb-domain-live-20261015-pc.zip.sha256 --clobber
+          else
+            gh release create "$tag" oldkoweb-domain-live-20261015-pc.zip oldkoweb-domain-live-20261015-pc.zip.sha256 \
+              --title 'OldKOWeb domain-live PC package 2026-10-15' \
+              --notes 'Checksum-verified local-origin package. Real public domain reachability is not claimed until DNS/tunnel acceptance passes.'
+          fi
