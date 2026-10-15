@@ -46,6 +46,7 @@ function install(GameSession) {
 
     this.state.accountId = accountId;
     this._transition(SESSION_STATES.AUTHENTICATED, 'credentials accepted');
+    this._startOwnershipHeartbeat?.();
     return [new Writer().u8(GAME.LOGIN).u8(await this.repo.getNation(accountId)).done()];
   };
 
