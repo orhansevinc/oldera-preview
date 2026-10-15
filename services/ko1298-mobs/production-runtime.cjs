@@ -181,8 +181,11 @@ class MobProductionRuntime {
     const snapshot = normalizePlayer(player);
     const previous = this.players.get(snapshot.id) ?? null;
     const previousKey = this.playerVisibilityKeys.get(snapshot.id) ?? null;
-    const nextKey = String(this.visibilityKey(snapshot));
-    if (!nextKey) throw new Error('ko1298-mobs: world.visibilityKey returned an empty key');
+    const rawKey = this.visibilityKey(snapshot);
+    if (rawKey === undefined || rawKey === null || String(rawKey).trim() === '') {
+      throw new Error('ko1298-mobs: world.visibilityKey returned an empty key');
+    }
+    const nextKey = String(rawKey);
 
     this.players.set(snapshot.id, snapshot);
     this.playerVisibilityKeys.set(snapshot.id, nextKey);
@@ -212,15 +215,18 @@ class MobProductionRuntime {
   }
 
   syncMobPosition(identifier, position, now = this.clock()) {
-    return this.service.syncPosition(identifier, finitePosition(position, 'mob.position'), requireTimestamp(now));
+    const sourceIdentity = this.#sourceIdentity(identifier);
+    return this.service.syncPosition(sourceIdentity, finitePosition(position, 'mob.position'), requireTimestamp(now));
   }
 
   reportMovementOutcome(identifier, outcome, now = this.clock()) {
-    return this.service.reportMovementOutcome(identifier, outcome, requireTimestamp(now));
+    const sourceIdentity = this.#sourceIdentity(identifier);
+    return this.service.reportMovementOutcome(sourceIdentity, outcome, requireTimestamp(now));
   }
 
   clearTarget(identifier, now = this.clock(), reason = 'external-clear') {
-    return this.service.clearTarget(identifier, requireTimestamp(now), reason);
+    const sourceIdentity = this.#sourceIdentity(identifier);
+    return this.service.clearTarget(sourceIdentity, requireTimestamp(now), reason);
   }
 
   getNearby(query) {
@@ -295,6 +301,10 @@ class MobProductionRuntime {
       mobCount: this.service.stats().mobCount,
       timerModel: 'single-central-timer',
     });
+  }
+
+  #sourceIdentity(identifier) {
+    return this.service.visibilitySnapshot(identifier).sourceIdentity;
   }
 
   #emit(kind, payload) {
