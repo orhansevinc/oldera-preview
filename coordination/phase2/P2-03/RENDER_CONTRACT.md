@@ -24,7 +24,7 @@ P2-03 publishes the read-only runtime object `window.__OLDKO_RENDER_METRICS__`; 
 
 ## Resize and projection
 
-`tools/p2_03_patch_openko_render.py` removes the WS05 Emscripten-only 1024x768 option lock. Every browser frame it compares the current canvas CSS rectangle with the last logical surface. On change it:
+`tools/p2_03_patch_openko_render.py` removes the WS05 Emscripten-only 1024x768 option lock while preserving the accepted browser window/cursor behavior. Every browser frame it compares the current canvas CSS rectangle with the last logical surface. On change it:
 
 - updates the Emscripten canvas backing store;
 - updates the engine logical width/height;
@@ -73,7 +73,7 @@ WebGL does not expose reliable exact per-process GPU VRAM usage; the handoff mus
 
 ## Required matrix
 
-`qa/p2-03/render_probe.mjs` is the acceptance harness for the integrated candidate. It covers:
+`tools/p2_03_render_probe.mjs` is the renderer-owned acceptance harness for the integrated candidate. It covers:
 
 - physical display models 1366x768 and 1920x1080;
 - Windows/browser scale models 100%, 125%, 150%;
