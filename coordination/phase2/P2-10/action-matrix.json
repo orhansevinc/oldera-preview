@@ -1,0 +1,223 @@
+{
+  "workstream": "P2-10",
+  "engine_source": "luisfelipe18/old-school-openko@97eb0ea20207afc0c360bfed6915113572711be3",
+  "status_legend": {
+    "PASS": "Source/contract behavior is proven and does not depend on a missing provider.",
+    "BLOCKED": "Native client path exists, but authoritative provider/build/browser proof is unavailable; no success may be synthesized.",
+    "FAIL": "Observed behavior contradicts the contract."
+  },
+  "controls": [
+    {
+      "control": "Map / minimap",
+      "ui_or_key_id": "KM_TOGGLE_MINIMAP",
+      "native_ui": "CUIStateBar::minimap",
+      "handler": "CGameProcMain::CommandToggleUIMiniMap",
+      "server_message": null,
+      "state_response": "local native visibility state",
+      "asset": "native UI resource selected by client UI tables",
+      "status": "PASS",
+      "evidence": "GameProcMain source dispatches KM_TOGGLE_MINIMAP to CommandToggleUIMiniMap."
+    },
+    {
+      "control": "Inventory / equipment",
+      "ui_or_key_id": "KM_TOGGLE_INVENTORY",
+      "native_ui": "CUIInventory",
+      "handler": "CGameProcMain::CommandToggleUIInventory",
+      "server_message": "item transaction requests owned by P2-08",
+      "state_response": "MsgRecv_ItemMove / MsgRecv_ItemWeightChange / MsgRecv_ItemRepair / MsgRecv_ItemCountChange / MsgRecv_ItemDestroy",
+      "asset": "item icon filename from authoritative item tables; native inventory UI resource",
+      "status": "BLOCKED",
+      "blocker": "P2-08 handoff absent; browser end-to-end proof unavailable.",
+      "evidence": "Pinned source constructs CUIInventory and mutates it only from received item results."
+    },
+    {
+      "control": "Character state",
+      "ui_or_key_id": "KM_TOGGLE_STATE",
+      "native_ui": "CUIVarious state page",
+      "handler": "CGameProcMain::CommandToggleUIState",
+      "server_message": "point allocation request owned by P2-07",
+      "state_response": "MsgRecv_MyInfo_PointChange",
+      "asset": "native CUIVarious resource",
+      "status": "BLOCKED",
+      "blocker": "P2-07 handoff absent; point mutation must stay server-authoritative."
+    },
+    {
+      "control": "Skill tree",
+      "ui_or_key_id": "KM_TOGGLE_SKILL",
+      "native_ui": "CUISkillTreeDlg",
+      "handler": "CGameProcMain::CommandToggleUISkillTree",
+      "server_message": "skill/progression request owned by P2-07",
+      "state_response": "MsgRecv_SkillChange / MsgRecv_MagicProcess",
+      "asset": "native skill tree resource + skill icon table",
+      "status": "BLOCKED",
+      "blocker": "P2-07 skill/cooldown/target/error handoff absent."
+    },
+    {
+      "control": "Hotbar drag/drop and keys",
+      "ui_or_key_id": "DIK_1..DIK_8, DIK_PRIOR/DIK_NEXT plus native icon drag",
+      "native_ui": "CUIHotKeyDlg",
+      "handler": "CUIHotKeyDlg + CGameProcMain::ProcessUIKeyInput",
+      "server_message": "skill use request owned by P2-07",
+      "state_response": "MsgRecv_MagicProcess and authoritative cooldown/error state from P2-07",
+      "asset": "skill icon resolved through native client tables",
+      "status": "BLOCKED",
+      "blocker": "P2-07 handoff absent; cannot fabricate cooldown, targeting or success feedback."
+    },
+    {
+      "control": "Command menu",
+      "ui_or_key_id": "KM_TOGGLE_CMDLIST",
+      "native_ui": "CUICmd / CUICmdList / CUICmdEdit",
+      "handler": "CGameProcMain::CommandToggleCmdList / OpenCmdEdit",
+      "server_message": "depends on selected command; authorization remains server-side",
+      "state_response": "authoritative response of selected command",
+      "asset": "native command UI resource",
+      "status": "PASS",
+      "evidence": "Pinned source has a distinct GM panel gated by iAuthority == AUTHORITY_MANAGER; command list is a separate native UI path.",
+      "security_rule": "Opening or navigating CUICmdList never grants GM authority."
+    },
+    {
+      "control": "Exit",
+      "ui_or_key_id": "ESC / window close",
+      "native_ui": "CUIExitMenu",
+      "handler": "native exit menu / CGameProcMain exit timer path",
+      "server_message": "logout/exit flow owned by game server/session authority",
+      "state_response": "native exit countdown/cancel/close state",
+      "asset": "native exit UI resource",
+      "status": "BLOCKED",
+      "blocker": "Fresh P2-00 WASM build and real-browser close/ESC proof required."
+    },
+    {
+      "control": "NPC dialog",
+      "ui_or_key_id": "NPC click/event",
+      "native_ui": "CUINPCEvent",
+      "handler": "CGameProcMain::MsgRecv_NpcEvent",
+      "server_message": "NPC request/routing owned by P2-05",
+      "state_response": "authoritative NPC event response",
+      "asset": "native NPC event UI resource",
+      "status": "BLOCKED",
+      "blocker": "P2-05 routing contract not pinned."
+    },
+    {
+      "control": "NPC shop",
+      "ui_or_key_id": "NPC transaction action",
+      "native_ui": "CUITransactionDlg",
+      "handler": "CGameProcMain::DoCommercialTransaction",
+      "server_message": "shop transaction owned by P2-08, entry routing by P2-05",
+      "state_response": "MsgRecv_ItemTradeStart / MsgRecv_ItemTradeResult and item/gold updates",
+      "asset": "native transaction UI + item icons",
+      "status": "BLOCKED",
+      "blocker": "P2-05/P2-08 authoritative handoffs absent."
+    },
+    {
+      "control": "Inn / storage",
+      "ui_or_key_id": "NPC inn/warehouse action",
+      "native_ui": "CUIInn / CUIWareHouseDlg",
+      "handler": "native warehouse/inn UI",
+      "server_message": "warehouse request owned by P2-08; entry routing by P2-05",
+      "state_response": "MsgRecv_WareHouse / MsgRecv_WareHouseOpen",
+      "asset": "native inn/warehouse resource + item icons",
+      "status": "BLOCKED",
+      "blocker": "P2-05/P2-08 authoritative handoffs absent."
+    },
+    {
+      "control": "Quest",
+      "ui_or_key_id": "NPC quest action",
+      "native_ui": "CUIQuestMenu / CUIQuestTalk",
+      "handler": "native quest menu/talk dispatch",
+      "server_message": "quest/NPC authority owned by provider",
+      "state_response": "server-driven quest/NPC state",
+      "asset": "native quest resources",
+      "status": "BLOCKED",
+      "blocker": "No authoritative P2 quest/NPC contract pinned; fake completion forbidden."
+    },
+    {
+      "control": "Upgrade / repair",
+      "ui_or_key_id": "NPC upgrade/repair action",
+      "native_ui": "CUIUpgradeSelect / CUIItemUpgrade / CUIRepairTooltipDlg",
+      "handler": "native item upgrade/repair UI",
+      "server_message": "upgrade/repair owned by P2-08; NPC entry routing by P2-05",
+      "state_response": "MsgRecv_ItemUpgrade / MsgRecv_ItemRepair",
+      "asset": "native upgrade/repair resources + item icons",
+      "status": "BLOCKED",
+      "blocker": "P2-05/P2-08 authoritative handoffs absent."
+    },
+    {
+      "control": "Loot",
+      "ui_or_key_id": "drop/bundle click",
+      "native_ui": "CUIDroppedItemDlg",
+      "handler": "native dropped-item dialog",
+      "server_message": "loot request owned by P2-08",
+      "state_response": "MsgRecv_ItemBundleDrop / MsgRecv_ItemBundleOpen / MsgRecv_ItemDroppedGetResult",
+      "asset": "native dropped-item resource + item icons",
+      "status": "BLOCKED",
+      "blocker": "P2-08 authoritative handoff absent."
+    },
+    {
+      "control": "Player trade",
+      "ui_or_key_id": "trade command/invite",
+      "native_ui": "CSubProcPerTrade / personal trade dialogs",
+      "handler": "native per-trade subprocess",
+      "server_message": "trade mutation owned by P2-08",
+      "state_response": "MsgRecv_PerTrade",
+      "asset": "native personal-trade resources + item icons",
+      "status": "BLOCKED",
+      "blocker": "P2-08 authoritative handoff absent."
+    },
+    {
+      "control": "Invite / party",
+      "ui_or_key_id": "party command/invite",
+      "native_ui": "CUIPartyOrForce / CUIPartyBBS",
+      "handler": "native party UI dispatch",
+      "server_message": "party/invite owned by P2-09",
+      "state_response": "MsgRecv_PartyOrForce",
+      "asset": "native party resources",
+      "status": "BLOCKED",
+      "blocker": "P2-09 authoritative handoff absent."
+    },
+    {
+      "control": "Clan",
+      "ui_or_key_id": "clan command/UI",
+      "native_ui": "CUIKnightsOperation / CUICreateClanName",
+      "handler": "native Knights UI dispatch",
+      "server_message": "clan/social authority owned by P2-09",
+      "state_response": "MsgRecv_Knights and MsgRecv_Knights_* handlers",
+      "asset": "native clan resources",
+      "status": "BLOCKED",
+      "blocker": "P2-09 authoritative handoff absent."
+    },
+    {
+      "control": "Chat / whisper",
+      "ui_or_key_id": "chat edit focus / command edit",
+      "native_ui": "CUIChat / CUIChat2 / CUICmdEdit",
+      "handler": "native focused CN3UIEdit and chat dispatch",
+      "server_message": "chat/whisper owned by P2-09",
+      "state_response": "CGameProcMain::MsgRecv_Chat",
+      "asset": "native chat resource",
+      "status": "BLOCKED",
+      "blocker": "P2-09 authoritative handoff absent for end-to-end chat proof.",
+      "local_input_evidence": "World movement branch is guarded by !IsUIKeyOperated() && CN3UIBase::GetFocusedEdit() == nullptr."
+    },
+    {
+      "control": "Mouse/camera and world click isolation",
+      "ui_or_key_id": "native mouse buttons/motion/wheel",
+      "native_ui": "CUIManager + CGameProcMain mouse handlers",
+      "handler": "OnMouseMove / OnMouseLbtnDown / OnMouseLBtnPress / OnMouseRBtnPress",
+      "server_message": "only after native UI declines the click and a world action is produced",
+      "state_response": "world/server response",
+      "asset": "native cursors and UI hit regions",
+      "status": "BLOCKED",
+      "blocker": "P2-03 coordinate handoff absent and fresh real-browser pointer-lock/UI-leak evidence required."
+    },
+    {
+      "control": "Focus loss / fullscreen",
+      "ui_or_key_id": "SDL window focus events / ALT+ENTER / ESC",
+      "native_ui": "browser SDL window",
+      "handler": "P2-10 browser input lifecycle patch",
+      "server_message": null,
+      "state_response": "clear held input on focus loss; preserve native ESC path; fullscreen only from user gesture",
+      "asset": null,
+      "status": "BLOCKED",
+      "blocker": "Patch is source-ready but needs P2-00 fresh C++/WASM rebuild and browser run."
+    }
+  ]
+}
