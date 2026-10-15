@@ -1,0 +1,13 @@
+'use strict';
+const { trunc } = require('./stat-calculator');
+function createCombatState(){return {attackReadyAt:0,cooldowns:new Map(),effects:new Map(),deathSequence:0};}
+function ensureCombatState(entity){if(!entity.combatState)entity.combatState=createCombatState();return entity.combatState;}
+function effectKey(effect){return `${effect.kind}:${effect.buffType??effect.skillId}:${effect.sourceId??''}`;}
+function addEffect(entity,effect,{replace=false}={}){const state=ensureCombatState(entity);const key=effectKey(effect);if(state.effects.has(key)&&!replace)return {ok:false,reason:'EFFECT_ALREADY_ACTIVE',existing:state.effects.get(key)};state.effects.set(key,Object.freeze({...effect,key}));return {ok:true,effect:state.effects.get(key)};}
+function removeEffect(entity,key){return ensureCombatState(entity).effects.delete(key);}
+function clearEffectsOnDeath(entity){const state=ensureCombatState(entity);const removed=[...state.effects.values()];state.effects.clear();return removed;}
+function processEffects(entity,now,{onTick=null,onExpire=null}={}){const state=ensureCombatState(entity);const events=[];const ordered=[...state.effects.values()].sort((a,b)=>(a.appliedAt-b.appliedAt)||String(a.key).localeCompare(String(b.key)));for(const effect of ordered){let current=state.effects.get(effect.key);if(!current)continue;if(current.kind==='TYPE3_DURATION'&&current.nextTickAt!=null){while(current.nextTickAt<=now&&current.nextTickAt<=current.expiresAt){const delta=trunc(current.tickAmount);const tick={type:'EFFECT_TICK',skillId:current.skillId,sourceId:current.sourceId,targetId:entity.id,delta,at:current.nextTickAt};events.push(tick);if(onTick)onTick(entity,tick,current);current=Object.freeze({...current,nextTickAt:current.nextTickAt+current.intervalMs});state.effects.set(current.key,current);if(entity.lifeState==='DEAD'||entity.hp<=0)break;}}
+if(current.expiresAt!=null&&current.expiresAt<=now&&state.effects.has(current.key)){state.effects.delete(current.key);const expired={type:'EFFECT_EXPIRED',skillId:current.skillId,targetId:entity.id,key:current.key,at:current.expiresAt};events.push(expired);if(onExpire)onExpire(entity,expired,current);}}
+return events;}
+function snapshotCombatState(entity,{includeCooldowns=false}={}){const s=ensureCombatState(entity);return Object.freeze({attackReadyAt:s.attackReadyAt,effects:[...s.effects.values()].map(e=>({...e})),cooldowns:includeCooldowns?[...s.cooldowns.entries()]:[],cooldownPersistence:includeCooldowns?'EXPLICIT':'TRANSIENT_BY_DEFAULT'});}
+module.exports={addEffect,clearEffectsOnDeath,createCombatState,effectKey,ensureCombatState,processEffects,removeEffect,snapshotCombatState};
