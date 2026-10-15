@@ -37,9 +37,11 @@ if($manifest.compose.env_file){
     $composeArgs+=@('--env-file',$envPath)
 }
 $runArgs=@($composeArgs)+@('run','--rm','--no-deps')
+if($plan.runner.env){
 foreach($prop in @($plan.runner.env.PSObject.Properties)){
     if($prop.Name -match '(?i)(password|secret|token|credential|api[_-]?key)'){throw "Secret-bearing migration env is forbidden in plan: $($prop.Name)"}
     $runArgs+=@('-e',([string]$prop.Name+'='+[string]$prop.Value))
+}
 }
 $runArgs+=@([string]$plan.runner.service)
 foreach($part in @($plan.runner.command)){$runArgs+=[string]$part}
