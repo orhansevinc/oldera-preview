@@ -14,7 +14,8 @@ const { chromium } = require('playwright');
   const lines=[]; const sockets=[]; const errors=[];
   const browser=await chromium.launch({headless:true,args:[
     '--no-sandbox','--disable-dev-shm-usage','--use-angle=swiftshader','--enable-unsafe-swiftshader','--enable-webgl','--ignore-gpu-blocklist',
-    '--host-resolver-rules=MAP play.oldkoweb.com 127.0.0.1'
+    '--host-resolver-rules=MAP play.oldkoweb.com 127.0.0.1',
+    '--unsafely-treat-insecure-origin-as-secure=http://play.oldkoweb.com:18088'
   ]});
   const page=await browser.newPage({viewport:{width:1024,height:768}});
   page.on('console',m=>{const t=m.text();lines.push(t);console.log(`[console:${m.type()}] ${t}`);});
