@@ -1,49 +1,63 @@
 {
-  "schema_version": "oldkoweb-domain-live-handoff/v1",
+  "schema_version": "oldkoweb-domain-live-handoff/v2",
   "release_id": "oldkoweb-domain-live-20261015",
   "owner": "WS50",
   "branch": "ws50-integration-rehearsal",
-  "source_commit": "396a765384f87fd97159204fd1eefc77702e6624",
+  "source_commit": "ffb2b8dc3e2a86a136fb13deddd4ea551c031939",
+  "child_candidate": "ffb2b8dc3e2a86a136fb13deddd4ea551c031939",
+  "status": "LOCAL_ORIGIN_VERIFIED_PACKAGE_PUBLICATION_PENDING",
+  "domain_live_verified": false,
+  "local_origin_verified": true,
   "input_pins": {
-    "parent_provider_set": "WS50-C5@sha256:7ac3b8a4c06b67e52b8d18518ef8c82209a60c6101c33609a4c16e64d84f119e",
-    "website_source": "5f9a4f0ccd3d7d06e8b407bfca35266f1b2d3516",
-    "website_handoff": "8370de2ebfdfd319cf8a719da79cbdef9853fd2f",
-    "ws39": "8a80a506d813dab9c6777275e3fa39c63d248992",
-    "ws10_c5_run": "38604174659",
-    "client_artifact": "11915666463",
-    "client_digest": "sha256:f749750fc5bb0249a67b712bd4e1a03847773d8845fd209508b8c95f6c447a83"
+    "WEBSITE": "dcabc6805823fb5e0613c9de7d3225f268caaf26",
+    "WS07": "eaac4700c3535c449f6a2b7d20c925bc61382c35",
+    "WS13": "e53966d9f882d98e2a5b4746262f38355dfda848",
+    "WS03": "77e001bb6f43618883b626ae403d2fa134065c0f",
+    "WS08": "944f704f55eb5e9656b8f77d9a2f5f87d136e270",
+    "WS28": "c1ef0f6e84456cb38edd2f3ce2b11ca5ff7de99a",
+    "WS02": "1738f60945b24e00bdd2266e6600b5c0cf3c64cf",
+    "WS14": "ed5f806ce7505f4dfae406e4164735def63b6c86",
+    "WS15": "ce9bed13b8d45c32ff0592595aa3a0d1e7b3964d",
+    "WS16": "5ed48ff32187000312652838674388df52fc3fb7",
+    "WS25": "18c9e9b8439fef88fc93d74bfec7981b0cb41958",
+    "WS09_BOOTSTRAP": "9d07509558961c9f63e3eda4667a375488e746f5",
+    "moradon_smd": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:assets/Server/MAP/moradon_0826.smd"
   },
-  "contracts": [
-    {"commit": "396a765384f87fd97159204fd1eefc77702e6624", "path": "tools/ws50_integration/domain_live.py"},
-    {"commit": "396a765384f87fd97159204fd1eefc77702e6624", "path": ".github/workflows/ws50-domain-live.yml"},
-    {"commit": "8851d3e6487e741e42264b643d98945714ec382c", "path": "integration-rehearsal/domain-live/oldkoweb-domain-live-20261015.json"}
+  "composition": {
+    "postgres": "shared oldko PostgreSQL schema/migrations",
+    "account": "real WS13 account API",
+    "game": "real WS03 KO1298 persistent session/runtime",
+    "admin": "real WS08 PostgreSQL admin API",
+    "runtime_authority": "WS50 domain-live bridge over authoritative WS03 SessionAuthority",
+    "command_bus": "WS50 downstream composition preserving WS28 apply-proof semantics",
+    "frontend": "accepted website/account and admin v10 preserved",
+    "moradon_scope": "accepted Moradon/NPC/135 mob/movement milestone; no new gameplay"
+  },
+  "verification": {
+    "workflow": "WS50 domain-live PC package",
+    "pre_package_run_id": 38739645560,
+    "pre_package_run_head": "ffb2b8dc3e2a86a136fb13deddd4ea551c031939",
+    "pre_package_result": "success",
+    "real_account_game_admin_cutoff": "PASS",
+    "service_restart_persistence": "PASS",
+    "postgres_one_db_contract": "PASS",
+    "owner_test_suites": "PASS",
+    "powershell_5_1": "pending package-enabled rerun",
+    "package_checksum": "pending package-enabled rerun"
+  },
+  "package": {
+    "workflow": ".github/workflows/ws50-domain-live-pc-package.yml",
+    "bootstrap": "deploy/domain-live/bootstrap.ps1",
+    "compose": "deploy/domain-live/docker-compose.yml",
+    "release_tag": "oldkoweb-domain-live-20261015",
+    "artifact_name": "oldkoweb-domain-live-20261015-pc",
+    "checksummed": true,
+    "contains_real_admin": true,
+    "test_fixture_default": false
+  },
+  "remaining_external_gates": [
+    "DNS/tunnel/host authorization and real public-domain reachability",
+    "fresh WS10 live-domain acceptance against this exact child candidate"
   ],
-  "artifacts": [
-    {
-      "name": "ws50-domain-live-discovery-1",
-      "workflow_run_id": 38654219214,
-      "artifact_id": 11935439132,
-      "digest": "sha256:4c267dc523d2d0c4057603843b086700d1ba21d6a5aa431e938e463cf576bab3"
-    },
-    {
-      "name": "existing-c5-browser-client",
-      "artifact_id": 11915666463,
-      "digest": "sha256:f749750fc5bb0249a67b712bd4e1a03847773d8845fd209508b8c95f6c447a83",
-      "reused_without_rebuild": true
-    }
-  ],
-  "checks": [
-    {
-      "name": "WS50 OldKOWeb Domain Live Coordinator / owner-handoff-discovery",
-      "url": "https://github.com/orhansevinc/oldera-preview/actions/runs/38654219214",
-      "tested_sha": "396a765384f87fd97159204fd1eefc77702e6624",
-      "result": "SUCCESS"
-    }
-  ],
-  "blockers": [
-    {"id": "UPSTREAM_DOMAIN_LIVE_HANDOFFS_MISSING", "owner": "WEBSITE/WS13/WS07/WS03/WS08/WS09/WS10", "required_action": "Each owner must publish coordination/handoffs/domain-live/<OWNER>.json with an exact tested source_commit and real Actions run/job URL."},
-    {"id": "DEFAULT_BRANCH_BOOTSTRAP_PR_OPEN", "owner": "WS50", "required_action": "Review PR #2; do not bypass main protections. Default-branch registration remains pending until that PR is merged through normal policy."},
-    {"id": "WS09_PERSISTENT_HOST_TARGET_MISSING", "owner": "WS09", "required_action": "Provide and verify an authorized persistent production host target before DNS/TLS/deploy."},
-    {"id": "WS10_DOMAIN_ACCEPTANCE_ENTRYPOINT_MISSING", "owner": "WS10", "required_action": "Publish a domain-live acceptance handoff and registered exact-candidate browser/domain gate; do not reuse a hard-coded C5 build as proof of the changed persistent composition."}
-  ]
+  "claim": "The immutable local-origin child candidate is pinned and its real account/game/admin integration plus restart persistence passed. Public oldkoweb.com/play.oldkoweb.com/admin.oldkoweb.com reachability is not claimed until DNS/tunnel acceptance passes."
 }
