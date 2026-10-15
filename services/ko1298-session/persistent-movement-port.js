@@ -1,5 +1,24 @@
 'use strict';
 
+function isMovementPolicyRejection(error) {
+  return error?.name === 'MovementRejectedError' && typeof error?.code === 'string';
+}
+
+function nonFatalMovementRejection(error) {
+  return Object.freeze({
+    accepted: false,
+    rejected: true,
+    disconnect: false,
+    rejection: Object.freeze({
+      category: 'MOVEMENT_POLICY',
+      code: error.code,
+      details: error.details && typeof error.details === 'object'
+        ? Object.freeze({ ...error.details })
+        : Object.freeze({}),
+    }),
+  });
+}
+
 class PersistentMovementPort {
   constructor({ movement, repository, worldSession }) {
     if (!movement || !repository || !worldSession) throw new TypeError('movement, repository and worldSession are required');
@@ -14,13 +33,20 @@ class PersistentMovementPort {
   getPositionSnapshot(sessionId) { return this.movement.getPositionSnapshot(sessionId); }
   getEntityPositionSnapshot(entityId) { return this.movement.getEntityPositionSnapshot(entityId); }
   hasSession(sessionId) { return this.movement.hasSession(sessionId); }
-  teleport(sessionId, input) { return this.movement.teleport(sessionId, input); }
+  resetMovementBaseline(sessionId, input) { return this.movement.teleport(sessionId, input); }
+  teleport(sessionId, input) { return this.resetMovementBaseline(sessionId, input); }
   disconnect(sessionId) { return this.movement.disconnect(sessionId); }
   cleanup(sessionId) { return this.disconnect(sessionId); }
 
   async handleMovePacket(sessionId, payload, context = {}) {
     const previous = this.movement.getState(sessionId);
-    const outcome = await this.movement.handleMovePacket(sessionId, payload, context);
+    let outcome;
+    try {
+      outcome = await this.movement.handleMovePacket(sessionId, payload, context);
+    } catch (error) {
+      if (isMovementPolicyRejection(error)) return nonFatalMovementRejection(error);
+      throw error;
+    }
     if (!outcome?.accepted || outcome.deduplicated || !outcome.state) return outcome;
 
     const fallbackSocketId = Number(String(sessionId).split(':').pop());
@@ -51,8 +77,13 @@ class PersistentMovementPort {
     return outcome;
   }
 
-  handleRotatePacket(sessionId, payload, context = {}) {
-    return this.movement.handleRotatePacket(sessionId, payload, context);
+  async handleRotatePacket(sessionId, payload, context = {}) {
+    try {
+      return await this.movement.handleRotatePacket(sessionId, payload, context);
+    } catch (error) {
+      if (isMovementPolicyRejection(error)) return nonFatalMovementRejection(error);
+      throw error;
+    }
   }
 
   getDiagnostics() {
@@ -61,7 +92,7 @@ class PersistentMovementPort {
 
   #rollback(sessionId, previous) {
     if (!previous) return;
-    this.movement.teleport(sessionId, {
+    this.resetMovementBaseline(sessionId, {
       zoneId: previous.zoneId,
       position: previous.position,
       headingRaw: previous.headingRaw,
@@ -70,4 +101,4 @@ class PersistentMovementPort {
   }
 }
 
-module.exports = { PersistentMovementPort };
+module.exports = { PersistentMovementPort, isMovementPolicyRejection, nonFatalMovementRejection };
