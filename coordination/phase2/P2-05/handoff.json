@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "workstream": "P2-05",
+  "status": "BLOCKED",
+  "branch": "phase2/05-npc",
+  "base": {
+    "branch": "ws50-integration-rehearsal",
+    "sha": "50ecabec15bd358d222a01891ca31359f3a928b0"
+  },
+  "codeSha": "10b16c6bfc18ecf65100029f8a6c9b493ff12fd6",
+  "continuedFrom": [
+    {"workstream":"WS16","branch":"ws16-npc-world","sha":"5ed48ff32187000312652838674388df52fc3fb7"},
+    {"workstream":"WS23","branch":"ws23-quest-events","sha":"6073b687bda3f1006a37cc97ee873c36a2d4e7a8"}
+  ],
+  "rootCause": {
+    "chain": "click -> WIZ_NPC_EVENT -> game session -> npc router -> handler -> client packet",
+    "break": "production-server composed npcWorld but did not inject npcRouter into gameOptions, so session _handleNpcPacket returned [] before any NPC handler ran",
+    "secondaryBreak": "session actor context carries position as position.{x,y,z}, while WS16 router range validation expects flat x/z; production adapter now normalizes it",
+    "responseBreak": "WS16 router nests handler results under outcome.result; production adapter promotes nested Buffer/packets to clientPackets so the existing session response path can transmit them"
+  },
+  "npcScope": {
+    "targetMapsPresentAtBase": [{"zoneId":21,"zoneName":"Moradon","catalog":"world-data/npc/moradon.json","templateCount":31}],
+    "exhaustiveRegister": "node scripts/phase2/p2-05-npc-scope.js",
+    "registerGuarantee": "one generated record per canonical template plus every canonical spawn anchor; source/role/route/prerequisites/result/status/blocker included",
+    "matrix": [
+      {"service":"merchant","templateSids":[13001,13002,13003,13005,13006,13008,22301],"status":"WIRED_WINDOW_OPEN","handler":"WIZ_TRADE_NPC 0x25 + server-authored u32 sellingGroup","mutationOwner":"P2-08"},
+      {"service":"repair+tinker","templateSids":[13004,13007],"status":"WIRED_WINDOW_OPEN","handler":"WIZ_REPAIR_NPC 0x3A + server-authored u32 sellingGroup","mutationOwner":"P2-08"},
+      {"service":"inn/storage","templateSids":[12000],"status":"WIRED_INN_LANDING","handler":"WIZ_WAREHOUSE 0x45 / N3_SP_WARE_INN 0x10","mutationOwner":"P2-08"},
+      {"service":"special-store","templateSids":[16071],"status":"BLOCKED_SOURCE","blocker":"SELITH_SPECIAL_STORE_HANDLER_UNVERIFIED"},
+      {"service":"quest/event","templateSids":[13009,13011,13012,13013,13014,13015,14301,16011,16079,16081,16082,16083,16092],"status":"BLOCKED_SOURCE_AND_TRANSACTION","source":"Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:assets/Server/QUESTS/21.evt","blockers":["ZONE21_EVT_RUNTIME_BINDING_MISSING","P2-11_PRODUCTION_QUEST_TRANSACTION_MISSING","P2-08_ITEM_TURNIN_REWARD_MUTATION_MISSING","P2-10_WIZ_SELECT_MSG_UI_COMPOSITION_MISSING"]},
+      {"service":"gate/teleport","templateSids":[15002],"status":"BLOCKED_SOURCE_MISMATCH","blocker":"catalog role=gate/type=136 but pinned client enum type 28=NPC_TELEPORT_GATE and type 136=NPC_COLISEUM_ARTES","owner":"P2-04"},
+      {"service":"warehouse-name mismatch","templateSids":[16047],"status":"BLOCKED_SOURCE_MISMATCH","blocker":"name says Warehouse Keeper/type=29 but pinned client enum type 31=NPC_WAREHOUSE and type 29=NPC_OPERATOR"},
+      {"service":"static/non-interactive","templateSids":[11021,16048,16049,16050,21021],"status":"NON_INTERACTIVE"}
+    ],
+    "catalogCapabilitiesAbsentInCurrentMoradon": ["NPC_ANVIL type 24","master types 73/74/75/76","nation-change service"],
+    "note": "absence above is a statement about the current checked-in Moradon catalog only; future P2-04 map catalogs must be re-run through the same exhaustive register"
+  },
+  "questEventState": {
+    "carriedForward": "WS23 QuestService/EventScriptExecutor/NpcEventRouter",
+    "supports": ["min/max level eligibility","class eligibility","nation eligibility","prerequisite quests","accept","server-authored progress events","kill/target counting via objective eventType+targetId","repeatable/non-repeatable completion","abandon policy","idempotent completion reward key","bounded event scripts"],
+    "newP205Guard": "OfferedOptionLedger binds a client u8 option index to the exact server-offered NPC/action and consumes it once; replay or different-NPC selection is rejected",
+    "productionRule": "no official quest NPC is marked interactionVerified until zone 21 EVT binding and P2-08/P2-11 mutation authorities are composed"
+  },
+  "serverValidation": {
+    "distanceMeters": 11,
+    "checks": ["NPC exists","same zone","NPC enabled/alive","interactionVerified","authoritative distance","server-authored sellingGroup","server-authored quest eligibility level/nation/class through WS23 bridge","option was actually offered by server"],
+    "clientCannotAuthor": ["price","sellingGroup","reward","quest result","event id","option action","zone destination"]
+  },
+  "p210Contract": "coordination/phase2/P2-05/P2-10-CONTRACT.json",
+  "dependencies": [
+    {"owner":"P2-08","need":"buy/sell/potion/storage/repair/anvil item+currency mutation","status":"BLOCKING_MUTATIONS"},
+    {"owner":"P2-11","need":"durable/CAS quest state, atomic item turn-in+transition, idempotent reward gateway, authoritative player snapshot","status":"BLOCKING_QUEST_PRODUCTION"},
+    {"owner":"P2-04","need":"real zone transition authority for gate/teleport","status":"BLOCKING_GATE"},
+    {"owner":"P2-07","need":"class/master/skill mutation authority when such NPCs appear","status":"DEPENDENCY_DECLARED"},
+    {"owner":"P2-10","need":"existing-client WIZ_SELECT_MSG dispatch/encode plus UIQuestMenu/QUEST_TALK/QUEST_MENU asset verification","status":"BLOCKING_QUEST_UI"}
+  ],
+  "changedFiles": [
+    "coordination/phase2/P2-05/DEPENDENCIES.md",
+    "coordination/phase2/P2-05/P2-10-CONTRACT.json",
+    "scripts/phase2/p2-05-npc-scope.js",
+    "services/ko1298-npc/production.js",
+    "services/ko1298-npc/quest-bridge.js",
+    "services/ko1298-quests/QUEST_MODEL.md",
+    "services/ko1298-quests/package.json",
+    "services/ko1298-quests/src/errors.js",
+    "services/ko1298-quests/src/events.js",
+    "services/ko1298-quests/src/index.js",
+    "services/ko1298-quests/src/loader.js",
+    "services/ko1298-quests/src/model.js",
+    "services/ko1298-quests/src/repository.js",
+    "services/ko1298-quests/src/rewards.js",
+    "services/ko1298-quests/src/service.js",
+    "services/ko1298-session/production-server.js",
+    "tests/ko1298-npc/p2-05-production.test.js",
+    "tests/ko1298-quests/quest-service.test.js"
+  ],
+  "testsAndEvidence": {
+    "local": [
+      {"command":"node --check services/ko1298-npc/production.js services/ko1298-npc/quest-bridge.js services/ko1298-session/production-server.js","result":"PASS"},
+      {"command":"node --test tests/ko1298-npc/p2-05-production.test.js against the real WS16 router/protocol copied from the pinned base","result":"10/10 PASS before the final canonical-catalog assertion was added"},
+      {"command":"node --check tests/ko1298-npc/p2-05-production.test.js after canonical-catalog assertion","result":"PASS"}
+    ],
+    "canonicalCatalogAssertion": "committed test requires world-data/npc/moradon.json, asserts exactly 31 templates, one coverage record per template, all spawn anchors represented and no wired interaction lacking interactionVerified",
+    "ws23Regression": "original WS23 quest-service test suite is carried forward byte-for-byte from ws23-quest-events",
+    "githubCi": "No workflow run/status was created automatically for this branch head during this task",
+    "realBrowser": "NOT_PRODUCED: task forbids live deploy and this execution context has no access to the user's local PC/browser runtime; therefore merchant/repair/inn browser screenshots and quest browser evidence cannot honestly be claimed"
+  },
+  "blockers": [
+    "P2_05_REAL_BROWSER_EVIDENCE_MISSING",
+    "ZONE21_EVT_RUNTIME_BINDING_MISSING: Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:assets/Server/QUESTS/21.evt",
+    "P2_11_PRODUCTION_QUEST_TRANSACTION_MISSING",
+    "P2_08_ITEM_CURRENCY_STORAGE_REPAIR_UPGRADE_MUTATIONS_MISSING",
+    "P2_10_QUEST_MENU_PROTOCOL_UI_COMPOSITION_MISSING",
+    "P2_04_GATE_TRANSITION_MISSING",
+    "SELITH_SPECIAL_STORE_HANDLER_UNVERIFIED",
+    "MORADON_15002_TYPE136_GATE_ROLE_SOURCE_MISMATCH",
+    "MORADON_16047_TYPE29_WAREHOUSE_NAME_SOURCE_MISMATCH"
+  ],
+  "integrationInstruction": "Coordinator may cherry-pick/merge the code for merchant/tinker/inn production routing and WS23 carry-forward, but P2-05 must remain BLOCKED overall until the named dependencies are composed and each service/quest flow gets real browser evidence. Do not flip unverified NPCs to success as a shortcut.",
+  "liveDeployPerformed": false
+}
