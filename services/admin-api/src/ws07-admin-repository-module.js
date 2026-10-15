@@ -219,8 +219,8 @@ class Ws08PgCompatibilityRepository {
       : patch.result == null ? null : JSON.stringify(patch.result);
     const { rows } = await this.db.query(
       `UPDATE oldko.admin_command_outbox
-          SET status=$2,
-              completed_at=CASE WHEN $2 IN ('succeeded','failed','cancelled') THEN COALESCE(completed_at,now()) ELSE completed_at END,
+          SET status=$2::varchar(24),
+              completed_at=CASE WHEN $2::varchar(24) IN ('succeeded','failed','cancelled') THEN COALESCE(completed_at,now()) ELSE completed_at END,
               last_error=$3,
               updated_at=now()
         WHERE id=$1
