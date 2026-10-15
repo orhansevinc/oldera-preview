@@ -1,0 +1,132 @@
+{
+  "schema_version": "ws45-production-session-ownership/v1",
+  "release_id": "oldkoweb-domain-live-20261015",
+  "workstream": "WS45",
+  "branch": "ws45-session-ownership",
+  "task_start_commit": "4a66338743553c2781c68ca84b866ff4e999c14e",
+  "dependency_contract_pins": {
+    "WS07": {
+      "handoff": "coordination/handoffs/domain-live/WS07.json",
+      "source_commit": "eaac4700c3535c449f6a2b7d20c925bc61382c35",
+      "shared_table_authority": "oldko.session_leases",
+      "schema_source": "database/migrations/0002_persistence_hardening.sql"
+    },
+    "WS03": {
+      "handoff": "coordination/handoffs/domain-live/WS03.json",
+      "source_commit": "77e001bb6f43618883b626ae403d2fa134065c0f",
+      "boundary": "game/auth runtime consumes WS45 account/character ownership; WS45 does not import or own WS03 product code"
+    },
+    "WS08": {
+      "handoff": "coordination/handoffs/domain-live/WS08.json",
+      "source_commit": "97771268f37735e6ebaad9ed48a6927438f65f59",
+      "boundary": "WS45 supplies online ownership snapshot and revoke/kick primitives only; full admin runtime authority remains external"
+    }
+  },
+  "postgres": {
+    "module": "services/session-ownership/postgres-lease-store.js",
+    "factory": "createPostgresLeaseStore({connectionString: env.DATABASE_URL})",
+    "export": "services/session-ownership/index.js",
+    "table": "oldko.session_leases",
+    "single_authoritative_store": true,
+    "migration": "services/session-ownership/sql/0001_postgres_lease_store.sql",
+    "migration_sha256": "543f6b567d6224b82e146cc6b71036cc2eba058351ab06a5aab66785620f6638",
+    "migration_manifest": "services/session-ownership/sql/manifest.json",
+    "migration_runner": "services/session-ownership/scripts/migrate-postgres.js",
+    "migration_order": "after WS07 database/migrations/0002_persistence_hardening.sql; never append to the WS07 numbered ledger"
+  },
+  "env": {
+    "production_required": ["DATABASE_URL"],
+    "composition_options": [
+      "duplicateLoginPolicy",
+      "leaseMs",
+      "reconnectGraceMs",
+      "serverId/process owner supplied per acquisition"
+    ],
+    "hardcoded_database_url": false,
+    "credentials_in_repository": false
+  },
+  "schema": {
+    "scope_type": "scope",
+    "lease_key": "lease_key",
+    "account_identity": "account_id",
+    "optional_character_identity": "character_id",
+    "session_id": "session_id",
+    "owner_process_id": "server_id",
+    "lease_version": "version",
+    "acquired_at": "acquired_at epoch milliseconds",
+    "expires_at": "expires_at generated alias of lease_until epoch milliseconds",
+    "canonical_expiry": "lease_until",
+    "heartbeat": "heartbeat_at",
+    "updated_at": "updated_at",
+    "reconnect_grace": ["state", "grace_until", "replaced_session_id", "payload.disconnectReason"],
+    "raw_secret_or_token_columns": false
+  },
+  "atomic_primitives": {
+    "read": "get/read",
+    "compare_and_set": "compareAndSet",
+    "acquire": "acquire -> INSERT ... ON CONFLICT DO NOTHING",
+    "renew": "renew -> version-conditional UPDATE",
+    "release": "release -> version-conditional DELETE",
+    "replace": "replace -> version-conditional UPDATE; account takeover deletes displaced character leases in the same transaction",
+    "expiry_reclaim": "reclaimExpired -> version + lease_until condition inside one transaction",
+    "rules": [
+      "PRIMARY KEY (scope, lease_key) is the uniqueness boundary",
+      "every write path is transactional",
+      "updates/deletes are conditioned on the expected lease version",
+      "no application-side blind write after an unlocked SELECT",
+      "old owners cannot delete or renew a newer version",
+      "stale account reclaim and replace-old remove displaced character leases atomically"
+    ]
+  },
+  "policy": {
+    "default_duplicate_login": "reject-new",
+    "supported_duplicate_login": ["reject-new", "replace-old"],
+    "default_lease_ms": 30000,
+    "default_reconnect_grace_ms": 10000,
+    "heartbeat": "active leases only; version CAS prevents displaced owners from renewing newer ownership",
+    "stale_reclaim": "lease_until <= service clock permits CAS reclaim with generation increment",
+    "crash_recovery": "no release call is required; TTL expiry followed by CAS reclaim is authoritative",
+    "reconnect": "grace state + grace_until + expected version; concurrent resume has one CAS winner"
+  },
+  "integration_boundaries": {
+    "WS03": {
+      "consumes": [
+        "acquireAccount",
+        "acquireCharacter",
+        "heartbeat",
+        "disconnect/reconnect grace",
+        "revoke/kick ownership results"
+      ],
+      "owns_here": false,
+      "note": "WS03/game code is not imported into WS45; production composition injects this service/store boundary."
+    },
+    "WS08": {
+      "contract": "workstreams/ws45/ADMIN_SESSION_AUTHORITY_CONTRACT.json",
+      "provides": ["online lease snapshot", "session/account revoke", "character-owner kick/revoke"],
+      "full_admin_runtime_authority": false
+    }
+  },
+  "verification": {
+    "existing_concurrency_tests": 16,
+    "existing_test_path": "tests/session-ownership/session-ownership.test.js",
+    "real_postgres_test_path": "tests/session-ownership/postgres-lease-store.integration.test.js",
+    "real_postgres_cases": [
+      "two independent stores forced to observe the same empty account state; exactly one reject-new winner",
+      "replace-old plus stale old-owner heartbeat/release cannot remove the new lease",
+      "concurrent character acquire with account ownership precondition",
+      "process crash without release -> TTL stale reclaim and orphan character cleanup",
+      "concurrent reconnect grace CAS resume",
+      "admin online snapshot and revoke/kick"
+    ],
+    "workflow": ".github/workflows/ws45-sessions.yml",
+    "postgres": "16-alpine",
+    "node": "20"
+  },
+  "security": {
+    "hardcoded_DATABASE_URL": false,
+    "production_credentials": false,
+    "raw_auth_password": false,
+    "raw_session_secret_logging": false
+  },
+  "shared_atomic_lease_store_condition": "RESOLVED_BY_THIS_IMPLEMENTATION"
+}
