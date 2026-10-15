@@ -10,13 +10,22 @@
     {"path": "real1298/KnightOnLine.data", "sha256": "REPLACE_WITH_SHA256"},
     {"path": "coordination/phase2/migration-plan.json", "sha256": "REPLACE_WITH_SHA256"},
     {"path": "hosting/p2-12/Run-Migrations.ps1", "sha256": "REPLACE_WITH_SHA256"},
-    {"path": "database/migrations/0001_example.sql", "sha256": "REPLACE_WITH_SHA256"}
+    {"path": "database/migrations/0005_phase2_data_admin.sql", "sha256": "REPLACE_WITH_SHA256"},
+    {"path": "services/oldko-data/src/scripts/migrate.js", "sha256": "REPLACE_WITH_SHA256"}
   ],
   "compose": {
     "project_name": "oldkoweb-domain-live",
     "files": ["deploy/domain-live/docker-compose.yml"],
     "env_file": ".oldkoweb/state/runtime.env"
   },
+  "required_persistent_volumes": [
+    {"service": "db", "destination": "/var/lib/postgresql/data", "type": "volume"}
+  ],
+  "health_checks": [
+    {"name": "edge", "kind": "compose-service", "service": "edge"},
+    {"name": "website-local", "kind": "http", "url": "http://127.0.0.1:8080/", "host_header": "oldkoweb.com", "expected_status": 200},
+    {"name": "play-local", "kind": "http", "url": "http://127.0.0.1:8080/", "host_header": "play.oldkoweb.com", "expected_status": 200}
+  ],
   "migration": {
     "plan_path": "coordination/phase2/migration-plan.json",
     "runner_path": "hosting/p2-12/Run-Migrations.ps1",
