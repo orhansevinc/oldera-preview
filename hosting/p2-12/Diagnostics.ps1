@@ -119,6 +119,8 @@ $report=[ordered]@{
     websocket_transport=$ws
     gameplay_login=$loginEvidence
     tunnel=$discovery.tunnel
+    dns=$discovery.dns
+    origin_chain=$discovery.origin_chain
     host=[ordered]@{ install_root=$discovery.install_root; disk=$discovery.disk; power=$discovery.power }
     evidence_boundary='No deploy was performed. Public probes are transport/cache/header evidence only unless an authenticated browser receipt is attached.'
 }
