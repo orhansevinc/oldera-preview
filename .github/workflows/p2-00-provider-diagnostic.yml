@@ -1,0 +1,72 @@
+name: P2-00 provider diagnostic
+
+on:
+  push:
+    branches: [phase2/00-integration]
+    paths:
+      - '.github/workflows/p2-00-provider-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  session-tests:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        test:
+          - async-repository.test.js
+          - combat-routing.test.js
+          - domain-live-production.test.js
+          - p2-01-network.test.js
+          - p2-07-combat-composition.test.js
+          - production-lifecycle.test.js
+          - production-routing.test.js
+          - production-transport.test.js
+          - session.test.js
+    name: session / ${{ matrix.test }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install runtime dependencies
+        shell: bash
+        run: |
+          npm --prefix services/oldko-data install --omit=dev --ignore-scripts
+          npm --prefix services/ko-gateway install --omit=dev --ignore-scripts
+      - name: Run exact test
+        run: node --test "tests/ko1298-session/${{ matrix.test }}"
+
+  domain-tests:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        domain: [gateway, combat, progression, social, items, client, qa]
+    name: domain / ${{ matrix.domain }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install runtime dependencies
+        shell: bash
+        run: |
+          npm --prefix services/oldko-data install --omit=dev --ignore-scripts
+          npm --prefix services/ko-gateway install --omit=dev --ignore-scripts
+      - name: Run domain gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          case '${{ matrix.domain }}' in
+            gateway) node --test tests/ko-gateway/*.test.js ;;
+            combat) if compgen -G 'tests/ko1298-combat/*.test.js' >/dev/null; then node --test tests/ko1298-combat/*.test.js; fi ;;
+            progression) if compgen -G 'tests/ko1298-progression/*.test.js' >/dev/null; then node --test tests/ko1298-progression/*.test.js; fi ;;
+            social) if compgen -G 'tests/ko1298-social/*.test.js' >/dev/null; then node --test tests/ko1298-social/*.test.js; fi ;;
+            items) if compgen -G 'tests/ko1298-items*/*.test.*' >/dev/null; then node --test tests/ko1298-items*/*.test.*; fi ;;
+            client) python3 -m unittest tests/client/test_p2_10_contracts.py ;;
+            qa) node qa/phase2/selftest.mjs ;;
+          esac
