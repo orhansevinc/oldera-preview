@@ -30,7 +30,7 @@ function fixture() {
       21: { minX: 0, maxX: 60000, minY: -1000, maxY: 1000, minZ: 0, maxZ: 60000 },
     }),
     clock: () => now,
-    speedPolicy: ({ state }) => state?.maxSpeed ?? 8,
+    speedPolicy: (state) => state.maxSpeed ?? 8,
     broadcast: (event) => broadcasts.push(event),
   });
   const repository = {
@@ -57,26 +57,27 @@ test('15-minute virtual walk/run/sprint/stop/turn soak accepts legitimate 1298 m
   f.port.registerSession({ sessionId: 'game:1', entityId: 100, zoneId: 21, position: { x: 1000, y: 0, z: 1000 }, maxSpeed: 8 });
 
   let x = 1000;
-  const phases = [
-    { speed: 1.5, flag: 0x01 },
-    { speed: 4.5, flag: 0x03 },
-    { speed: 6.5, flag: 0x03 },
-  ];
+  let moving = false;
+  let receiveSequence = 0;
+  const speeds = [1.5, 4.5, 6.5];
 
   for (let i = 0; i < 600; i += 1) {
-    const phase = phases[i % phases.length];
-    x += phase.speed;
-    const move = await f.port.handleMovePacket('game:1', movePayload(x, 1000, phase.speed, phase.flag), { receiveSequence: i * 2 + 1 });
+    const speed = speeds[i % speeds.length];
+    x += speed;
+    const flag = moving ? 0x03 : 0x01;
+    const move = await f.port.handleMovePacket('game:1', movePayload(x, 1000, speed, flag), { receiveSequence: ++receiveSequence });
     assert.equal(move.accepted, true, `movement rejected at iteration ${i}`);
     assert.notEqual(move.disconnect, true);
+    moving = true;
 
     if (i % 10 === 0) {
-      const turn = await f.port.handleRotatePacket('game:1', rotatePayload((i * 97) % 30000), { receiveSequence: i * 2 + 2 });
+      const turn = await f.port.handleRotatePacket('game:1', rotatePayload((i * 97) % 30000), { receiveSequence: ++receiveSequence });
       assert.equal(turn.accepted, true);
     }
     if (i % 20 === 19) {
-      const stop = await f.port.handleMovePacket('game:1', movePayload(x, 1000, 0, 0x00), { receiveSequence: i * 2 + 2 });
+      const stop = await f.port.handleMovePacket('game:1', movePayload(x, 1000, 0, 0x00), { receiveSequence: ++receiveSequence });
       assert.equal(stop.accepted, true);
+      moving = false;
     }
     f.advance(1500);
   }
