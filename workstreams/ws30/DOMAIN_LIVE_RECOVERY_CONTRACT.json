@@ -1,0 +1,192 @@
+{
+  "schema_version": "ws30-domain-live-recovery/v1",
+  "release_id": "oldkoweb-domain-live-20261015",
+  "workstream": "WS30",
+  "branch": "ws30-backup-recovery",
+  "task_start_head": "4a80cf4c117af5a0c2fd6efde15655370a05a0fa",
+  "production_connection_allowed": false,
+  "source_pins": {
+    "WS07": {
+      "branch": "ws07-database",
+      "source_commit": "eaac4700c3535c449f6a2b7d20c925bc61382c35",
+      "handoff": "coordination/handoffs/domain-live/WS07.json",
+      "migration_runner": "services/oldko-data/src/scripts/migrate.js",
+      "ledger": "public._oldko_migrations",
+      "account_adapter": {
+        "class": "PgWs13AccountRepository",
+        "path": "services/oldko-data/src/adapters/ws13-account-api.js",
+        "git_blob": "022c32abde503a6dc3af1ff9429c206a1b20ca63"
+      },
+      "admin_adapter": {
+        "class": "PgWs08AdminRepository",
+        "path": "services/oldko-data/src/adapters/ws08-admin.js",
+        "git_blob": "221114aa464e5f6175b36e266a722b0eb771c579"
+      }
+    },
+    "WS13": {
+      "branch": "ws13-account-api",
+      "source_commit": "e53966d9f882d98e2a5b4746262f38355dfda848",
+      "handoff": "coordination/handoffs/domain-live/WS13.json"
+    }
+  },
+  "migration_bootstrap": {
+    "postgres_major": 16,
+    "synthetic_schema_allowed": false,
+    "forward_only": true,
+    "ordered_ws07_migrations": [
+      {
+        "order": 1,
+        "path": "database/migrations/0001_init.sql",
+        "sha256": "88f0c4c4d92f8dd5602a87707d689f9364b793274b58eb68372483a333a3ef8a"
+      },
+      {
+        "order": 2,
+        "path": "database/migrations/0002_persistence_hardening.sql",
+        "sha256": "86ee8d6bbd83bf7be4134030f2967874902f13de5a4eb1c5d1c14ed04ba17314"
+      },
+      {
+        "order": 3,
+        "path": "database/migrations/0003_public_account_api.sql",
+        "sha256": "24c3e52086e6197d1a998cdd4604531418af92b7f6dd37f5d5a1c725939f590f"
+      },
+      {
+        "order": 4,
+        "path": "database/migrations/0004_admin_persistence.sql",
+        "sha256": "66ac0374b0373f7ae7b064c0254762425da1b7da3e1c2073e5ce566f4d817b45"
+      }
+    ],
+    "ws13_service_owned_migration": {
+      "path": "services/account-api/sql/0001_postgres_rate_limit.sql",
+      "sha256": "c7319604db165e2aa75280612e1da7912966b6d78c579c362b80ea145923026c",
+      "ledger_rule": "service-owned; do not insert into public._oldko_migrations"
+    }
+  },
+  "rehearsal": {
+    "workflow": ".github/workflows/ws30-recovery.yml",
+    "entrypoint": "recovery-tests/run_recovery_test.sh",
+    "seed": "recovery-tests/sql/domain_live_seed.sql",
+    "source_database_disposable_only": true,
+    "destroy_source_before_restore": true,
+    "restore_target_clean_database": true,
+    "provider_commit_and_file_hash_guards": true,
+    "schema_inventory": [
+      "tables",
+      "constraints",
+      "indexes"
+    ],
+    "seeded_surfaces": [
+      "account",
+      "account_session",
+      "account_action_token",
+      "account_rate_limit",
+      "character",
+      "character_stats",
+      "character_skills",
+      "character_world_save_state",
+      "item_serial",
+      "equipment",
+      "inventory",
+      "inn_storage",
+      "admin_actor",
+      "admin_session",
+      "admin_operation_idempotency",
+      "admin_command_outbox_status",
+      "persistence_operation_idempotency",
+      "audit_log",
+      "item_serial_event",
+      "sanction",
+      "session_lease"
+    ],
+    "adapter_reads": [
+      "PgWs13AccountRepository.findByUsernameCanonical",
+      "PgWs13AccountRepository.listCharactersByAccount",
+      "PgWs08AdminRepository.overview",
+      "PgWs08AdminRepository.getCharacter",
+      "PgWs08AdminRepository.getInventory"
+    ]
+  },
+  "backup": {
+    "format": "PostgreSQL custom",
+    "writer": "backup/postgres/full_backup.sh",
+    "metadata_version": 2,
+    "sha256_required": true,
+    "pg_restore_list_required": true,
+    "metadata_includes": [
+      "PostgreSQL version",
+      "WS07 source pin",
+      "WS13 source pin",
+      "migration file hashes",
+      "migration ledger names/head/checksum/fingerprint",
+      "schema table/constraint/index counts",
+      "schema fingerprint",
+      "domain row counts",
+      "backup SHA256"
+    ]
+  },
+  "post_restore_integrity": {
+    "primary_keys": true,
+    "foreign_key_relationships": true,
+    "unique_constraints_semantics": true,
+    "serial_sequences": true,
+    "migration_ledger": true,
+    "schema_fingerprint": true,
+    "account_character_relationship": true,
+    "account_and_admin_sessions": true,
+    "action_token": true,
+    "rate_limit_state": true,
+    "character_world_save_state": true,
+    "item_serial_placements": true,
+    "admin_idempotency": true,
+    "command_status": true,
+    "audit_append_only": true,
+    "item_serial_history_append_only": true,
+    "pinned_application_adapter_reads": true
+  },
+  "backup_before_migrate": {
+    "path": "backup/postgres/backup_before_migrate.sh",
+    "stages": [
+      "preflight",
+      "disk",
+      "backup",
+      "archive_integrity",
+      "optional_disposable_restore_integrity",
+      "migration",
+      "postcheck"
+    ],
+    "stop_on_failure": true,
+    "safety_token": "BACKUP_VERIFIED_BEFORE_MIGRATION"
+  },
+  "restore_safety": {
+    "allow_destructive_restore_token_required": true,
+    "exact_target_database_confirmation_required": true,
+    "disposable_marker_required_for_ci_test_local": true,
+    "production_incident_token_required": true,
+    "protected_database_names": [
+      "postgres",
+      "template0",
+      "template1"
+    ],
+    "prefer_replacement_database": true
+  },
+  "rollback": {
+    "sql_down_migration_claimed": false,
+    "contract": "restore known-good pre-migration backup to a clean/replacement target and deploy the previous compatible application release"
+  },
+  "encryption_at_rest": {
+    "ci_local_archive_encryption": "none",
+    "production_contract": "encrypted ephemeral staging + managed KMS/provider envelope encryption + policy-enforced encrypted object storage + separated decrypt role + immutable retention"
+  },
+  "rpo_rto": {
+    "daily_full_backup_rpo": "up to 24h",
+    "current_rto_target": "<=120m until timed environment drill proves better",
+    "desired_target": "RPO<=15m and RTO<=60m",
+    "desired_target_dependency": "WAL/PITR or equivalent managed continuous backup plus successful timed drill"
+  },
+  "ci": {
+    "postgres_image": "postgres:16",
+    "node": 22,
+    "evidence_artifact": "ws30-domain-live-recovery-evidence",
+    "green_required_for_ready": true
+  },
+  "readiness": "CI_GATED"
+}

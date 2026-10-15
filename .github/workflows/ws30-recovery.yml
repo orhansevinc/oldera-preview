@@ -1,4 +1,4 @@
-name: WS30 Backup Recovery
+name: WS30 Domain-Live Backup Recovery
 
 on:
   push:
@@ -22,9 +22,9 @@ permissions:
   contents: read
 
 jobs:
-  disposable-postgres-recovery:
+  domain-live-postgres16-recovery:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16
@@ -41,19 +41,56 @@ jobs:
           --health-retries 10
 
     steps:
-      - name: Checkout
+      - name: Checkout WS30
         uses: actions/checkout@v4
+
+      - name: Checkout pinned WS07 provider
+        uses: actions/checkout@v4
+        with:
+          ref: eaac4700c3535c449f6a2b7d20c925bc61382c35
+          path: .providers/ws07
+          fetch-depth: 1
+
+      - name: Checkout pinned WS13 provider
+        uses: actions/checkout@v4
+        with:
+          ref: e53966d9f882d98e2a5b4746262f38355dfda848
+          path: .providers/ws13
+          fetch-depth: 1
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
 
       - name: Install PostgreSQL client
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-client
 
-      - name: Validate shell syntax
+      - name: Install pinned WS07 data adapter dependency
+        working-directory: .providers/ws07/services/oldko-data
+        run: npm install --omit=dev --no-audit --no-fund
+
+      - name: Validate shell and JSON syntax
         run: |
           find backup recovery-tests -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+          node -e "JSON.parse(require('fs').readFileSync('workstreams/ws30/DOMAIN_LIVE_RECOVERY_CONTRACT.json','utf8'))"
 
-      - name: Run disposable recovery test
+      - name: Run real-schema disposable recovery rehearsal
         env:
           PG_TEST_ADMIN_URL: postgresql://postgres:ws30_test_only@127.0.0.1:5432/postgres
+          WS07_PROVIDER_ROOT: ${{ github.workspace }}/.providers/ws07
+          WS13_PROVIDER_ROOT: ${{ github.workspace }}/.providers/ws13
+          WS30_DISPOSABLE_REHEARSAL: YES
+          WS30_EVIDENCE_DIR: ${{ github.workspace }}/recovery-artifacts
         run: recovery-tests/run_recovery_test.sh
+
+      - name: Upload recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ws30-domain-live-recovery-evidence
+          path: recovery-artifacts/**
+          if-no-files-found: warn
+          retention-days: 14

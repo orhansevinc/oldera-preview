@@ -33,11 +33,17 @@ checksum_name="$(basename -- "$checksum_file")"
   fi
 )
 
-pg_restore --list "$backup_file" >/dev/null
+archive_list="$(pg_restore --list "$backup_file")"
+[[ -n "$archive_list" ]] || die "pg_restore --list returned an empty archive inventory"
 
 format="$(metadata_value "$meta_file" backup_format)"
 metadata_version="$(metadata_value "$meta_file" metadata_version)"
 [[ "$format" == "postgres_custom" ]] || die "unsupported backup_format: $format"
-[[ "$metadata_version" == "1" ]] || die "unsupported metadata_version: $metadata_version"
+[[ "$metadata_version" == "2" ]] || die "unsupported metadata_version: $metadata_version"
+
+schema_sha="$(metadata_value "$meta_file" schema_fingerprint_sha256)"
+ledger_sha="$(metadata_value "$meta_file" migration_ledger_sha256)"
+[[ "$schema_sha" =~ ^[0-9a-fA-F]{64}$ ]] || die "metadata schema_fingerprint_sha256 is invalid"
+[[ "$ledger_sha" =~ ^[0-9a-fA-F]{64}$ ]] || die "metadata migration_ledger_sha256 is invalid"
 
 log "backup integrity verified: $(basename -- "$backup_file")"

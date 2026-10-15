@@ -1,62 +1,82 @@
-# WS30 — OldKOWeb Backup Strategy
+# WS30 — Domain-Live PostgreSQL Backup Strategy
 
-## Scope
+## Authority and scope
 
-This workstream defines a PostgreSQL backup/restore contract for the OldKOWeb persistence layer without changing WS07 schema or migrations. WS07 currently targets PostgreSQL 16, stores game data under the `oldko` schema, and records migration name/checksum/time in `public._oldko_migrations`.
+This contract is pinned to release `oldkoweb-domain-live-20261015` and does not follow moving provider branch heads during a rehearsal.
 
-The scripts in `backup/postgres/` are safe-by-default building blocks. They do not discover or contact production on their own. A database connection must be supplied at runtime through environment/secret-management plumbing.
+- WS07 source: `eaac4700c3535c449f6a2b7d20c925bc61382c35`
+- WS13 source: `e53966d9f882d98e2a5b4746262f38355dfda848`
+- PostgreSQL major: 16
+- WS07 migration ledger: `public._oldko_migrations`
+- WS07 ordered migrations: `0001_init.sql`, `0002_persistence_hardening.sql`, `0003_public_account_api.sql`, `0004_admin_persistence.sql`
+- WS13 service-owned migration: `services/account-api/sql/0001_postgres_rate_limit.sql`; it is intentionally **not** inserted into the WS07 numbered ledger.
+
+WS30 does not own or modify WS07, WS13, WS08 or WS09 product code. CI checks out the exact provider commits into isolated directories and consumes their migrations/adapters read-only.
+
+## Real-schema rehearsal
+
+`recovery-tests/run_recovery_test.sh` creates a disposable PostgreSQL 16 source database, runs the pinned WS07 migration runner, applies the pinned WS13 rate-limit migration, inventories tables/constraints/indexes, seeds only fields that exist in that real schema, takes a full custom-format backup, destroys the source database, creates a clean target, restores, and verifies relational/application integrity.
+
+The obsolete synthetic `ws07_contract_fixture.sql` is not used. CI fails if provider commit/hash/blob pins differ from the handoffs.
+
+The seed covers the available domain-live surfaces: account, account session, action token, shared rate-limit state, character/stat/skill/world-save state, item serial/equipment/inventory/inn placement, admin actor/session, durable admin idempotency receipt, command outbox/status, persistence operation/idempotency, audit/serial history, sanction and session lease.
 
 ## Backup artifact contract
 
-`full_backup.sh` creates three files atomically:
+`backup/postgres/full_backup.sh` atomically publishes:
 
-- `<id>.dump`: PostgreSQL custom-format logical full backup (`pg_dump -Fc`).
-- `<id>.dump.meta`: non-secret recovery metadata.
-- `<id>.dump.sha256`: SHA-256 checksum sidecar.
+- `<id>.dump` — PostgreSQL custom-format full logical backup (`pg_dump -Fc`).
+- `<id>.dump.meta` — non-secret recovery metadata, version 2.
+- `<id>.dump.sha256` — SHA-256 sidecar.
 
-The metadata records UTC timestamp/ID, format version, PostgreSQL version, application version, migration count/head/checksum, source/dump sizes, core row counts and dump SHA-256. Connection strings, passwords, tokens and encryption keys are never written to metadata or repository files.
+Metadata records PostgreSQL version, exact WS07/WS13 source pins, migration hashes, migration names/head/checksum and ledger fingerprint, schema table/constraint/index counts, schema fingerprint, selected domain row counts, source/dump sizes, backup hash and the encryption contract. No URL, password, token or encryption key is recorded.
 
-## Creation and validation flow
+`verify_backup.sh` requires matching SHA-256 metadata/sidecar and a successful non-empty `pg_restore --list` parse.
 
-1. Confirm the WS07 contract tables and `public._oldko_migrations` exist.
-2. Query source DB size and fail before dumping if destination free space is below `max(MIN_FREE_BYTES, source_db_size)`.
-3. Run `pg_dump` custom format with owner/ACL data excluded.
-4. Parse the archive with `pg_restore --list`.
-5. Compute SHA-256 and write metadata/checksum sidecars.
-6. Publish by atomic rename only after all checks pass; temporary artifacts are removed on error.
+## Backup-before-migrate STOP gate
 
-A non-zero exit from `psql`, `pg_dump`, `pg_restore`, disk checks or metadata validation is a backup failure and should alert the production backup owner.
+Every production schema migration must be wrapped by `backup/postgres/backup_before_migrate.sh` (or an orchestration layer that enforces the same stages):
 
-## Restore verification
+1. preflight connectivity, PostgreSQL 16 and current integrity;
+2. disk headroom check;
+3. full custom-format backup;
+4. SHA-256/archive integrity validation, plus disposable restore when a verification target is supplied;
+5. explicitly supplied migration command;
+6. post-migration integrity check.
 
-Every candidate backup should pass archive integrity (checksum + archive parse) and a disposable restore. Post-restore checks cover expected WS07 tables/migration ledger, account username uniqueness, live character name/slot uniqueness, item serial uniqueness, cross-placement item uniqueness, missing account/item references, core row counts and migration head. CI also confirms the restored item-serial unique constraint rejects a duplicate.
+The gate is fail-closed under `set -Eeuo pipefail`. Any failed stage stops before subsequent stages. It requires `WS30_MIGRATION_SAFETY_TOKEN=BACKUP_VERIFIED_BEFORE_MIGRATION` so an ad-hoc invocation cannot silently bypass the backup-first contract.
 
-## Encryption at rest design
+## Restore integrity
 
-Production backups must be encrypted outside the repository using a managed key system:
+Restore validation covers the real current schema rather than a representative fixture:
 
-1. Create the dump on an encrypted ephemeral volume.
-2. Upload to object storage with provider-side envelope encryption using a dedicated KMS key (SSE-KMS or equivalent).
-3. Deny unencrypted uploads with storage policy.
-4. Give the backup writer minimal/encrypt-only object permissions; give restore operators decrypt through a separate role.
-5. Enable immutable/object-lock retention for a short operational window (example: 7 days).
-6. Never commit credentials, private keys, passphrases or plaintext production backups.
+- primary-key presence and validated constraints on critical domain-live tables;
+- account username, live character name/slot, item serial, action-token, admin username, command trace and rate-limit uniqueness;
+- account↔character/session/token relationships and item/admin foreign-key relationships;
+- cross-placement item uniqueness;
+- serial sequence positions not regressing behind restored IDs;
+- migration ledger names/checksums/fingerprint;
+- full schema fingerprint and core row counts;
+- account session, rate-limit, character world/save, admin session/idempotency, command status and audit state in the rehearsal;
+- append-only audit and item-serial-history triggers;
+- minimum logical reads through the exact pinned WS07 `PgWs13AccountRepository` and `PgWs08AdminRepository`.
 
-If client-side encryption is later required, add an `age`/KMS envelope adapter with key identifiers supplied at runtime. The current local/CI metadata explicitly records `encryption=none` so tests do not falsely claim production encryption.
+## Restore safety
 
-## Retention example
+`restore.sh` is destructive and refuses to run unless all required gates are explicit. Disposable targets require `ALLOW_DESTRUCTIVE_RESTORE=YES`, `RESTORE_TARGET_MARKER=disposable`, and `RESTORE_CONFIRM_DATABASE` exactly matching `current_database()`. Administrative databases `postgres`, `template0` and `template1` are refused.
 
-`retention-policy.example.env` describes a starter GFS-style policy: daily 7 days, weekly 4 weeks, monthly 6 months, immutable 7 days. Retention deletion belongs to the storage lifecycle/orchestrator, not the backup writer, so creation credentials do not need delete permission.
+Production additionally requires `TARGET_ENVIRONMENT=production`, `RESTORE_TARGET_MARKER=approved-production`, and `ALLOW_PRODUCTION_RESTORE=YES_I_HAVE_AN_APPROVED_INCIDENT`. These tokens are technical guardrails, not authorization. Prefer restoring into a replacement database/cluster instead of overwriting the failed primary.
+
+## Rollback reality
+
+The pinned migrations are forward-only. WS30 does **not** invent SQL down migrations. A schema-release rollback is: restore a known verified pre-migration backup into a clean/replacement target, then deploy the previous compatible application release and cut traffic only after post-restore verification.
+
+## Encryption at rest
+
+CI/local rehearsal metadata truthfully records `encryption=none`. Production backup storage must use encrypted ephemeral staging plus managed provider/KMS envelope encryption, policy-enforced rejection of unencrypted uploads, separated backup-writer/decrypt roles and immutable/object-lock retention. Secrets and plaintext production backups must never be committed.
 
 ## RPO / RTO
 
-- Baseline with one full backup every 24 hours: achieved RPO is up to 24 hours. Initial measured RTO target: **<= 120 minutes**.
-- Recommended production target: **RPO <= 15 minutes, RTO <= 60 minutes**. The 15-minute RPO requires PostgreSQL WAL archiving/PITR (or managed continuous backup) in addition to these full backups. Do not advertise that target until PITR is implemented and a drill passes.
+A daily full backup alone provides a worst-case RPO of up to 24 hours. The operational target remains **RTO <= 120 minutes** until environment drills demonstrate a better figure. A desired **RPO <= 15 minutes / RTO <= 60 minutes** requires WAL archiving/PITR or equivalent managed continuous backup plus a successful timed drill; do not claim those targets as achieved from this logical-backup rehearsal alone.
 
-## Scheduling and alerts
-
-Record start/end/duration, backup ID/object location, bytes, migration head, checksum result, recovery-drill result and failure category. Alert on failed/missing backup windows, checksum failures, lifecycle failures and recovery-drill failures. Alert messages reference backup IDs, never credentials.
-
-## Compatibility policy
-
-Use a `pg_dump` client equal to or newer than the server major version. Restore drills should use the same target major version as production unless an upgrade recovery is explicitly being tested. Run a recovery drill before PostgreSQL major upgrades.
+Run disposable CI on every WS30 change, environment restore monthly once staging/DR exists, and a full incident simulation quarterly once production is live. Re-run after PostgreSQL major changes, migration tooling changes, backup storage/encryption changes, or material schema additions.
