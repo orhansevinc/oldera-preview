@@ -36,10 +36,11 @@ def patch_main(text: str) -> str:
         raise SystemExit(f"WS05 1024x768 browser lock: expected one block, found {len(matches)}")
     text = hard_lock.sub(
         "#ifdef __EMSCRIPTEN__\n"
-        "\t// P2-03 browser render surface: CSS size is the logical viewport;\n"
+        "\t// P2-03 browser render surface: viewport size is the logical game space;\n"
         "\t// backing-store size is selected independently from DPR/quality.\n"
         "\tCN3Base::s_Options.bWindowMode = true;\n"
         "\tCN3Base::s_Options.bWindowCursor = false;\n"
+        "\tOldKOWebSyncRenderSurface(nullptr, true);\n"
         "#endif",
         text,
         count=1,
@@ -83,23 +84,27 @@ struct OldKOWebRenderSurface
 	const char* quality = "sharp";
 };
 
-double OldKOWebCssWidth()
+double OldKOWebViewportWidth()
 {
 	return EM_ASM_DOUBLE({
+		if (window.visualViewport && window.visualViewport.width > 1)
+			return window.visualViewport.width;
+		if (window.innerWidth > 1) return window.innerWidth;
 		const c = (typeof Module !== 'undefined' && Module.canvas)
 			? Module.canvas : document.querySelector('#canvas');
-		if (!c) return 0;
-		return c.getBoundingClientRect().width;
+		return c ? c.getBoundingClientRect().width : 0;
 	});
 }
 
-double OldKOWebCssHeight()
+double OldKOWebViewportHeight()
 {
 	return EM_ASM_DOUBLE({
+		if (window.visualViewport && window.visualViewport.height > 1)
+			return window.visualViewport.height;
+		if (window.innerHeight > 1) return window.innerHeight;
 		const c = (typeof Module !== 'undefined' && Module.canvas)
 			? Module.canvas : document.querySelector('#canvas');
-		if (!c) return 0;
-		return c.getBoundingClientRect().height;
+		return c ? c.getBoundingClientRect().height : 0;
 	});
 }
 
@@ -140,11 +145,11 @@ double OldKOWebPixelBudget(const char* quality)
 OldKOWebRenderSurface OldKOWebDesiredRenderSurface()
 {
 	OldKOWebRenderSurface out;
-	const double cssW = OldKOWebCssWidth();
-	const double cssH = OldKOWebCssHeight();
-	out.logicalW = cssW >= 2.0 ? static_cast<int>(std::lround(cssW))
+	const double viewportW = OldKOWebViewportWidth();
+	const double viewportH = OldKOWebViewportHeight();
+	out.logicalW = viewportW >= 2.0 ? static_cast<int>(std::lround(viewportW))
 		: std::max(1, CN3Base::s_Options.iViewWidth);
-	out.logicalH = cssH >= 2.0 ? static_cast<int>(std::lround(cssH))
+	out.logicalH = viewportH >= 2.0 ? static_cast<int>(std::lround(viewportH))
 		: std::max(1, CN3Base::s_Options.iViewHeight);
 	out.dpr = static_cast<float>(EM_ASM_DOUBLE({ return window.devicePixelRatio || 1; }));
 	out.dpr = std::max(1.0f, std::min(out.dpr, 2.0f));
@@ -167,12 +172,16 @@ void OldKOWebPublishRenderMetrics(const OldKOWebRenderSurface& s)
 			? Module.canvas : document.querySelector('#canvas');
 		if (!c) return;
 		const gl = (typeof Module !== 'undefined' && Module.ctx) ? Module.ctx : null;
+		const r = c.getBoundingClientRect();
+		const vv = window.visualViewport;
 		const m = window.__OLDKO_RENDER_METRICS__ || {};
-		m.cssWidth = $0; m.cssHeight = $1;
+		m.cssWidth = r.width; m.cssHeight = r.height;
 		m.logicalWidth = $0; m.logicalHeight = $1;
 		m.backingWidth = $2; m.backingHeight = $3;
 		m.drawingBufferWidth = gl ? gl.drawingBufferWidth : c.width;
 		m.drawingBufferHeight = gl ? gl.drawingBufferHeight : c.height;
+		m.viewportWidth = vv ? vv.width : innerWidth;
+		m.viewportHeight = vv ? vv.height : innerHeight;
 		m.devicePixelRatio = $4;
 		m.renderScale = $5;
 		m.quality = UTF8ToString($6);
