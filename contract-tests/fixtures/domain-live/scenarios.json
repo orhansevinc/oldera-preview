@@ -1,0 +1,93 @@
+{
+  "release_id": "oldkoweb-domain-live-20261015",
+  "base_handoffs": {
+    "WEBSITE": {
+      "schema_version": "domain-live-website-handoff/v1",
+      "release_id": "oldkoweb-domain-live-20261015",
+      "branch": "official-site-domain-release",
+      "source_commit": "1111111111111111111111111111111111111111",
+      "input_pins": {"WS13": {"head": "2222222222222222222222222222222222222222"}},
+      "api_contract_references": {
+        "account_ws13": {"routes": ["POST /v1/accounts/register","POST /v1/accounts/verification/request","POST /v1/accounts/verification/confirm","POST /v1/session/login","GET /v1/session/current","POST /v1/session/logout","POST /v1/password/change","POST /v1/password-reset/request","POST /v1/password-reset/confirm"]},
+        "credential_envelope_ws03": {"required_shared_boundary": "10-12 printable ASCII bytes for website credentials that must authenticate through KO1298"}
+      },
+      "checks": {"head_sha": "1111111111111111111111111111111111111111","javascript_syntax": "PASS"},
+      "blockers": [], "consumers": ["WS13","WS03"]
+    },
+    "WS13": {
+      "schema_version": "domain-live-handoff/v1", "release_id": "oldkoweb-domain-live-20261015", "workstream": "WS13", "branch": "ws13-account-api", "source_commit": "2222222222222222222222222222222222222222",
+      "input_pins": {"WS07": "3333333333333333333333333333333333333333","WS03_reviewed": "4444444444444444444444444444444444444444"},
+      "credential_contract_summary": {"password_write": {"accepted": "10-12 printable ASCII bytes U+0021-U+007E with at least three character classes"}},
+      "api_contract_summary": {"routes": ["POST /v1/accounts/register","POST /v1/accounts/verification/request","POST /v1/accounts/verification/confirm","POST /v1/session/login","GET /v1/session/current","POST /v1/session/logout","POST /v1/password/change","POST /v1/password-reset/request","POST /v1/password-reset/confirm"]},
+      "delivery_contract_summary": {"production_env": ["OLDKO_ACCOUNT_DELIVERY_WEBHOOK_URL","OLDKO_ACCOUNT_DELIVERY_WEBHOOK_SECRET","OLDKO_ACCOUNT_MAIL_FROM"]},
+      "production_dependencies": {"account_table": "oldko.accounts"},
+      "ci": {"head_sha": "2222222222222222222222222222222222222222","conclusion": "success"},
+      "blockers": [], "consumers": ["WEBSITE","WS03","WS09"]
+    },
+    "WS07": {
+      "schema_version": "ws07-domain-live/v1", "release_id": "oldkoweb-domain-live-20261015", "workstream": "WS07", "branch": "ws07-database", "source_commit": "3333333333333333333333333333333333333333",
+      "authoritative_identity": {"player_account_table": "oldko.accounts","character_table": "oldko.characters"},
+      "adapter_contract": {
+        "class": "PgWs08AdminRepository",
+        "required_methods": ["transaction","overview","listPlayers","getCharacter","updateCharacter","updateStats","updateSkills","getInventory","getInn","getTransactions","getSanctions","searchItems","itemHistory","itemAction","findDuplicateSerials","createSanction","removeSanction","appendAudit","listAudit","enqueueCommand"],
+        "extra_persistence_methods": ["createAdminSession","getAdminSession","revokeAdminSession","runIdempotent","updateCommand","getCommand"],
+        "table_mapping": {"command_outbox": ["oldko.admin_command_outbox"]}
+      },
+      "migration_plan": {"ledger": "public._oldko_migrations","order": [
+        {"order":1,"owner":"WS07","path":"database/migrations/0001_init.sql"},
+        {"order":2,"owner":"WS07","path":"database/migrations/0002_persistence_hardening.sql"},
+        {"order":3,"owner":"WS07","path":"database/migrations/0003_public_account_api.sql"},
+        {"order":4,"owner":"WS07","path":"database/migrations/0004_admin_persistence.sql"},
+        {"order":5,"owner":"WS13","path":"services/account-api/sql/0001_postgres_rate_limit.sql","ledger":"WS13 service-owned migration; separate ledger"}
+      ]},
+      "checks": {"run_head": "3333333333333333333333333333333333333333","source_ci": [{"result":"success"}]},
+      "blockers": [], "consumers": ["WS13","WS03","WS08","WS09"]
+    },
+    "WS03": {
+      "release_id": "oldkoweb-domain-live-20261015", "workstream": "WS03", "source_commit": "4444444444444444444444444444444444444444",
+      "input_pins": {"WS07": "3333333333333333333333333333333333333333","WS13_reviewed": "2222222222222222222222222222222222222222"},
+      "production": {"required_env": ["DATABASE_URL","OLDKO_MORADON_SMD"]},
+      "persistence_contract": {"account": "oldko.accounts","character_fk": "oldko.characters.account_id -> oldko.accounts.id"},
+      "credential_contract": {"secret_max_bytes":12,"shared_required_range":"10-12 printable ASCII bytes"},
+      "runtime_contract": {"methods":["listOnlineCharacters","getCharacterState","mutateOnlineCharacter"]},
+      "checks": {"domain_live_head":"4444444444444444444444444444444444444444","test":"success"},
+      "blockers": [], "consumers":["WS13","WS08","WS09"]
+    },
+    "WS08": {
+      "schema_version":1,"release_id":"oldkoweb-domain-live-20261015","workstream":"WS08","branch":"ws08-admin-api","source_commit":"5555555555555555555555555555555555555555",
+      "input_pins":{"WS07":"3333333333333333333333333333333333333333","WS03":"4444444444444444444444444444444444444444"},
+      "adapter_contracts":{"repository_methods":["transaction","overview","listPlayers","getCharacter","updateCharacter","updateStats","updateSkills","getInventory","getInn","getTransactions","getSanctions","searchItems","itemHistory","itemAction","findDuplicateSerials","createSanction","removeSanction","appendAudit","listAudit","createAdminSession","getAdminSession","revokeAdminSession","runIdempotent","enqueueCommand","updateCommand","getCommand"],"runtime_methods":["listOnlineCharacters","getCharacterState","mutateOnlineCharacter"]},
+      "command_contract":{"states":["PENDING","SUCCEEDED","FAILED","UNSUPPORTED"]},
+      "frontend_owner_contract":{"command_status_endpoint":"GET /api/admin/commands/:id"},
+      "ws09_required_config":["ADMIN_USERS_JSON","ADMIN_ROOT_OWNER_ID","ADMIN_SESSION_SECRET","ADMIN_ALLOWED_ORIGINS","ADMIN_REPOSITORY_MODULE","ADMIN_RUNTIME_AUTHORITY_MODULE","ADMIN_COMMAND_BUS_MODULE","DATABASE_URL"],
+      "checks":{"run_head":"5555555555555555555555555555555555555555","conclusion":"success"},
+      "blockers":[],"consumers":["WEBSITE","WS09","WS10"]
+    },
+    "WS09": {
+      "schema_version":"ws09-domain-live/v1","release_id":"oldkoweb-domain-live-20261015","owner":"WS09","branch":"ws09-production-infra","source_commit":"6666666666666666666666666666666666666666",
+      "deployment":{"deployment_receipt":"receipt-123","required_env":["DATABASE_URL","OLDKO_MORADON_SMD","OLDKO_ACCOUNT_DELIVERY_WEBHOOK_URL","OLDKO_ACCOUNT_DELIVERY_WEBHOOK_SECRET","OLDKO_ACCOUNT_MAIL_FROM","ADMIN_USERS_JSON","ADMIN_ROOT_OWNER_ID","ADMIN_SESSION_SECRET","ADMIN_ALLOWED_ORIGINS","ADMIN_REPOSITORY_MODULE","ADMIN_RUNTIME_AUTHORITY_MODULE","ADMIN_COMMAND_BUS_MODULE"]},
+      "tested_release":{"release_id":"oldkoweb-domain-live-20261015"},
+      "checks":{"head_sha":"6666666666666666666666666666666666666666","production_readiness":"SUCCESS"},
+      "blockers":[],"consumers":["WS10"]
+    },
+    "WS10": {
+      "schema_version":"ws10-domain-live-handoff/v1","release_id":"oldkoweb-domain-live-20261015","owner":"WS10","branch":"ws10-qa-integration","source_commit":"7777777777777777777777777777777777777777",
+      "tested_release":{"accepted_website_source_commit":"1111111111111111111111111111111111111111"},
+      "automation":{"machine_result":"artifacts/domain-live/WS10.json"},
+      "acceptance_run":{"head_sha":"7777777777777777777777777777777777777777","workflow_conclusion":"SUCCESS"},
+      "blockers":[],"consumer_requirements":["WS09 deployment receipt","WS50 child candidate"]
+    },
+    "WS50": {
+      "schema_version":"oldkoweb-domain-live-handoff/v1","release_id":"oldkoweb-domain-live-20261015","owner":"WS50","branch":"ws50-integration-rehearsal","source_commit":"8888888888888888888888888888888888888888",
+      "contracts":[{"path":"tools/ws50_integration/domain_live.py","commit":"8888888888888888888888888888888888888888"}],
+      "child_candidate":"WS50-C-final@sha256:abc",
+      "checks":[{"tested_sha":"8888888888888888888888888888888888888888","result":"SUCCESS"}],
+      "blockers":[],"consumer_requirements":["exact owner pins"]
+    }
+  },
+  "variants": {
+    "stale_admin_blocker": {"owner":"WS08","patch":{"input_pins":{"WS07":"0000000000000000000000000000000000000000","WS03":"4444444444444444444444444444444444444444"},"blockers":[{"owner":"WS07","code":"WS07_ADMIN_ADAPTER_MISSING","detail":"adapter missing"}]}},
+    "credential_conflict": {"owner":"WEBSITE","patch":{"input_pins":{"WS13":{"head":"9999999999999999999999999999999999999999"}},"api_contract_references":{"account_ws13":{"routes":["POST /v1/accounts/register","POST /v1/accounts/verification/request","POST /v1/accounts/verification/confirm","POST /v1/session/login","GET /v1/session/current","POST /v1/session/logout","POST /v1/password/change","POST /v1/password-reset/request","POST /v1/password-reset/confirm"]},"credential_envelope_ws03":{"required_shared_boundary":"10-128 characters"}}}},
+    "migration_collision": {"owner":"WS07","patch":{"migration_plan":{"ledger":"public._oldko_migrations","order":[{"order":1,"owner":"WS07","path":"database/migrations/0001_init.sql"},{"order":2,"owner":"WS07","path":"database/migrations/0002_persistence_hardening.sql"},{"order":3,"owner":"WS13","path":"services/account-api/sql/0001_postgres_rate_limit.sql","ledger":"public._oldko_migrations"}]}}}
+  }
+}
