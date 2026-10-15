@@ -1,0 +1,123 @@
+{
+  "schema_version": "oldkoweb-phase2-owners/v1",
+  "integration_owner": {
+    "id": "P2-00",
+    "branch": "phase2/00-integration",
+    "owns": [
+      "coordination/phase2/**",
+      "services/ko1298-session/dispatcher.js",
+      "services/ko1298-session/production-composition.js",
+      "services/domain-live-runtime/**",
+      "deploy/domain-live/**",
+      "deploy/local-origin/** release/update composition",
+      ".github/workflows/*phase2*",
+      ".github/workflows/publish-openko-real1298.yml",
+      "real1298/KnightOnLine.js",
+      "real1298/KnightOnLine.wasm",
+      "real1298/KnightOnLine.data",
+      "real1298/index.html",
+      "final release/provider manifests"
+    ]
+  },
+  "providers": [
+    {
+      "id": "P2-01",
+      "branch": "phase2/01-network",
+      "scope": "connection, session, movement",
+      "owned_paths": ["services/ko-gateway/**", "services/ko1298-movement/**", "services/ko1298-session/session-auth.js", "services/ko1298-session/session-lifecycle.js", "services/ko1298-session/persistent-movement-port.js", "services/ko1298-session/protocol.js", "tests/ko-gateway/**", "tests/ko1298-session/** network/movement-focused additions"]
+    },
+    {
+      "id": "P2-02",
+      "branch": "phase2/02-loading",
+      "scope": "loading, launcher, asset cache",
+      "owned_paths": ["launcher/loading-specific source and tests", "tools/patch_openko_browser.py when loading-specific", "client asset-cache/loading patch files", "loading-specific QA fixtures"]
+    },
+    {
+      "id": "P2-03",
+      "branch": "phase2/03-render",
+      "scope": "graphics, resolution, renderer",
+      "owned_paths": ["OpenKO renderer patch sources/scripts", "renderer-specific browser patches", "render QA/evidence files"]
+    },
+    {
+      "id": "P2-04",
+      "branch": "phase2/04-world",
+      "scope": "maps, world, zone, region",
+      "owned_paths": ["services/ko1298-world/**", "services/oldko-data/src/adapters/ws14-world.js", "world/map authority data", "world-session tests"]
+    },
+    {
+      "id": "P2-05",
+      "branch": "phase2/05-npc",
+      "scope": "NPC, dialogue, quest",
+      "owned_paths": ["services/ko1298-npc/**", "world-data/npc/**", "NPC/dialogue/quest tests and fixtures"]
+    },
+    {
+      "id": "P2-06",
+      "branch": "phase2/06-mobs",
+      "scope": "mob, boss, spawn, AI",
+      "owned_paths": ["services/ko1298-mobs/**", "world-data/mobs/**", "mob/boss/spawn/AI tests"]
+    },
+    {
+      "id": "P2-07",
+      "branch": "phase2/07-combat",
+      "scope": "combat, skill, progression",
+      "owned_paths": ["services/ko1298-session/combat-protocol.js", "services/ko1298-session/playable-combat-adapter.js", "protocol-lab/runtime/playable-combat-codec.cjs", "combat/skill/progression service modules", "services/oldko-data/src/adapters/ws27-progression.js", "combat tests"]
+    },
+    {
+      "id": "P2-08",
+      "branch": "phase2/08-items",
+      "scope": "items, drops, bank, economy",
+      "owned_paths": ["item/inventory/drop/bank service modules", "services/oldko-data/src/adapters/ws17-inventory.js", "services/oldko-data/src/adapters/ws22-economy.js", "item/economy tests"]
+    },
+    {
+      "id": "P2-09",
+      "branch": "phase2/09-social",
+      "scope": "party, clan, communication, PvP",
+      "owned_paths": ["party/clan/chat/PvP service modules", "social protocol/data modules", "social/PvP tests"]
+    },
+    {
+      "id": "P2-10",
+      "branch": "phase2/10-client-ui",
+      "scope": "real client UI, input, audio",
+      "owned_paths": ["OpenKO client UI/input/audio patch sources/scripts", "tools/ws04_character/** when client-facing", "client UI/input/audio QA/evidence files"]
+    },
+    {
+      "id": "P2-11",
+      "branch": "phase2/11-data-admin",
+      "scope": "DB, account, character, admin",
+      "owned_paths": ["database/migrations/**", "services/oldko-data/** except domain-owned adapters", "services/account-api/**", "services/admin-api/**", "admin backend contracts/tests", "account/data/admin tests"]
+    },
+    {
+      "id": "P2-12",
+      "branch": "phase2/12-hosting",
+      "scope": "PC hosting, deploy, diagnostics, backup",
+      "owned_paths": ["hosting/diagnostic/backup implementation outside integration-owned final deploy composition", "deployment tests", "backup/restore tests", "PowerShell helper proposals"]
+    },
+    {
+      "id": "P2-13",
+      "branch": "phase2/13-qa",
+      "scope": "independent real-browser acceptance",
+      "owned_paths": ["qa/**", "acceptance tests", "browser evidence/receipts", "no production implementation ownership"]
+    }
+  ],
+  "protected_product_surfaces": [
+    "index.html",
+    "account.html",
+    "site-config.js",
+    "oldkoweb-v14-a.css",
+    "oldkoweb-v14-b.css",
+    "oldkoweb-v14.js",
+    "account-v15.css",
+    "account-v15.js",
+    "admin/index.html",
+    "admin/admin.css",
+    "admin/admin.js",
+    "admin/character-control.css",
+    "admin/character-control.js"
+  ],
+  "rules": [
+    "Provider ownership is primary ownership, not permission to finalize integration-owned shared files.",
+    "When two providers need the same shared dispatcher/build/deploy file, each records the requested wiring in its handoff and P2-00 performs the final edit.",
+    "Built real1298 binaries are publication outputs owned by P2-00; client providers supply source patches and reproducible build inputs, not stale replacement binaries.",
+    "Website/account design and admin v10 are preserved unless explicitly re-approved by the user."
+  ]
+}
