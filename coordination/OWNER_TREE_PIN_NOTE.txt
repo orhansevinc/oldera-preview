@@ -1,0 +1,1 @@
+Owner source trees are composed by WS50 using exact handoff commits. This marker is intentionally small; release evidence is in coordination/ws50-domain-live-owner-pins.json.
