@@ -79,9 +79,9 @@ async function createFixture() {
   const character = (await pool.query(`INSERT INTO oldko.characters(account_id,slot,name,name_key,nation,race,class_id,zone_id,pos_x,pos_y,pos_z,world_state) VALUES($1,0,$2,lower($2),1,1,101,21,312,0,402,'{}') RETURNING id`,[account.id,`P${stamp}`.slice(0,20)])).rows[0];
   await pool.query(`INSERT INTO oldko.character_stats(character_id,level,exp) VALUES($1,2,10)`,[character.id]);
   const item = (await pool.query(`INSERT INTO oldko.item_instances(serial,item_template_id) VALUES($1,1001) RETURNING id`,[(700000000000000000n-BigInt(stamp)).toString()])).rows[0];
-  await pool.query(`INSERT INTO oldko.inventory(character_id,slot,item_instance_id,quantity) VALUES($1,0,$2,1)`,[character.id,item.id]);
+  await pool.query(`INSERT INTO oldko.inventory(character_id,slot,item_instance_id) VALUES($1,0,$2)`,[character.id,item.id]);
   const clan = (await pool.query(`INSERT INTO oldko.clans(name,name_key,nation,chief_character_id) VALUES($1,lower($1),1,$2) RETURNING id`,[`C${stamp}`.slice(0,24),character.id])).rows[0];
-  await pool.query(`INSERT INTO oldko.clan_members(clan_id,character_id,rank) VALUES($1,$2,0)`,[clan.id,character.id]);
+  await pool.query(`INSERT INTO oldko.clan_members(clan_id,character_id,role) VALUES($1,$2,'chief')`,[clan.id,character.id]);
   await pool.query(`INSERT INTO oldko.admin_actors(id,username,username_key,password_hash,roles) VALUES($1,$2,lower($2),$3,ARRAY['owner'])`,[adminId,`Admin${stamp}`.slice(0,64),passwordHash]);
   return { accountId:account.id,characterId:character.id,clanId:clan.id,adminId };
 }
