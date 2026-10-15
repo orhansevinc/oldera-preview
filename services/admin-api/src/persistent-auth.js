@@ -74,11 +74,13 @@ function createPersistentAuth({ repository, users, rootOwnerId, sessionSecret, t
     const user = byUsername.get(String(username || '').trim().toLowerCase());
     if (!user || !verifyPassword(password, user.passwordHash)) return null;
     const token = crypto.randomBytes(32).toString('base64url');
+    const tokenHash = digestHex('session', token);
     const csrf = csrfForToken(token);
     const now = Date.now();
     const session = await repository.createAdminSession({
+      id: tokenHash,
       userId: user.id,
-      tokenHash: digestHex('session', token),
+      tokenHash,
       createdAt: new Date(now).toISOString(),
       expiresAt: new Date(now + ttlSeconds * 1000).toISOString(),
       sourceIp: context.sourceIp || null,
