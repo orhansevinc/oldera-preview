@@ -113,12 +113,21 @@ jobs:
         run: |
           set -euo pipefail
           docker rm -f ws50-pg-test >/dev/null 2>&1 || true
+          trap 'docker rm -f ws50-pg-test >/dev/null 2>&1 || true' EXIT
           docker run -d --name ws50-pg-test -e POSTGRES_DB=oldkoweb -e POSTGRES_USER=oldkoweb -e POSTGRES_PASSWORD=ws50-ci-password -p 55432:5432 postgres:16-alpine >/dev/null
-          for i in $(seq 1 40); do docker exec ws50-pg-test pg_isready -U oldkoweb -d oldkoweb >/dev/null 2>&1 && break; sleep 1; done
+          ready_count=0
+          for i in $(seq 1 60); do
+            ready_count="$(docker logs ws50-pg-test 2>&1 | grep -c 'database system is ready to accept connections' || true)"
+            if [[ "$ready_count" -ge 2 ]]; then break; fi
+            sleep 1
+          done
+          if [[ "${ready_count:-0}" -lt 2 ]]; then
+            docker logs ws50-pg-test >&2
+            exit 1
+          fi
           DATABASE_URL="$DATABASE_URL" node services/oldko-data/src/scripts/migrate.js
           DATABASE_URL="$DATABASE_URL" node services/account-api/src/scripts/apply-rate-limit-schema.js
           DATABASE_URL="$DATABASE_URL" node --test tests/ko1298-session/postgres-composition.test.mjs
-          docker rm -f ws50-pg-test >/dev/null
 
       - name: Start unified real services
         shell: bash
