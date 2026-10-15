@@ -170,21 +170,26 @@ test('P2-07 result drives one death event, duplicate result drives no second P2-
   assert.equal(respawned.spawnEpoch, 1);
 });
 
-test('movement ownership stays external: no-path/leash uses intent ports and authoritative position sync', () => {
+test('movement ownership stays external: acquired target movement yields chase, no-path yields return intent', () => {
   const { runtime, movementIntents } = harness();
   const first = runtime.visibilitySnapshot()[0];
-  runtime.playerUpsert(playerAt('player-a', first, {
-    position: { x: first.x + 10, y: first.y, z: first.z },
-  }), 100);
+  runtime.playerUpsert(playerAt('player-a', first), 100);
   runtime.tick(200);
+
+  const localX = ((first.x % 48) + 48) % 48;
+  const movedX = localX <= 41 ? first.x + 6 : first.x - 6;
+  runtime.playerUpsert(playerAt('player-a', first, {
+    position: { x: movedX, y: first.y, z: first.z },
+  }), 250);
+  runtime.tick(300);
   assert.ok(movementIntents.some((entry) => entry.kind === 'CHASE'));
 
-  runtime.reportMovementOutcome(first.runtimeId, 'no-path', 300);
+  runtime.reportMovementOutcome(first.runtimeId, 'no-path', 400);
   assert.ok(movementIntents.some((entry) => entry.kind === 'NO_PATH'));
   assert.ok(movementIntents.some((entry) => entry.kind === 'RETURN_HOME'));
 
-  runtime.syncMobPosition(first.runtimeId, first.home, 400);
-  runtime.tick(500);
+  runtime.syncMobPosition(first.runtimeId, first.home, 500);
+  runtime.tick(600);
   assert.ok(['idle', 'aggro', 'chasing', 'attack-intent'].includes(runtime.combatSnapshot(first.runtimeId).state));
 });
 
