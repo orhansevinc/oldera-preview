@@ -1,0 +1,15 @@
+{
+  "schema_version": "oldkoweb-phase2-migrations/v1",
+  "release_id": "phase2-rc-example",
+  "backup_before_migrate": true,
+  "rollback_compatible_with_previous_application": true,
+  "migrations": [
+    {
+      "order": 1,
+      "id": "0001_example",
+      "kind": "sql",
+      "path": "database/migrations/0001_example.sql",
+      "sha256": "REPLACE_WITH_SHA256"
+    }
+  ]
+}
