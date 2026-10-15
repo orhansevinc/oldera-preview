@@ -1,0 +1,261 @@
+{
+  "schema_version": "oldkoweb-phase2-handoff/v1",
+  "owner": "P2-06",
+  "branch": "phase2/06-mobs",
+  "base": {
+    "ref": "ws50-integration-rehearsal",
+    "sha": "50ecabec15bd358d222a01891ca31359f3a928b0"
+  },
+  "source_commit": "12d7ef0cdc753156c9061e47cde259de563a6ebf",
+  "status": "BLOCKED",
+  "integration_disposition": "The normal-Moradon mob provider implementation is ready to be selectively consumed by P2-00, but complete P2-06 closure is blocked by missing boss/source facts, P2-04 shared world/collision contract, shared composition wiring, incomplete PID700 client asset authority, and real-PC/browser evidence.",
+  "continued_workstreams": [
+    {
+      "id": "WS25",
+      "branch": "ws25-mob-ai",
+      "sha": "18c9e9b8439fef88fc93d74bfec7981b0cb41958",
+      "use": "Existing verified Moradon spawn/visibility/combat lifecycle implementation; extended, not replaced."
+    },
+    {
+      "id": "WS36",
+      "branch": "ws36-world-clock",
+      "sha": "adf25c055f50f26cbbc9ba81254307019ff5bcbd",
+      "use": "World-clock deterministic schedule mechanics inspected as the future timed-spawn mechanism; no boss schedule fact is inferred from the scheduler."
+    },
+    {
+      "id": "WS38",
+      "branch": "ws38-client-content-pipeline",
+      "asset_manifest_verified_commit": "13a8094f35e0d5b205c71fd2f7b4a8b387709555",
+      "use": "PID800 Bandicoot model/joint/n3anim/parts/textures source authority only."
+    }
+  ],
+  "coordination_inputs": [
+    {
+      "path": "coordination/phase2/CHARTER.md",
+      "branch": "phase2/00-integration",
+      "blob_sha": "ce219c228d4f5595f227d6e612ffead319baa8b7"
+    },
+    {
+      "path": "coordination/phase2/OWNERS.json",
+      "branch": "phase2/00-integration",
+      "blob_sha": "022dae3604cb781fcae1968e2e91f61b36f34f6d"
+    },
+    {
+      "path": "coordination/phase2/CONTRACTS.md",
+      "branch": "phase2/00-integration",
+      "blob_sha": "8b6f59366c1bf1c7e92b7d38aa8cae8c33b18cfb"
+    }
+  ],
+  "scope": {
+    "owned": [
+      "spawn/despawn lifecycle",
+      "idle/aggro/chase/attack-intent/return AI state",
+      "leash and target reset",
+      "source-backed respawn timing",
+      "mob runtime semantic visibility events",
+      "single central mob tick",
+      "idempotent death-event identity for P2-08",
+      "source audit for Moradon mob/boss/assets"
+    ],
+    "not_owned": [
+      "damage calculation or skill resolution (P2-07)",
+      "drop/item/reward application (P2-08)",
+      "zone/region/entity-ID/collision/path authority (P2-04)",
+      "shared session composition/dispatcher/domain runtime (P2-00)",
+      "real client build or browser packet encoder (P2-00/P2-04/client owners)",
+      "website/account/admin UI"
+    ]
+  },
+  "changed_files": [
+    "services/ko1298-mobs/production-runtime.cjs",
+    "services/ko1298-mobs/index.cjs",
+    "services/ko1298-mobs/P2_06_RUNTIME_CONTRACT.md",
+    "tests/ko1298-mobs/p2-06-production-runtime.test.cjs",
+    "world-data/mobs/P2-06_SOURCE_AUDIT.json"
+  ],
+  "contracts_provided": [
+    {
+      "contract": "p2-06/mob-production-runtime/v1",
+      "entry": "createMobProductionRuntime(worldDefinition, ports)",
+      "semantics": "One shared MobCombatService instance and one optional central 100ms interval for the complete population; same runtime identity/HP/position is consumed by all players."
+    },
+    {
+      "contract": "p2-06/mob-visibility-events/v1",
+      "events": ["visibility-in", "visibility-out"],
+      "payload": "{player,snapshot,event}",
+      "consumer": "P2-00 routes to existing WS14 VisibilityWorldSessionService.consumeMobVisibilityEvent; P2-06 emits no packet bytes."
+    },
+    {
+      "contract": "p2-06/mob-attack-intent/v1",
+      "event": "attack-intent",
+      "consumer": "P2-07",
+      "semantics": "Source-backed attack metadata and target intent only; P2-06 never applies its own damage."
+    },
+    {
+      "contract": "p2-06/mob-death-event/v1",
+      "event_id": "ko1298-mob-death:<runtimeId>:<requestKey>",
+      "consumer": "P2-08",
+      "semantics": "Emitted only on an accepted zero-HP combat result; replay of the same accepted request cannot emit a second provider reward event. P2-08 must persist/dedupe event_id."
+    }
+  ],
+  "contracts_consumed": [
+    {
+      "owner": "P2-04",
+      "contract": "world-region-movement-authority/v1 (proposed)",
+      "required": true,
+      "needs": [
+        "terrain.resolveHeight",
+        "shared runtimeIds.claim",
+        "visibilityKey(player)",
+        "isMobVisibleToPlayer(player,mob)",
+        "player region updates",
+        "authoritative mob movement/collision/path outcomes"
+      ],
+      "state": "BLOCKED_CONTRACT: P2-04 handoff was not published when inspected."
+    },
+    {
+      "owner": "P2-07",
+      "contract": "combat attack-intent -> authoritative absolute-HP result/v1 (proposed)",
+      "required": true,
+      "state": "BLOCKED_CONTRACT: P2-07 handoff was not published when inspected."
+    },
+    {
+      "owner": "P2-08",
+      "contract": "persistent mob-death event dedupe/v1 (proposed)",
+      "required": true,
+      "state": "BLOCKED_CONTRACT: P2-08 handoff was not published when inspected."
+    },
+    {
+      "owner": "P2-00",
+      "contract": "shared runtime composition/v1",
+      "required": true,
+      "state": "BLOCKED_CONTRACT: provider ownership forbids P2-06 from finalizing production-composition/domain-runtime wiring."
+    }
+  ],
+  "root_cause": {
+    "moradon_invisibility": {
+      "data_table": {
+        "state": "VERIFIED",
+        "evidence": "world-data/mobs/verified/moradon-zone21.verified.json contains 10 source-backed K_MONSTER rows, 20 active K_NPCPOS rows and materializes 135 slots. Current verified spawn rectangles have maximum z=329 while the world login coordinate is z=402."
+      },
+      "server_behavior": {
+        "state": "BLOCKED_CONTRACT",
+        "evidence": "Phase-1 services/ko1298-session/production-composition.js creates MobVisibilityService, calls initialize(0), and passes it as mobPort. It does not create/run MobCombatService, a central tick, player region callbacks, movement outcomes, or P2-07/P2-08 routing. P2-06 now provides createMobProductionRuntime for that wiring."
+      },
+      "browser_visibility": {
+        "state": "PARTIAL",
+        "evidence": "WS14 VisibilityWorldSessionService already merges mobPort.getNearby into WIZ_NPC_REGION 0x1C and serves WIZ_REQ_NPCIN 0x1D. Initial login legitimately yields zero mob IDs because every verified slot is outside the login 3x3 AOI. Dynamic region crossing is not currently wired from movement -> P2-06 playerUpsert -> visibility-in/out -> consumeMobVisibilityEvent, so walking into the monster fields can remain visually empty until P2-00 composes the event path."
+      },
+      "asset_binding": {
+        "state": "PARTIAL",
+        "evidence": "WS38 source-verifies PID800 Bandicoot n3chr/n3joint/n3anim/parts/textures. The inspected source manifest does not close PID700 Worm-family binaries; exact all-family animation-state IDs are not invented."
+      }
+    }
+  },
+  "source_inventory": {
+    "zone_id": 21,
+    "monster_template_ids": [750, 751, 752, 754, 755, 850, 851, 852, 853, 854],
+    "model_resource_ids": [700, 800],
+    "spawn_rows": 20,
+    "runtime_slots": 135,
+    "source_respawn_seconds": [20, 30],
+    "bosses_with_verified_schedule": [],
+    "details": "world-data/mobs/P2-06_SOURCE_AUDIT.json"
+  },
+  "tests": [
+    {
+      "command": "cd services/ko1298-mobs && npm test",
+      "result": "NOT_RUN",
+      "evidence": "Provider test suite was added at tests/ko1298-mobs/p2-06-production-runtime.test.cjs. This branch has no matching GitHub Actions trigger and the available GitHub connector does not execute repository commands; no PASS is claimed by inspection."
+    },
+    {
+      "command": "git diff/compare 50ecabec15bd358d222a01891ca31359f3a928b0..12d7ef0cdc753156c9061e47cde259de563a6ebf",
+      "result": "PASS",
+      "evidence": "GitHub compare reports branch ahead by 8 with changes limited to P2-06-owned mob/data/tests plus the required P2-06 handoff contract document; no shared production-composition, website/admin, deploy, client binary, or P2-04/P2-07/P2-08 implementation path was edited."
+    },
+    {
+      "command": "real Windows-PC tick/CPU measurement",
+      "result": "NOT_RUN",
+      "evidence": "benchmarkTicks() and single-timer test are provided, but exact intended-PC CPU evidence must be executed by P2-00/P2-13 on the user's machine; a fabricated or GitHub-host timing is not substituted."
+    },
+    {
+      "command": "real play.oldkoweb.com two-player/browser acceptance",
+      "result": "NOT_RUN",
+      "evidence": "Requires P2-00 shared composition and P2-13 real-browser execution. Provider code alone cannot truthfully claim client visibility."
+    }
+  ],
+  "runtime_evidence": [
+    {
+      "area": "data_table",
+      "state": "VERIFIED",
+      "evidence": "Source audit records exact Moradon monster IDs/models/stats/spawn/respawn facts and explicitly records unresolved animation/boss facts."
+    },
+    {
+      "area": "server_behavior",
+      "state": "PARTIAL",
+      "evidence": "Provider implements one shared runtime, AI intents, disconnect/region reset, external movement outcomes, authoritative HP-result ingestion, death-event idempotency and respawn runtime-ID reuse. Final shared composition is pending."
+    },
+    {
+      "area": "browser_visibility",
+      "state": "PARTIAL",
+      "evidence": "Existing 0x1C/0x1D encoder path is identified; initial-zero-AOI and missing dynamic region wiring are isolated. Real client evidence remains pending integration."
+    },
+    {
+      "area": "boss_restart_singleton",
+      "state": "BLOCKED_SOURCE",
+      "evidence": "No source-backed boss/schedule exists in the current verified input; no fake boss is instantiated. WS36 deterministic scheduler mechanics alone are insufficient to claim an original boss schedule."
+    },
+    {
+      "area": "wall_hidden_spawn",
+      "state": "BLOCKED_CONTRACT",
+      "evidence": "P2-06 requires authoritative terrain Y and never falls back to y=0, but wall/collision acceptance is P2-04 ownership and no Phase-2 spawn-validity/collision contract was published at inspection time."
+    },
+    {
+      "area": "tick_cpu",
+      "state": "PARTIAL",
+      "evidence": "Implementation uses one central 100ms timer and exposes benchmarkTicks; exact Windows-PC number is pending."
+    }
+  ],
+  "shared_file_requests": [
+    {
+      "owner": "P2-00",
+      "files": [
+        "services/ko1298-session/production-composition.js",
+        "services/domain-live-runtime/** and/or integration-owned runtime lifecycle"
+      ],
+      "request": "Replace the production-only MobVisibilityService construction with P2-06 createMobProductionRuntime while preserving its getNearby surface as mobPort; initialize once and start exactly one central tick; feed P2-04 player region/movement outcomes into P2-06; route visibility-in/out through existing VisibilityWorldSessionService.consumeMobVisibilityEvent and socket delivery; route attack-intent to P2-07 and mob-death.eventId to P2-08. Do not widen AOI or move source spawn coordinates in this wiring."
+    }
+  ],
+  "source_or_asset_gaps": [
+    {
+      "id": "BOSS_SOURCE_SCHEDULE_MISSING",
+      "state": "BLOCKED_SOURCE",
+      "detail": "Current verified Moradon slice supplies no boss-specific row, original ability policy or world-clock spawn schedule."
+    },
+    {
+      "id": "PID700_CLIENT_ASSET_AUTHORITY_MISSING",
+      "state": "BLOCKED_ASSET",
+      "detail": "PID800 Bandicoot assets are source-verified by WS38; PID700 Worm-family binary mapping is not closed by the inspected manifest."
+    },
+    {
+      "id": "ALL_MONSTER_ANIMATION_STATE_MAPPING_INCOMPLETE",
+      "state": "BLOCKED_ASSET",
+      "detail": "A PID800 n3anim asset exists, but exact behavior-state/animation-id authority for all current monster families is not established here."
+    }
+  ],
+  "blockers": [
+    "P2_00_SHARED_COMPOSITION_WIRING_REQUIRED",
+    "P2_04_REGION_COLLISION_AND_MOB_MOVEMENT_CONTRACT_REQUIRED",
+    "P2_07_ATTACK_INTENT_RESULT_CONTRACT_REQUIRED",
+    "P2_08_PERSISTENT_DEATH_EVENT_DEDUPE_REQUIRED",
+    "BOSS_SOURCE_SCHEDULE_MISSING",
+    "PID700_CLIENT_ASSET_AUTHORITY_MISSING",
+    "REAL_PC_TWO_PLAYER_BROWSER_AND_CPU_EVIDENCE_PENDING"
+  ],
+  "migration_entries": [],
+  "notes": [
+    "No second mob system was created; production-runtime.cjs composes the existing MobCombatService/WS25 implementation.",
+    "No damage formula, loot table, world collision algorithm, region geometry change, website/admin change, client binary or deploy workflow was added.",
+    "Do not mark P2-06 VERIFIED solely because 135 records exist or unit tests later pass; final browser visibility and two-player/shared-boss claims require integrated real-client evidence."
+  ]
+}
