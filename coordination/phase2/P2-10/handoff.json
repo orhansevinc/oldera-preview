@@ -1,0 +1,127 @@
+{
+  "workstream": "P2-10",
+  "status": "BLOCKED",
+  "branch": "phase2/10-client-ui",
+  "baseline": {
+    "ref": "ws50-integration-rehearsal",
+    "commit": "50ecabec15bd358d222a01891ca31359f3a928b0"
+  },
+  "code_sha": "748a589872948388768d19be965e3264cd7cec2c",
+  "legacy_inputs": [
+    {
+      "workstream": "WS04",
+      "branch": "ws04-character-client",
+      "commit": "32616b1b7ccbdc3de41c0949f182a65e03450d18",
+      "reuse": "character/native client integration constraints and honest artifact proof policy"
+    },
+    {
+      "workstream": "WS41",
+      "branch": "ws41-browser-input",
+      "commit": "96b9b0fc46bff9644da18138bff868dc99a814b3",
+      "reuse": "browser input bridge and focus/fullscreen compatibility findings"
+    },
+    {
+      "workstream": "WS42",
+      "branch": "ws42-browser-audio",
+      "commit": "6df145cefe9babd59bfac0df3eb8575a0446bbad",
+      "reuse": "native audio ownership, browser gesture requirement, and explicit single-thread audio blocker"
+    }
+  ],
+  "engine_source": {
+    "repo": "luisfelipe18/old-school-openko",
+    "commit": "97eb0ea20207afc0c360bfed6915113572711be3",
+    "compiler": "Emscripten 3.1.50",
+    "publication_rule": "P2-10 does not publish an old C5 binary; P2-00 must rebuild JS/WASM/data from integrated source."
+  },
+  "files": [
+    "client-src/p2_10/apply_browser_input_lifecycle.py",
+    "client-src/p2_10/verify_browser_source.py",
+    "tests/client/test_p2_10_contracts.py",
+    "coordination/phase2/P2-10/action-matrix.json",
+    "coordination/phase2/P2-10/audio-event-map.json",
+    "coordination/phase2/P2-10/dependency-proposal.json",
+    "coordination/phase2/P2-10/runtime-evidence.json",
+    "coordination/phase2/P2-10/handoff.json"
+  ],
+  "provides": [
+    "client-action-dispatch",
+    "client-window-contract",
+    "client-input-focus",
+    "client-audio-event-map"
+  ],
+  "interfaces": {
+    "p2_03": "consume one provider-owned viewport-to-game transform; P2-10 contains no duplicate coordinate math",
+    "p2_05": "consume authoritative NPC dialog/action routing",
+    "p2_07": "consume authoritative skill/progression/cooldown/target/error state",
+    "p2_08": "consume authoritative inventory/loot/shop/storage/repair/upgrade/trade transaction state",
+    "p2_09": "consume authoritative chat/invite/party/clan/social state",
+    "p2_00": "apply source patch, compose provider contracts, rebuild and publish matching JS/WASM/data"
+  },
+  "implemented": [
+    "Mapped native Map/Inventory/Character/Skill/Hotbar/Command/Exit/NPC/shop/inn/quest/upgrade/loot/trade/party/clan/chat/mouse/focus paths without adding DOM game UI.",
+    "Added deterministic pinned-source browser input lifecycle patch: focus state propagation, held keyboard/mouse clear on focus loss, input reacquire on focus gain, ALT+ENTER fullscreen from a physical user gesture.",
+    "Preserved native chat/edit movement suppression and documented the source guard.",
+    "Kept Command menu separate from GM authority; pinned source GM panel remains explicitly gated by AUTHORITY_MANAGER.",
+    "Kept provider-dependent success fail-closed; no client-side skill/item/social/NPC success simulation was added.",
+    "Documented native audio event ownership and added an integration gate that refuses audio-ready status while the WS42 single-thread audio-disable guard remains."
+  ],
+  "asset_build_needs": [
+    "P2-02 must publish asset/build readiness for native UI, skill/item icons and sound assets.",
+    "P2-00 must apply client-src/p2_10/apply_browser_input_lifecycle.py to the exact pinned OpenKO source after resolving any upstream patch ordering.",
+    "P2-00 must rebuild the real C++/WASM client with Emscripten 3.1.50 and publish JS/WASM/data as one provenance-matched set.",
+    "Browser audio requires an audio-capable build; the WS42 single-thread guard that returns false from CN3SndMgr::InitOpenAL cannot remain if audio is claimed working.",
+    "Do not copy or republish the previous C5 binary after these source changes."
+  ],
+  "tests_and_evidence": {
+    "static_contract_tests": "tests/client/test_p2_10_contracts.py added; covers required control inventory, provider fail-closed policy, Command-vs-GM separation, focus/fullscreen patch invariants and native-audio/no-DOM policy.",
+    "source_evidence": [
+      "Pinned GameProcMain owns CUIInventory, CUIVarious, CUISkillTreeDlg, CUIHotKeyDlg, CUITransactionDlg, CUIWareHouseDlg, CUIInn, CUIQuestMenu/Talk, CUIItemUpgrade, CUIPartyOrForce and related native response handlers.",
+      "Pinned ProcessUIKeyInput dispatches KM_TOGGLE_INVENTORY/STATE/SKILL/CMDLIST/MINIMAP to native handlers.",
+      "Pinned movement input is gated by !IsUIKeyOperated() and no focused CN3UIEdit, so chat typing does not intentionally drive world movement.",
+      "Pinned BGM path creates native stream objects and PlayBGM_Town/PlayBGM_Battle; ReleaseSound tears them down."
+    ],
+    "runtime_evidence": "Not claimed. No direct deploy was performed and this workstream did not receive a fresh P2-00 WASM/data build to exercise at play.oldkoweb.com. runtime-evidence.json marks the exact post-integration browser cases PASS/BLOCKED without fabricating proof.",
+    "integration_gate": "client-src/p2_10/verify_browser_source.py must pass before browser smoke; it intentionally BLOCKS if the old browser-audio-disable guard is still present."
+  },
+  "blockers": [
+    {
+      "id": "P2_03_VIEWPORT_CONTRACT_MISSING",
+      "detail": "coordination/phase2/P2-03/handoff.json was absent when checked; world-click isolation/pointer-lock proof cannot be finalized without the single coordinate adapter."
+    },
+    {
+      "id": "P2_07_SKILL_AUTHORITY_MISSING",
+      "detail": "coordination/phase2/P2-07/handoff.json was absent when checked; skill points, cooldown, targeting and error feedback remain provider-blocked."
+    },
+    {
+      "id": "P2_08_ITEM_AUTHORITY_MISSING",
+      "detail": "coordination/phase2/P2-08/handoff.json was absent when checked; inventory/loot/shop/storage/repair/upgrade/trade success remains provider-blocked."
+    },
+    {
+      "id": "P2_09_SOCIAL_AUTHORITY_MISSING",
+      "detail": "coordination/phase2/P2-09/handoff.json was absent when checked; chat/invite/party/clan end-to-end proof remains provider-blocked."
+    },
+    {
+      "id": "P2_02_BUILD_ASSET_HANDOFF_MISSING",
+      "detail": "coordination/phase2/P2-02/handoff.json was absent when checked; asset/build readiness is not pinned."
+    },
+    {
+      "id": "P2_05_NPC_ROUTING_NOT_PINNED",
+      "detail": "NPC dialog/action routing must be consumed from P2-05 before NPC/shop/inn/quest/upgrade can be called integrated."
+    },
+    {
+      "id": "BROWSER_AUDIO_DISABLED_IN_WS42_SINGLE_THREAD_PATH",
+      "detail": "WS42 patch explicitly disables CN3SndMgr initialization for single-thread Emscripten; sound cannot honestly be marked working until P2-00 proves an audio-capable rebuild and user-gesture unlock."
+    },
+    {
+      "id": "P2_00_FRESH_BROWSER_REBUILD_AND_REAL_USE_PROOF_REQUIRED",
+      "detail": "P2-10 source changes require a fresh integrated C++/WASM build and real-browser smoke. No direct publication was performed."
+    }
+  ],
+  "integration_order": [
+    "Merge/pin provider handoffs (P2-02/P2-03/P2-05/P2-07/P2-08/P2-09 as applicable).",
+    "Apply P2-10 source patch to the exact OpenKO source pin.",
+    "Resolve browser audio build authority and run verify_browser_source.py.",
+    "P2-00 rebuilds JS/WASM/data from the integrated source with Emscripten 3.1.50.",
+    "Run runtime-evidence.json browser smoke cases; only then promote P2-10 from BLOCKED to READY_FOR_INTEGRATION."
+  ]
+}

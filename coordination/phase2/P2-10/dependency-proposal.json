@@ -1,0 +1,68 @@
+{
+  "workstream": "P2-10",
+  "baseline": {
+    "repo": "orhansevinc/oldera-preview",
+    "ref": "ws50-integration-rehearsal",
+    "commit": "50ecabec15bd358d222a01891ca31359f3a928b0"
+  },
+  "engine_source": {
+    "repo": "luisfelipe18/old-school-openko",
+    "commit": "97eb0ea20207afc0c360bfed6915113572711be3",
+    "compiler": "Emscripten 3.1.50"
+  },
+  "contracts_requested": [
+    {
+      "provider": "P2-02",
+      "contract": "client asset/build readiness",
+      "needed_for": ["UI asset availability", "audio asset availability", "fresh WASM/data rebuild"],
+      "handoff_checked": "coordination/phase2/P2-02/handoff.json",
+      "state": "MISSING_AT_PIN_CHECK"
+    },
+    {
+      "provider": "P2-03",
+      "contract": "single viewport-to-game coordinate transform",
+      "needed_for": ["native UI hit testing", "world click isolation", "pointer lock/camera coexistence"],
+      "handoff_checked": "coordination/phase2/P2-03/handoff.json",
+      "state": "MISSING_AT_PIN_CHECK"
+    },
+    {
+      "provider": "P2-07",
+      "contract": "authoritative skill/cooldown/target/error/progression state",
+      "needed_for": ["skill tree", "stat/skill point allocation", "hotbar cooldown", "target/error feedback"],
+      "handoff_checked": "coordination/phase2/P2-07/handoff.json",
+      "state": "MISSING_AT_PIN_CHECK"
+    },
+    {
+      "provider": "P2-08",
+      "contract": "authoritative item transaction responses",
+      "needed_for": ["inventory/equipment", "loot", "shop", "inn/storage", "repair/upgrade", "trade/merchant"],
+      "handoff_checked": "coordination/phase2/P2-08/handoff.json",
+      "state": "MISSING_AT_PIN_CHECK"
+    },
+    {
+      "provider": "P2-09",
+      "contract": "authoritative social responses",
+      "needed_for": ["chat/whisper", "invite/party", "clan", "social error feedback"],
+      "handoff_checked": "coordination/phase2/P2-09/handoff.json",
+      "state": "MISSING_AT_PIN_CHECK"
+    },
+    {
+      "provider": "P2-05",
+      "contract": "NPC action/dialog routing",
+      "needed_for": ["NPC dialog", "shop/inn/quest/upgrade entry routing"],
+      "state": "REQUIRED_NOT_PINNED_BY_P2_10"
+    },
+    {
+      "provider": "P2-00",
+      "contract": "integrated OpenKO source checkout and fresh browser rebuild",
+      "needed_for": ["apply P2-10 source patch", "publish matching JS/WASM/data", "real-browser evidence"],
+      "state": "REQUIRED"
+    }
+  ],
+  "fail_closed_policy": "P2-10 never synthesizes success. Until provider handoffs exist, native controls may open locally but transaction/skill/social/NPC success remains BLOCKED and must be driven only by authoritative server responses.",
+  "notes": [
+    "P2-10 owns client dispatch/window/input/audio only; server rules remain with providers.",
+    "Command menu navigation is client UI and does not imply GM authorization.",
+    "P2-03 remains sole owner of viewport-to-game coordinate conversion; P2-10 will consume one adapter instead of duplicating math."
+  ]
+}

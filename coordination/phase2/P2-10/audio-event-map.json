@@ -1,0 +1,68 @@
+{
+  "workstream": "P2-10",
+  "policy": "Use OpenKO CN3SndMgr/CN3SndObj event paths only; never add parallel DOM audio.",
+  "engine_source": "luisfelipe18/old-school-openko@97eb0ea20207afc0c360bfed6915113572711be3",
+  "browser_runtime": {
+    "status": "BLOCKED",
+    "reason": "WS42 browser patch explicitly disables CN3SndMgr::InitOpenAL for single-thread Emscripten because native audio workers require pthreads. P2-10 must not claim sound until P2-00 selects and proves an audio-capable rebuild.",
+    "required": [
+      "fresh P2-00 source rebuild; never reuse C5 binary",
+      "browser user-gesture AudioContext resume proof",
+      "one sound-manager lifecycle per client session",
+      "mute/BGM/effect volume persistence through native Option state",
+      "re-entry test proving no duplicate BGM/ambient instances"
+    ]
+  },
+  "events": [
+    {
+      "event": "town_music",
+      "native_owner": "CGameProcMain::PlayBGM_Town",
+      "source_object": "m_pSnd_Town / ID_SOUND_BGM_TOWN",
+      "lifecycle": "CreateStreamObj -> Looping(true) -> Play; Stop on battle/zone transition; ReleaseSound on teardown",
+      "status": "PASS_SOURCE_BLOCKED_RUNTIME"
+    },
+    {
+      "event": "battle_music",
+      "native_owner": "CGameProcMain::PlayBGM_Battle",
+      "source_object": "m_pSnd_Battle",
+      "lifecycle": "native stream object, mutually stopped against town BGM",
+      "status": "PASS_SOURCE_BLOCKED_RUNTIME"
+    },
+    {
+      "event": "world_ambient",
+      "native_owner": "ACT_WORLD sky/world sound lifecycle",
+      "source_object": "world sound assets from client data",
+      "lifecycle": "native world init/release; ReleaseSound calls ACT_WORLD->GetSkyRef()->ReleaseSound()",
+      "status": "BLOCKED_RUNTIME"
+    },
+    {
+      "event": "footstep",
+      "native_owner": "native character movement sound path",
+      "source_object": "sound.tbl / character source IDs",
+      "lifecycle": "do not synthesize from DOM key events; event must remain animation/movement driven",
+      "status": "BLOCKED_RUNTIME"
+    },
+    {
+      "event": "attack",
+      "native_owner": "native combat/animation sound path",
+      "source_object": "sound.tbl / combat source IDs",
+      "lifecycle": "trigger from authoritative/native combat event, not button click success",
+      "status": "BLOCKED_P2_07_AND_RUNTIME"
+    },
+    {
+      "event": "skill",
+      "native_owner": "native magic/skill manager sound path",
+      "source_object": "skill/effect tables + sound.tbl",
+      "lifecycle": "trigger from native skill execution/result path; failed skill must not emit success sound",
+      "status": "BLOCKED_P2_07_AND_RUNTIME"
+    },
+    {
+      "event": "ui",
+      "native_owner": "native N3UI sound hooks",
+      "source_object": "native UI/sound assets",
+      "lifecycle": "UI open/click/error events stay native; no HTML audio mirror",
+      "status": "BLOCKED_RUNTIME"
+    }
+  ],
+  "duplicate_prevention": "P2-00 must prove ReleaseSound/CN3SndMgr teardown occurs before a new world/client audio lifecycle is created; P2-10 will not add a second browser audio graph."
+}
