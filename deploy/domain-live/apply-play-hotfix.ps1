@@ -40,8 +40,9 @@ if(-not $status.edge_tag){ throw 'HOTFIX_STATUS edge_tag missing' }
 Invoke-Checked 'docker info' { docker info --format '{{.ServerVersion}}' | Out-Null }
 Invoke-Checked 'docker load edge' { docker load -i $archive | Out-Host }
 $tag=[string]$status.edge_tag
-$imageId=(& docker image inspect $tag --format '{{.Id}}' 2>$null | Select-Object -First 1)
-if($LASTEXITCODE -ne 0 -or -not $imageId){ throw "Loaded edge image tag missing: $tag" }
+$imageInspect = & docker image inspect $tag 2>$null
+$inspectExitCode = $LASTEXITCODE
+if($inspectExitCode -ne 0 -or -not $imageInspect){ throw "Loaded edge image tag missing: $tag" }
 Write-Host "Edge image: PASS -> $tag" -ForegroundColor Green
 
 $state=Join-Path $InstallRoot '.state\domain-live'
