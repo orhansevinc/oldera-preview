@@ -1,0 +1,30 @@
+{
+  "release": {
+    "handoff_file": "coordination/handoffs/domain-live/WS50.json"
+  },
+  "collector": {
+    "project_name": "oldkoweb",
+    "services": ["account-api", "postgres", "auth-gateway", "game-gateway", "admin-api"],
+    "postgres_service": "postgres",
+    "logs_since": "15m",
+    "logs_tail": 500,
+    "max_log_chars": 200000,
+    "disk_path": ".",
+    "endpoints": [],
+    "migration": {
+      "expected": null,
+      "current": null
+    }
+  },
+  "browser_evidence": {
+    "run_id": null,
+    "provider_set": null,
+    "entity_runtime_id": null,
+    "asset_id": null,
+    "frame_evidence_path": null
+  },
+  "retention": {
+    "max_bundles": 10,
+    "max_age_days": 7
+  }
+}
