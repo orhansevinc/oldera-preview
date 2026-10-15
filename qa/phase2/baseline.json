@@ -1,0 +1,33 @@
+{
+  "schema_version": "oldkoweb-phase2-qa-baseline/v1",
+  "captured_for_branch": "phase2/13-qa",
+  "baseline_source_commit": "50ecabec15bd358d222a01891ca31359f3a928b0",
+  "phase1_ws50_handoff": {
+    "release_id": "oldkoweb-domain-live-20261015",
+    "local_origin_verified": true,
+    "domain_live_verified": false,
+    "handoff_path": "coordination/handoffs/domain-live/WS50.json"
+  },
+  "prior_qa": {
+    "ws10_branch": "ws10-qa-integration",
+    "observed_head": "a0ae49f05c76c6eab1dd8c60ca17ffec67d50bf2",
+    "historical_handoff_status": "BLOCKED",
+    "reuse": "evidence discipline, public-domain separation, browser/HTTP capture concepts only; historical PASS does not satisfy Phase 2"
+  },
+  "prior_scenarios": {
+    "ws49_branch": "ws49-test-scenarios",
+    "observed_head": "69bf326dcdf6b9807feb3993936f0b56709bb320",
+    "reuse": "deterministic controlled test fixture discipline and provider-aware scenario classification; fixtures are never production proof"
+  },
+  "known_user_regressions": [
+    {"id":"loading-6-7m","owner":"P2-02","baseline":"REPRO_REQUIRED"},
+    {"id":"sprint-dc","owner":"P2-01","baseline":"REPRO_REQUIRED"},
+    {"id":"invisible-mobs","owner":"P2-06","baseline":"REPRO_REQUIRED"},
+    {"id":"npc-noop","owner":"P2-05","baseline":"REPRO_REQUIRED"},
+    {"id":"skill-noop","owner":"P2-07","baseline":"REPRO_REQUIRED"},
+    {"id":"command-noop","owner":"P2-11","baseline":"REPRO_REQUIRED"},
+    {"id":"blurry-render","owner":"P2-03","baseline":"REPRO_REQUIRED"}
+  ],
+  "baseline_release_decision": "BLOCK",
+  "reason": "P2-00 Phase 2 final candidate manifest has not been supplied to P2-13; no Phase 2 real-browser or public-domain acceptance has run."
+}
