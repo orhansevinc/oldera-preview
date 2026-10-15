@@ -11,4 +11,6 @@ module.exports = {
   ...require('./src/mock-world-repository'),
   ...require('./src/smd-height-resolver'),
   ...require('./src/shared-runtime-id-namespace'),
+  ...require('./src/world-asset-registry'),
+  ...require('./src/shared-world-aoi'),
 };

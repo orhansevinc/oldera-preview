@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "patch": "1298",
+  "sources": {
+    "ws14": "ed5f806ce7505f4dfae406e4164735def63b6c86",
+    "ws31": "56ada741532c8f6cabfc83b129a8e87e645db055",
+    "ws05": "b55cab4e79a200d103472d16c231011cc1263548",
+    "openkoServer": "7d6cf81093e142c928c2ac9510512b2b182178b5",
+    "openkoDb": "bec619466938d278339c30e5b1a4bff3c9413bab",
+    "openkoClientAssets": "b4636332c7cd818b0ce171eccc973dd3d6b2e56d"
+  },
+  "notes": [
+    "serverZoneId and clientZoneTableId are independently source-pinned; client IDs are not inferred at runtime.",
+    "clientAssetRefs are exact Zones.tbl row values. Their semantic role is not guessed from filename extensions.",
+    "ZONE_INFO initial positions are source evidence, not automatically safe spawns. Height/collision validation remains mandatory.",
+    "Entry policy is P2-09-owned. P2-04 does not mark a zone enterable merely because map assets exist."
+  ],
+  "zones": [
+    {
+      "key": "luferson-karus",
+      "serverZoneId": 1,
+      "clientZoneTableId": 10,
+      "displayName": "Karus / Luferson",
+      "nation": 1,
+      "serverSmd": {"file":"karus_0730.smd","gitBlobSha1":"a9cd8fee7430c1b594865d0937e9258df351a645","byteLength":2346726},
+      "sourceSpawn": {"status":"SOURCE_CANDIDATE_REQUIRES_COLLISION_VALIDATION","x":1630,"y":150,"z":394,"rawHundredths":{"x":163000,"y":15000,"z":39400}},
+      "clientAssetRefs": ["Zones/karus2004.gtd","Zones/karus2004.tct","Zones/karus2004.tlt","Zones/karus2004.opd","Zones/karus2004.dxt","Misc/Sky/Karus.N3Sky","Zones/karus_start.glo","Zones/karus2004.gev","Zones/karus2004.ens","Zones/karus2004.flag","Zones/karus2004.opdsub","Zones/event_ka.evtsub"],
+      "eventSource": {"file":"1.evt","gitBlobSha1":"5ea1e1ded77920320c0733560fee950c2da34a13","status":"PRESENT","triggerRects":[{"room":1,"rect":[330,1510,440,1720],"actions":[[1,21510,0]],"events":[[100,3,2]]}]},
+      "provenance": {"zoneInfoRowSha256":"e6dc2d8a6f3019eeaf758a98e96b814e49ba61dbd228c5ea858c5648a9ffb9ad","zonesTblRowSha256":"3a0b9045ec2c8274d47cd36e4fb3285f3f6101d1c51a205f4a62a74e5e0fe34f"},
+      "entryPolicy": "P2-09_REQUIRED",
+      "packagedAssetStatus": "MUST_BE_VERIFIED_BY_P2-02"
+    },
+    {
+      "key": "el-morad-castle",
+      "serverZoneId": 2,
+      "clientZoneTableId": 20,
+      "displayName": "El Morad Castle (EMC)",
+      "nation": 2,
+      "serverSmd": {"file":"elmorad_1220.smd","gitBlobSha1":"7aed396badd2c0524b351b03d12ffc932d14a637","byteLength":3943902},
+      "sourceSpawn": {"status":"DATA_CONFLICT_NOT_SAFE","rawHundredths":{"x":1630000,"y":15000,"z":39400},"reason":"ZONE_INFO X converts to 16300.0 and does not fit the KO1298 u16-tenths coordinate field; no correction is inferred."},
+      "clientAssetRefs": ["Zones/elmo2004.gtd","Zones/elmo2004.tct","Zones/elmo2004.tlt","Zones/elmo2004.opd","Zones/elmo2004.dxt","Misc/Sky/Elmorad.N3Sky","Zones/Elmorad_start.glo","Zones/elmo2004.gev","Zones/elmo2004.ens","Zones/elmo2004.flag","Zones/elmo2004.opdsub","Zones/event_elmo.evtsub"],
+      "eventSource": {"file":"2.evt","gitBlobSha1":"e8e479fce1ae8962a99c33b15ffd6b359629c60a","status":"PRESENT","triggerRects":[{"room":1,"rect":[1530,320,1720,520],"actions":[[1,11510,0]],"events":[[100,3,1]]}]},
+      "provenance": {"zoneInfoRowSha256":"f46ac099022d2ad9c5f9f8c4e3b64ed31bf09b8513b16a159a8ff668b0ae6b07","zonesTblRowSha256":"16358fb3fc30cbd5a672a841574baf59726f0936db29fb18547c299052ad15d4"},
+      "entryPolicy": "P2-09_REQUIRED",
+      "packagedAssetStatus": "MUST_BE_VERIFIED_BY_P2-02"
+    },
+    {
+      "key": "eslant-karus",
+      "serverZoneId": 11,
+      "clientZoneTableId": 110,
+      "displayName": "Eslant (Karus)",
+      "nation": 1,
+      "serverSmd": {"file":"k_eslant.smd","gitBlobSha1":"6310fe57d28d4b79d88a7b5f52eed90899085c7a","byteLength":1140624},
+      "sourceSpawn": {"status":"SOURCE_CANDIDATE_REQUIRES_COLLISION_VALIDATION","x":150,"y":150,"z":150,"rawHundredths":{"x":15000,"y":15000,"z":15000}},
+      "clientAssetRefs": ["Zones/EslantZone.gtd","Zones/EslantZone.tct","Zones/EslantZone.tlt","Zones/EslantZone.opd","Zones/EslantZone.dxt","Misc/Sky/BattleZone.N3Sky","Zones/EslantZone.glo","Zones/EslantZone.gev","Zones/EslantZone.ens","Zones/EslantZone.opdsub"],
+      "eventSource": {"file":"11.evt","status":"MISSING_IN_PINNED_OPENKO_SERVER_SNAPSHOT"},
+      "provenance": {"zoneInfoRowSha256":"3825e90cb28d73f82476f58fda5aed0bc7ccbd92a0ecd1324456e94abc1aa89e","zonesTblRowSha256":"bcf57b48cc34748f3c618ce5dda160544ef0b897d74e45160bf75f48d8e48a97"},
+      "entryPolicy": "P2-09_REQUIRED",
+      "packagedAssetStatus": "MUST_BE_VERIFIED_BY_P2-02"
+    },
+    {
+      "key": "eslant-el-morad",
+      "serverZoneId": 12,
+      "clientZoneTableId": 120,
+      "displayName": "Eslant (El Morad)",
+      "nation": 2,
+      "serverSmd": {"file":"e_eslant.smd","gitBlobSha1":"6a69157d9104ed8b8f42a8c8570872c2615a104c","byteLength":1140624},
+      "sourceSpawn": {"status":"SOURCE_CANDIDATE_REQUIRES_COLLISION_VALIDATION","x":150,"y":150,"z":150,"rawHundredths":{"x":15000,"y":15000,"z":15000}},
+      "clientAssetRefs": ["Zones/EslantZone.gtd","Zones/EslantZone.tct","Zones/EslantZone.tlt","Zones/EslantZone.opd","Zones/EslantZone.dxt","Misc/Sky/BattleZone.N3Sky","Zones/EslantZone.glo","Zones/EslantZone.gev","Zones/EslantZone.ens","Zones/EslantZone.opdsub"],
+      "eventSource": {"file":"12.evt","status":"MISSING_IN_PINNED_OPENKO_SERVER_SNAPSHOT"},
+      "provenance": {"zoneInfoRowSha256":"6b662ce984afde9a1cc77f6bfacf41b87ef3a09425e240a15ae4981cd3accbf1","zonesTblRowSha256":"523de18939439380176c52fae74bca36515d347bce43ec6112f94b5d5ca5a577"},
+      "entryPolicy": "P2-09_REQUIRED",
+      "packagedAssetStatus": "MUST_BE_VERIFIED_BY_P2-02"
+    },
+    {
+      "key": "moradon",
+      "serverZoneId": 21,
+      "clientZoneTableId": 210,
+      "displayName": "Moradon",
+      "nation": null,
+      "serverSmd": {"file":"moradon_0826.smd","gitBlobSha1":"cf47772b8e42a8bad71032419f47978c8bbd6142","byteLength":786000},
+      "sourceSpawn": {"status":"SOURCE_CANDIDATE_REQUIRES_COLLISION_VALIDATION","x":312,"y":0,"z":402,"rawHundredths":{"x":31200,"y":0,"z":40200}},
+      "clientAssetRefs": ["Zones/Moradon_xmas.gtd","Zones/Moradon_xmas.tct","Zones/Moradon_xmas.tlt","Zones/Moradon_xmas.opd","Zones/Moradon_xmas.dxt","Misc/Sky/BattleZone.N3Sky","Zones/Moradon_xmas.glo","Zones/Moradon_xmas.gev","Zones/Moradon_xmas.ens","Zones/Moradon_xmas.flag","Zones/Moradon_xmas.opdsub"],
+      "eventSource": {"file":"21.evt","gitBlobSha1":"e2559eb8795ad0d56debc8cf1055aff9c72271de","status":"PRESENT","triggerRects":[{"room":1,"rect":[326,308,394,432],"actions":[[7,0,0],[7,0,0],[7,0,0],[6,10,0],[6,10,0],[6,10,0],[6,10,0],[6,10,0],[3,60,0]],"events":[[100,4,195],[5,11,21],[6,4101,20],[6,4101,20],[6,4101,20],[6,4101,20],[6,4101,20],[6,4102,1],[100,4,196]]}]},
+      "provenance": {"zoneInfoRowSha256":"01d7698dcd608bfe51a071a70ff2c63daf956a5048d3998d40b5a4a742c015ed","zonesTblRowSha256":"f8e5f3fbb3cda51da27265b6f206f229caf454460b85880efb174449e1a01a91"},
+      "entryPolicy": "WS14_EXISTING_MORADON_POLICY",
+      "packagedAssetStatus": "KNOWN_WORKING_CLIENT_RENDER_FROM_WS05; SERVER_SMD_PATH_STILL_CONFIGURED_AT_RUNTIME"
+    },
+    {
+      "key": "colony-zone-frontier",
+      "serverZoneId": 201,
+      "clientZoneTableId": 2010,
+      "displayName": "Colony Zone / Frontier (CZ)",
+      "nation": null,
+      "serverSmd": {"file":"freezone_1217.smd","gitBlobSha1":"6a9bc0eea1be4bfd95e55823cb0db389a7768094","byteLength":3758474},
+      "sourceSpawn": {"status":"SOURCE_CANDIDATE_REQUIRES_COLLISION_VALIDATION","x":10,"y":0,"z":10,"rawHundredths":{"x":1000,"y":0,"z":1000}},
+      "clientAssetRefs": ["Zones/FreeZone_b.gtd","Zones/FreeZone_b.tct","Zones/FreeZone_b.tlt","Zones/FreeZone_b.opd","Zones/Freezone_b.opdext","Zones/FreeZone_b.dxt","Misc/Sky/BattleZone.N3Sky","Zones/FreeZone_b.glo","Zones/FreeZone_b.gev","Zones/FreeZone_b.ens","Zones/FreeZone_b.opdsub"],
+      "eventSource": {"file":"201.evt","gitBlobSha1":"5f97d231ee11fcec17461836a9e96bf77f36009b","status":"PRESENT","triggerRects":[{"room":1,"nation":2,"rect":[275,570,325,600],"events":[[100,1,12]]},{"room":2,"nation":2,"rect":[195,119,273,139],"events":[[100,1,11]]},{"room":3,"nation":1,"rect":[912,772,933,790],"events":[[100,1,1]]},{"room":4,"nation":1,"rect":[635,308,665,355],"events":[[100,1,2]]},{"room":5,"nation":2,"rect":[163,860,200,890],"events":[[100,0,0]]},{"room":6,"nation":1,"rect":[784,81,805,159],"events":[[100,0,0]]}]},
+      "provenance": {"zoneInfoRowSha256":"f592225bbd1996338a7be4890708a45b4b8161e51f0af9b2b8cf3337a940c74f","zonesTblRowSha256":"1b1dc5c680fbac24974274e7bb6890aa719e303080334e7e1b3e4ef6109f26de"},
+      "entryPolicy": "P2-09_REQUIRED",
+      "packagedAssetStatus": "MUST_BE_VERIFIED_BY_P2-02",
+      "alternateServerArtifactsNotSelectedByZoneInfo": [{"file":"freezone_1218.smd","gitBlobSha1":"2345e1a4d50194ad26451c7dc5d18f37e61138b8","byteLength":3758474}]
+    }
+  ]
+}

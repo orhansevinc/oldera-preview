@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "openkoCommit": "7d6cf81093e142c928c2ac9510512b2b182178b5",
+    "tableStruct": "src/Client/WarFare/GameDef.h::__TABLE_ZONE",
+    "zonesTableCommit": "b4636332c7cd818b0ce171eccc973dd3d6b2e56d",
+    "zonesTable": "Data/Zones.tbl.csv"
+  },
+  "fieldSemantics": {
+    "terrain": "szTerrainFN / GTD",
+    "colorMap": "szColorMapFN / TCT",
+    "lightMap": "szLightMapFN / TLT",
+    "objectPlacement": "szObjectPostDataFN / OPD",
+    "objectPlacementExtension": "szOpdExtFN / OPDEXT",
+    "minimap": "szMiniMapFN / DXT",
+    "sky": "szSkySetting / N3Sky",
+    "lightObjects": "szLightObjFN / GLO",
+    "gev": "szGevFN / GEV",
+    "ens": "szEnsFN / ENS",
+    "flag": "szFlagFN / FLAG"
+  },
+  "modelInventory": {
+    "status": "P2-02_REQUIRED",
+    "reason": "Zones.tbl identifies OPD/OPDEXT world-object placement files, but does not enumerate every transitive N3 model/texture dependency. P2-04 does not invent that expansion."
+  },
+  "zones": {
+    "1": {"clientZoneTableId":10,"terrain":"Zones/karus2004.gtd","colorMap":"Zones/karus2004.tct","lightMap":"Zones/karus2004.tlt","objectPlacement":"Zones/karus2004.opd","objectPlacementExtension":null,"minimap":"Zones/karus2004.dxt","sky":"Misc/Sky/Karus.N3Sky","lightObjects":"Zones/karus_start.glo","gev":"Zones/karus2004.gev","ens":"Zones/karus2004.ens","flag":"Zones/karus2004.flag"},
+    "2": {"clientZoneTableId":20,"terrain":"Zones/elmo2004.gtd","colorMap":"Zones/elmo2004.tct","lightMap":"Zones/elmo2004.tlt","objectPlacement":"Zones/elmo2004.opd","objectPlacementExtension":null,"minimap":"Zones/elmo2004.dxt","sky":"Misc/Sky/Elmorad.N3Sky","lightObjects":"Zones/Elmorad_start.glo","gev":"Zones/elmo2004.gev","ens":"Zones/elmo2004.ens","flag":"Zones/elmo2004.flag"},
+    "11": {"clientZoneTableId":110,"terrain":"Zones/EslantZone.gtd","colorMap":"Zones/EslantZone.tct","lightMap":"Zones/EslantZone.tlt","objectPlacement":"Zones/EslantZone.opd","objectPlacementExtension":null,"minimap":"Zones/EslantZone.dxt","sky":"Misc/Sky/BattleZone.N3Sky","lightObjects":"Zones/EslantZone.glo","gev":"Zones/EslantZone.gev","ens":"Zones/EslantZone.ens","flag":null},
+    "12": {"clientZoneTableId":120,"terrain":"Zones/EslantZone.gtd","colorMap":"Zones/EslantZone.tct","lightMap":"Zones/EslantZone.tlt","objectPlacement":"Zones/EslantZone.opd","objectPlacementExtension":null,"minimap":"Zones/EslantZone.dxt","sky":"Misc/Sky/BattleZone.N3Sky","lightObjects":"Zones/EslantZone.glo","gev":"Zones/EslantZone.gev","ens":"Zones/EslantZone.ens","flag":null},
+    "21": {"clientZoneTableId":210,"terrain":"Zones/Moradon_xmas.gtd","colorMap":"Zones/Moradon_xmas.tct","lightMap":"Zones/Moradon_xmas.tlt","objectPlacement":"Zones/Moradon_xmas.opd","objectPlacementExtension":null,"minimap":"Zones/Moradon_xmas.dxt","sky":"Misc/Sky/BattleZone.N3Sky","lightObjects":"Zones/Moradon_xmas.glo","gev":"Zones/Moradon_xmas.gev","ens":"Zones/Moradon_xmas.ens","flag":"Zones/Moradon_xmas.flag"},
+    "201": {"clientZoneTableId":2010,"terrain":"Zones/FreeZone_b.gtd","colorMap":"Zones/FreeZone_b.tct","lightMap":"Zones/FreeZone_b.tlt","objectPlacement":"Zones/FreeZone_b.opd","objectPlacementExtension":"Zones/Freezone_b.opdext","minimap":"Zones/FreeZone_b.dxt","sky":"Misc/Sky/BattleZone.N3Sky","lightObjects":"Zones/FreeZone_b.glo","gev":"Zones/FreeZone_b.gev","ens":"Zones/FreeZone_b.ens","flag":null}
+  }
+}
