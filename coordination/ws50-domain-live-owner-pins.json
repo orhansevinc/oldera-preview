@@ -1,0 +1,19 @@
+{
+  "release_id": "oldkoweb-domain-live-20261015",
+  "pinned_at": "2026-10-15",
+  "owners": {
+    "WEBSITE": "dcabc6805823fb5e0613c9de7d3225f268caaf26",
+    "WS07": "eaac4700c3535c449f6a2b7d20c925bc61382c35",
+    "WS13": "e53966d9f882d98e2a5b4746262f38355dfda848",
+    "WS03": "77e001bb6f43618883b626ae403d2fa134065c0f",
+    "WS08": "944f704f55eb5e9656b8f77d9a2f5f87d136e270",
+    "WS28": "c1ef0f6e84456cb38edd2f3ce2b11ca5ff7de99a",
+    "WS02": "1738f60945b24e00bdd2266e6600b5c0cf3c64cf",
+    "WS14": "ed5f806ce7505f4dfae406e4164735def63b6c86",
+    "WS15": "ce9bed13b8d45c32ff0592595aa3a0d1e7b3964d",
+    "WS16": "5ed48ff32187000312652838674388df52fc3fb7",
+    "WS25": "18c9e9b8439fef88fc93d74bfec7981b0cb41958",
+    "WS09_BOOTSTRAP": "9d07509558961c9f63e3eda4667a375488e746f5"
+  },
+  "moradon_smd": "Open-KO/KnightOnline@7d6cf81093e142c928c2ac9510512b2b182178b5:assets/Server/MAP/moradon_0826.smd"
+}
